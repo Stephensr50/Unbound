@@ -1,9 +1,9 @@
-import TopNav from "../components/TopNav";
+
 
 export default function ProfilePage() {
 return (
 <>
-<TopNav />
+
 
 <div
 style={{

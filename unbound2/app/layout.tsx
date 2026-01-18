@@ -1,5 +1,12 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import TopNav from "./components/TopNav";
+import { Gloock } from "next/font/google";
+
+const gloock = Gloock({
+weight: "400",
+subsets: ["latin"],
+});
 
 export const metadata: Metadata = {
 title: "Unbound",
@@ -13,8 +20,9 @@ children: React.ReactNode;
 }>) {
 return (
 <html lang="en">
-<body>
-<div className="unbound-bg">{children}</div>
+<body className={`unbound-bg ${gloock.className}`}>
+<TopNav />
+{children}
 </body>
 </html>
 );
