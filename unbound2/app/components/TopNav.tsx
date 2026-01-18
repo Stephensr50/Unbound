@@ -51,6 +51,13 @@ UNBOUND
 <Link href="/feed" style={linkStyle("/feed")}>
 Feed
 </Link>
+
+<Link href="/edit-profile" style={linkStyle("/edit-profile")}>
+Edit
+</Link>
+
+<Link href="/explore">Explore</Link>
+
 <Link href="/profile" style={linkStyle("/profile")}>
 Profile
 </Link>

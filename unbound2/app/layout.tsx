@@ -13,7 +13,9 @@ children: React.ReactNode;
 }>) {
 return (
 <html lang="en">
-<body className="unbound-bg">{children}</body>
+<body>
+<div className="unbound-bg">{children}</div>
+</body>
 </html>
 );
 }
