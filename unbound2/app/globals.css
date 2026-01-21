@@ -1,7 +1,4 @@
 
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
 
 html,
 body {
@@ -1207,6 +1204,196 @@ border: 1px dashed rgba(255, 255, 255, 0.2);
 display: grid;
 place-items: center;
 color: rgba(255, 255, 255, 0.75);
+/* ===== Unbound: Profile + Follows UI ===== */
+
+.ub-card {
+max-width: 640px;
+margin: 24px auto;
+padding: 18px;
+border-radius: 18px;
+border: 1px solid rgba(255,255,255,0.12);
+background: rgba(0,0,0,0.55);
+backdrop-filter: blur(14px);
+-webkit-backdrop-filter: blur(14px);
+}
+
+.ub-row {
+display: flex;
+align-items: center;
+gap: 14px;
+}
+
+.ub-avatar {
+width: 64px;
+height: 64px;
+border-radius: 999px;
+overflow: hidden;
+border: 1px solid rgba(255,255,255,0.12);
+background: rgba(255,255,255,0.06);
+flex: 0 0 auto;
+}
+
+.ub-avatar img {
+width: 100%;
+height: 100%;
+object-fit: cover;
+}
+
+.ub-name {
+color: rgba(255,255,255,0.95);
+font-size: 18px;
+font-weight: 700;
+line-height: 1.2;
+}
+
+.ub-handle {
+color: rgba(255,255,255,0.65);
+font-size: 13px;
+margin-top: 2px;
+}
+
+.ub-bio {
+margin-top: 12px;
+color: rgba(255,255,255,0.75);
+font-size: 14px;
+}
+
+.ub-stats {
+margin-top: 14px;
+display: grid;
+grid-template-columns: 1fr 1fr;
+gap: 10px;
+}
+
+.ub-statbtn {
+text-align: left;
+padding: 12px;
+border-radius: 14px;
+border: 1px solid rgba(255,255,255,0.12);
+background: rgba(255,255,255,0.06);
+cursor: pointer;
+}
+
+.ub-statbtn:hover {
+background: rgba(255,255,255,0.10);
+}
+
+.ub-statnum {
+color: rgba(255,255,255,0.95);
+font-weight: 800;
+font-size: 18px;
+}
+
+.ub-statlabel {
+color: rgba(255,255,255,0.60);
+font-size: 13px;
+margin-top: 2px;
+}
+
+.ub-actions {
+margin-top: 14px;
+display: flex;
+gap: 10px;
+}
+
+.ub-pill {
+display: inline-flex;
+align-items: center;
+justify-content: center;
+padding: 9px 14px;
+border-radius: 999px;
+border: 1px solid rgba(255,255,255,0.14);
+background: rgba(255,255,255,0.06);
+color: rgba(255,255,255,0.92);
+font-size: 13px;
+text-decoration: none;
+}
+
+.ub-pill:hover {
+background: rgba(255,255,255,0.10);
+}
+
+/* Modal */
+.ub-modalOverlay {
+position: fixed;
+inset: 0;
+z-index: 50;
+display: flex;
+align-items: center;
+justify-content: center;
+background: rgba(0,0,0,0.65);
+padding: 16px;
+}
+
+.ub-modal {
+width: 100%;
+max-width: 440px;
+border-radius: 18px;
+border: 1px solid rgba(255,255,255,0.12);
+background: rgba(0,0,0,0.72);
+backdrop-filter: blur(16px);
+-webkit-backdrop-filter: blur(16px);
+padding: 14px;
+}
+
+.ub-modalHeader {
+display: flex;
+align-items: center;
+justify-content: space-between;
+gap: 10px;
+padding-bottom: 8px;
+}
+
+.ub-modalTitle {
+color: rgba(255,255,255,0.95);
+font-weight: 700;
+}
+
+.ub-modalClose {
+border: 1px solid rgba(255,255,255,0.14);
+background: rgba(255,255,255,0.06);
+color: rgba(255,255,255,0.85);
+border-radius: 999px;
+padding: 6px 10px;
+cursor: pointer;
+font-size: 12px;
+}
+
+.ub-modalList {
+max-height: 60vh;
+overflow: auto;
+margin-top: 8px;
+display: flex;
+flex-direction: column;
+gap: 10px;
+}
+
+.ub-userRow {
+display: flex;
+align-items: center;
+gap: 12px;
+padding: 10px;
+border-radius: 14px;
+border: 1px solid rgba(255,255,255,0.12);
+background: rgba(255,255,255,0.06);
+text-decoration: none;
+}
+
+.ub-userRow:hover {
+background: rgba(255,255,255,0.10);
+}
+
+.ub-userName {
+color: rgba(255,255,255,0.92);
+font-size: 14px;
+font-weight: 600;
+}
+
+.ub-userHandle {
+color: rgba(255,255,255,0.60);
+font-size: 12px;
+margin-top: 2px;
+}
 }
 }
 }
