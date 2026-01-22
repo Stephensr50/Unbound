@@ -173,9 +173,9 @@ alignItems: "center",
 } as const,
 
 avatar: {
-height: 86,
-width: 86,
-borderRadius: 12,
+height: 140,
+width: 140,
+borderRadius: "50%",
 overflow: "hidden",
 border: "1px solid rgba(255,255,255,0.10)",
 background: "rgba(255,255,255,0.06)",
@@ -366,7 +366,7 @@ return (
 {myProfile?.avatar_url ? (
 // eslint-disable-next-line @next/next/no-img-element
 <img
-src={myProfile.avatar_url}
+src={`${myProfile.avatar_url}?t=${Date.now()}`}
 alt=""
 style={{ height: "100%", width: "100%", objectFit: "cover" }}
 />

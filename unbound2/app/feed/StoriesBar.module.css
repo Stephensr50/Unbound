@@ -1,180 +1,190 @@
-
-.wrap {
-width: 100%;
-}
-
-.row {
+/* ================================
+STORIES ROW
+================================ */
+.storiesRow {
 display: flex;
-flex-direction: row;
 gap: 14px;
-align-items: flex-start;
+padding: 14px 16px;
 overflow-x: auto;
-overflow-y: hidden;
-padding: 6px 6px 10px;
-white-space: nowrap;
 }
 
-.bubbleBtn {
-display: inline-flex;
-flex-direction: column;
-align-items: center;
-gap: 6px;
-background: transparent;
-border: 0;
+/* ================================
+SHARED BASE (ALL BUBBLES)
+================================ */
+.storyBubble,
+.addStory {
+width: 62px;
+height: 62px;
+border-radius: 999px;
+background: rgba(0, 0, 0, 0.35);
 cursor: pointer;
+
+display: inline-flex;
+align-items: center;
+justify-content: center;
+
+position: relative;
+overflow: visible;
+isolation: isolate;
 }
 
-.ring {
-width: 66px;
-height: 66px;
+/* ================================
+REAL STORY BUBBLES
+SOLID GLOW RING
+================================ */
+.storyBubble {
+border: 2px solid rgba(150, 79, 237, 0.6);
+box-shadow:
+0 0 14px rgba(180, 120, 255, 0.35),
+inset 0 0 10px rgba(180, 120, 255, 0.15);
+}
+
+/* pulse behind real stories */
+.storyBubble::after {
+content: "";
+position: absolute;
+inset: -0.5px;
 border-radius: 999px;
-display: grid;
-place-items: center;
-animation: purplePulse 2.2s ease-in-out infinite;
-background: radial-gradient(circle at 30% 30%, rgba(168, 85, 247, 0.35), rgba(168, 85, 247, 0.05));
-border: 2px solid rgba(168, 85, 247, 0.9);
-box-shadow: 0 0 18px rgba(168, 85, 247, 0.35);
+border: 2px solid rgba(186, 50, 223, 0.6);
+box-shadow: 0 0 18px rgba(180, 120, 255, 0.45);
+opacity: 0.5;
+animation: storyPulse 2s ease-in-out infinite;
+z-index: 0;
 }
 
-@keyframes purplePulse {
-0% {
-transform: scale(1);
-box-shadow: 0 0 12px rgba(168, 85, 247, 0.25);
-filter: brightness(1);
-}
-65% {
-transform: scale(1.04);
-box-shadow: 0 0 40px rgba(168, 85, 247, 0.45);
-filter: brightness(1.08);
-}
-100% {
-transform: scale(1);
-box-shadow: 0 0 12px rgba(168, 85, 247, 0.25);
-filter: brightness(1);
-}
+/* ================================
+CREATE STORY (+)
+DOTTED RING ONLY
+================================ */
+.addStory {
+border: 2px dotted rgba(180, 120, 255, 0.85);
+box-shadow: 0 0 12px rgba(180, 120, 255, 0.25);
 }
 
-.avatar {
-width: 56px;
-height: 56px;
+.addStory span {
+font-size: 26px;
+font-weight: 800;
+color: rgba(220, 190, 255, 0.95);
+position: relative;
+z-index: 1;
+}
+
+/* dotted pulse */
+.addStory::after {
+content: "";
+position: absolute;
+inset: -6px;
 border-radius: 999px;
-background: rgba(0, 0, 0, 0.65);
-display: grid;
-place-items: center;
-overflow: hidden;
+border: 2px dotted rgba(180, 120, 255, 0.8);
+opacity: 0.55;
+animation: storyPulse 2s ease-in-out infinite;
+z-index: 0;
 }
 
-.avatarImg {
+/* ================================
+AVATAR / FALLBACK
+================================ */
+.storyAvatar {
 width: 100%;
 height: 100%;
 object-fit: cover;
+border-radius: 999px;
+position: relative;
+z-index: 1;
 }
 
-.initial {
-color: #fff;
-font-weight: 700;
-font-size: 18px;
+.storyFallback {
+width: 100%;
+height: 100%;
+border-radius: 999px;
+
+display: flex;
+align-items: center;
+justify-content: center;
+
+font-weight: 800;
+font-size: 20px;
+color: rgba(235, 235, 255, 0.95);
+background: rgba(0, 0, 0, 0.45);
+
+position: relative;
+z-index: 1;
 }
 
-.name {
-font-size: 12px;
-color: rgba(255, 255, 255, 0.85);
+/* ================================
+HOVER
+================================ */
+.storyBubble:hover,
+.addStory:hover {
+transform: translateY(-1px);
+border-color: rgba(200, 150, 255, 0.9);
+box-shadow:
+0 0 18px rgba(200, 150, 255, 0.5),
+inset 0 0 12px rgba(200, 150, 255, 0.2);
 }
 
-/* Viewer */
-.overlay {
+/* ================================
+PULSE ANIMATION
+================================ */
+@keyframes storyPulse {
+0% {
+transform: scale(1);
+opacity: 0.55;
+}
+50% {
+transform: scale(1.12);
+opacity: 0.25;
+}
+100% {
+transform: scale(1);
+opacity: 0.55;
+}
+}
+
+/* ================================
+MODAL (SAFE TO KEEP)
+================================ */
+.modalBackdrop {
 position: fixed;
 inset: 0;
 background: rgba(0, 0, 0, 0.65);
-display: grid;
-place-items: center;
-z-index: 9999;
-
-/* IMPORTANT for swipe: let pointer events behave predictably */
-touch-action: none;
-}
-
-.viewer {
-width: min(520px, 92vw);
-height: min(820px, 78vh);
-background: rgba(15, 15, 18, 0.92);
-border: 1px solid rgba(255, 255, 255, 0.10);
-border-radius: 16px;
-overflow: hidden;
-display: flex;
-flex-direction: column;
-}
-
-.top {
 display: flex;
 align-items: center;
-justify-content: space-between;
-padding: 10px 12px;
+justify-content: center;
+z-index: 50;
 }
 
-.userLabel {
-color: rgba(255, 255, 255, 0.9);
-font-size: 14px;
+.modalCard {
+width: 360px;
+border-radius: 14px;
+background: rgba(10, 10, 10, 0.9);
+border: 1px solid rgba(180, 120, 255, 0.25);
+box-shadow: 0 0 30px rgba(180, 120, 255, 0.25);
+padding: 16px;
+}
+
+.modalHeader {
+display: flex;
+justify-content: space-between;
+align-items: center;
+margin-bottom: 12px;
 }
 
 .closeBtn {
-background: rgba(255, 255, 255, 0.08);
-border: 1px solid rgba(255, 255, 255, 0.12);
-color: #fff;
-border-radius: 10px;
-padding: 6px 10px;
+background: none;
+border: none;
+color: white;
+font-size: 20px;
 cursor: pointer;
 }
 
-.mediaWrap {
-position: relative;
-flex: 1;
-display: grid;
-place-items: center;
-background: rgba(0, 0, 0, 0.35);
-}
-
-.media {
-max-width: 100%;
-max-height: 100%;
-object-fit: contain;
-}
-
-.mediaPlaceholder {
-color: rgba(255, 255, 255, 0.7);
-}
-
-.tapLeft,
-.tapRight {
-position: absolute;
-top: 0;
-bottom: 0;
-width: 40%;
-border: 0;
-background: transparent;
-}
-
-.tapLeft {
-left: 0;
-}
-
-.tapRight {
-right: 0;
-}
-
-.caption {
-padding: 10px 12px;
-color: rgba(255, 255, 255, 0.92);
-font-size: 14px;
-}
-
-.captionMuted {
-padding: 10px 12px;
-opacity: 0;
-}
-
-.hint {
-padding: 0 12px 12px;
-color: rgba(255, 255, 255, 0.6);
-font-size: 12px;
+.uploadBtn {
+margin-top: 12px;
+width: 100%;
+padding: 10px;
+border-radius: 10px;
+border: 1px solid rgba(180, 120, 255, 0.4);
+background: rgba(180, 120, 255, 0.15);
+color: white;
+cursor: pointer;
 }
