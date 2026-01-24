@@ -8,11 +8,7 @@ id: string;
 label: string;
 };
 
-const THREADS: Thread[] = [
-{ id: "A", label: "Conversation with User A" },
-{ id: "B", label: "Conversation with User B" },
-{ id: "C", label: "Conversation with User C" },
-];
+const THREADS: Thread[] = [{ id: "1", label: "Conversation 1" }];
 
 const STORAGE_KEY = "unbound_unread_threads";
 const UNREAD_EVENT = "unbound:unread";
@@ -33,14 +29,14 @@ const existing = loadUnread();
 const hasAny = Object.keys(existing).length > 0;
 
 if (!hasAny) {
-localStorage.setItem(
-STORAGE_KEY,
-JSON.stringify({
-A: 2,
-B: 1,
-C: 0,
-})
-);
+// Seed ONLY the threads that actually exist in the UI
+const seeded: Record<string, number> = {};
+for (const t of THREADS) seeded[t.id] = 0;
+
+// Optional: give Conversation 1 a fake unread count
+seeded["1"] = 2;
+
+localStorage.setItem(STORAGE_KEY, JSON.stringify(seeded));
 }
 } catch {
 // ignore
@@ -66,7 +62,7 @@ if (e.key === STORAGE_KEY) refresh();
 };
 window.addEventListener("storage", onStorage);
 
-// 4) update when you come back to this tab (nice + simple)
+// 4) update when you come back to this tab
 const onFocus = () => refresh();
 window.addEventListener("focus", onFocus);
 

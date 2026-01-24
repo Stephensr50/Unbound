@@ -1,214 +1,182 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { createClient } from "@supabase/supabase-js";
 
-type Msg = {
-id: string;
-from: "them" | "me";
-text: string;
-ts?: string;
+type MessageRow = {
+id: number;
+conversation_id: string;
+sender_id: string;
+body: string;
+created_at: string;
 };
 
-const THREADS_KEY = "unbound_unread_threads";
-const UNREAD_EVENT = "unbound:unread";
-
-function loadUnreadThreads(): Record<string, number> {
-try {
-const raw = localStorage.getItem(THREADS_KEY);
-const parsed = raw ? JSON.parse(raw) : {};
-return parsed && typeof parsed === "object" ? parsed : {};
-} catch {
-return {};
-}
-}
-
-function saveUnreadThreads(next: Record<string, number>) {
-try {
-localStorage.setItem(THREADS_KEY, JSON.stringify(next));
-window.dispatchEvent(new Event(UNREAD_EVENT));
-} catch {
-// ignore
-}
-}
-
-function markThreadRead(threadId: string) {
-const unread = loadUnreadThreads();
-if ((unread[threadId] ?? 0) > 0) {
-unread[threadId] = 0;
-saveUnreadThreads(unread);
-}
+function getSupabase() {
+const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+if (!url || !key) throw new Error("Missing Supabase env vars.");
+return createClient(url, key, { auth: { persistSession: true, autoRefreshToken: true } });
 }
 
 export default function MessagesThread({ threadId }: { threadId: string }) {
-const storageKey = `unbound_thread_${threadId}`;
+const supabase = useMemo(() => getSupabase(), []);
+const [me, setMe] = useState<string | null>(null);
 
-const seeded: Msg[] = useMemo(
-() => [
-{ id: "1", from: "them", text: "Hey there" },
-{ id: "2", from: "me", text: "Hey! What’s up?" },
-{ id: "3", from: "them", text: "Just testing messaging 👀" },
-],
-[]
-);
+const [messages, setMessages] = useState<MessageRow[]>([]);
+const [loading, setLoading] = useState(true);
+const [text, setText] = useState("");
 
-const [messages, setMessages] = useState<Msg[]>(seeded);
-const [draft, setDraft] = useState("");
 const bottomRef = useRef<HTMLDivElement | null>(null);
-const inputRef = useRef<HTMLInputElement | null>(null);
 
-// Load saved thread messages when threadId changes
+const scrollToBottom = (smooth = true) => {
+bottomRef.current?.scrollIntoView({ behavior: smooth ? "smooth" : "auto" });
+};
+
 useEffect(() => {
-try {
-const raw = localStorage.getItem(storageKey);
-if (raw) {
-const parsed = JSON.parse(raw) as Msg[];
-if (Array.isArray(parsed)) {
-setMessages(parsed);
+let alive = true;
+
+async function load() {
+setLoading(true);
+
+// who am I
+const { data: authData } = await supabase.auth.getUser();
+const uid = authData?.user?.id ?? null;
+if (!alive) return;
+setMe(uid);
+
+// load messages for this conversation/thread
+const { data, error } = await supabase
+.from("messages")
+.select("id, conversation_id, sender_id, body, created_at")
+.eq("conversation_id", threadId)
+.order("created_at", { ascending: true });
+
+if (error) console.error("load messages error:", error);
+
+if (!alive) return;
+setMessages(((data as MessageRow[]) ?? []).filter(Boolean));
+setLoading(false);
+
+setTimeout(() => scrollToBottom(false), 50);
+}
+
+load();
+
+return () => {
+alive = false;
+};
+}, [supabase, threadId]);
+
+async function send() {
+const trimmed = text.trim();
+if (!trimmed) return;
+
+const { data: authData } = await supabase.auth.getUser();
+const uid = authData?.user?.id;
+
+if (!uid) {
+alert("You must be logged in to send messages.");
 return;
 }
+
+setText("");
+
+const optimistic: MessageRow = {
+id: -Date.now(),
+conversation_id: threadId,
+sender_id: uid,
+body: trimmed,
+created_at: new Date().toISOString(),
+};
+
+setMessages((prev) => [...prev, optimistic]);
+setTimeout(() => scrollToBottom(true), 10);
+
+const { data, error } = await supabase
+.from("messages")
+.insert([{ conversation_id: threadId, sender_id: uid, body: trimmed }])
+.select("id, conversation_id, sender_id, body, created_at")
+.single();
+
+if (error) {
+console.error("send error:", error);
+setMessages((prev) => prev.filter((m) => m.id !== optimistic.id));
+alert("Send failed. (Likely RLS) — see SQL below.");
+return;
 }
-setMessages(seeded);
-} catch {
-setMessages(seeded);
+
+setMessages((prev) => prev.map((m) => (m.id === optimistic.id ? (data as MessageRow) : m)));
+setTimeout(() => scrollToBottom(true), 10);
 }
-// eslint-disable-next-line react-hooks/exhaustive-deps
-}, [threadId]);
 
-// Mark this thread read as soon as you open it
-useEffect(() => {
-markThreadRead(threadId);
-}, [threadId]);
-
-// Persist messages whenever they change
-useEffect(() => {
-try {
-localStorage.setItem(storageKey, JSON.stringify(messages));
-} catch {
-// ignore
+function onKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
+if (e.key === "Enter" && !e.shiftKey) {
+e.preventDefault();
+send();
 }
-}, [messages, storageKey]);
-
-// Scroll to bottom on new messages
-useEffect(() => {
-bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-}, [messages.length]);
-
-function send() {
-const text = draft.trim();
-if (!text) return;
-
-setMessages((prev) => [...prev, { id: String(Date.now()), from: "me", text }]);
-setDraft("");
-requestAnimationFrame(() => inputRef.current?.focus());
 }
 
 return (
-<div
-style={{
-maxWidth: 760,
-margin: "0 auto",
-padding: "16px 14px 90px",
-}}
->
-<h2 style={{ fontSize: 42, fontWeight: 700, marginBottom: 14 }}>
-Conversation {threadId}
-</h2>
+<div className="min-h-screen unbound-bg px-4 pt-4 pb-24">
+<div className="max-w-2xl mx-auto">
+<div className="mb-3 flex items-center gap-2">
+<a href="/messages" className="text-sm opacity-80 hover:opacity-100">
+← Back
+</a>
+<div className="text-sm opacity-70">Thread: {threadId.slice(0, 8)}…</div>
+</div>
 
-{/* Messages */}
-<div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+<div className="rounded-2xl border border-white/10 bg-black/40 backdrop-blur-md p-4">
+{loading ? (
+<div className="opacity-80">Loading…</div>
+) : messages.length === 0 ? (
+<div className="opacity-80">No messages yet. Send the first one 👇</div>
+) : (
+<div className="space-y-3 max-h-[65vh] overflow-y-auto pr-1">
 {messages.map((m) => {
-const isMe = m.from === "me";
+const mine = me && m.sender_id === me;
 return (
+<div key={m.id} className={`flex ${mine ? "justify-end" : "justify-start"}`}>
 <div
-key={m.id}
-style={{
-display: "flex",
-justifyContent: isMe ? "flex-end" : "flex-start",
-}}
+className={[
+"max-w-[80%] rounded-2xl px-4 py-2 text-sm leading-relaxed",
+mine
+? "bg-white/15 border border-white/20"
+: "bg-black/50 border border-white/10",
+].join(" ")}
 >
-<div
-style={{
-maxWidth: "78%",
-padding: "10px 12px",
-borderRadius: 16,
-lineHeight: 1.25,
-fontSize: 18,
-background: isMe
-? "rgba(186, 104, 255, 0.22)"
-: "rgba(255,255,255,0.12)",
-border: "1px solid rgba(255,255,255,0.12)",
-backdropFilter: "blur(10px)",
-WebkitBackdropFilter: "blur(10px)",
-boxShadow: "0 10px 30px rgba(0,0,0,0.25)",
-}}
->
-{m.text}
+<div className="whitespace-pre-wrap">{m.body}</div>
+<div className="mt-1 text-[11px] opacity-60">
+{new Date(m.created_at).toLocaleString()}
+</div>
 </div>
 </div>
 );
 })}
 <div ref={bottomRef} />
 </div>
+)}
+</div>
 
-{/* Composer */}
-<div
-style={{
-position: "fixed",
-left: 0,
-right: 0,
-bottom: 0,
-padding: "12px 14px",
-background: "rgba(0,0,0,0.45)",
-borderTop: "1px solid rgba(255,255,255,0.10)",
-backdropFilter: "blur(12px)",
-WebkitBackdropFilter: "blur(12px)",
-}}
->
-<div
-style={{
-maxWidth: 760,
-margin: "0 auto",
-display: "flex",
-gap: 10,
-alignItems: "center",
-}}
->
-<input
-ref={inputRef}
-value={draft}
-onChange={(e) => setDraft(e.target.value)}
-onKeyDown={(e) => {
-if (e.key === "Enter") send();
-}}
-placeholder="Message…"
-style={{
-flex: 1,
-height: 46,
-borderRadius: 999,
-padding: "0 14px",
-fontSize: 16,
-color: "white",
-background: "rgba(255,255,255,0.10)",
-border: "1px solid rgba(255,255,255,0.14)",
-outline: "none",
-}}
+{/* composer */}
+<div className="fixed left-0 right-0 bottom-0 px-4 pb-4">
+<div className="max-w-2xl mx-auto rounded-2xl border border-white/10 bg-black/60 backdrop-blur-md p-3">
+<div className="flex gap-2 items-end">
+<textarea
+value={text}
+onChange={(e) => setText(e.target.value)}
+onKeyDown={onKeyDown}
+placeholder="Write a message… (Enter to send, Shift+Enter for newline)"
+className="flex-1 min-h-[44px] max-h-40 resize-y rounded-xl bg-black/40 border border-white/10 px-3 py-2 text-sm outline-none"
 />
 <button
 onClick={send}
-style={{
-height: 46,
-padding: "0 16px",
-borderRadius: 999,
-fontSize: 16,
-fontWeight: 700,
-color: "white",
-background: "rgba(186, 104, 255, 0.35)",
-border: "1px solid rgba(186, 104, 255, 0.55)",
-cursor: "pointer",
-}}
+className="rounded-xl px-4 py-2 text-sm border border-white/15 bg-white/10 hover:bg-white/15"
 >
 Send
 </button>
+</div>
+</div>
 </div>
 </div>
 </div>
