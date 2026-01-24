@@ -1,13 +1,15 @@
-import { createClient } from "@supabase/supabase-js";
-import StoriesBar from "./StoriesBar";
+"use client";
 
-export const dynamic = "force-dynamic";
+import { useEffect, useState } from "react";
+import StoriesBar from "./StoriesBar";
+import { supabase } from "@/app/lib/supabaseClient";
 
 type StoryRow = {
 id: string;
 user_id: string;
-media_url: string;
+media_url: string | null;
 caption: string | null;
+created_at?: string;
 };
 
 type ProfileRow = {
@@ -16,30 +18,87 @@ username: string | null;
 avatar_url: string | null;
 };
 
-function getSupabase() {
-const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-
-if (!url || !key) {
-throw new Error(
-"Missing NEXT_PUBLIC_SUPABASE_URL or NEXT_PUBLIC_SUPABASE_ANON_KEY in env."
+export default function FeedPage() {
+const [stories, setStories] = useState<StoryRow[]>([]);
+const [profilesById, setProfilesById] = useState<Record<string, ProfileRow>>(
+{}
 );
-}
+const [error, setError] = useState<string | null>(null);
 
-return createClient(url, key, { auth: { persistSession: false } });
-}
+const refreshStories = async () => {
+setError(null);
 
-export default async function FeedPage() {
-const supabase = getSupabase();
-
-const { data: stories, error: storiesError } = await supabase
+const { data, error: storiesError } = await supabase
 .from("stories")
-.select("id,user_id,media_url,caption")
+.select("id, user_id, media_url, caption, created_at")
 .order("created_at", { ascending: false })
-.limit(200);
+.limit(50);
 
 if (storiesError) {
+setError(storiesError.message);
+setStories([]);
+return;
+}
+
+const rawStories = (data ?? []) as StoryRow[];
+
+// 1️⃣ Deduplicate by story id
+const dedupedById = Array.from(
+new Map(rawStories.map((s) => [s.id, s])).values()
+);
+
+// 2️⃣ Keep only latest story per user (Instagram-style)
+const seenUsers = new Set<string>();
+const oneStoryPerUser = dedupedById.filter((story) => {
+if (seenUsers.has(story.user_id)) return false;
+seenUsers.add(story.user_id);
+return true;
+});
+
+setStories(oneStoryPerUser);
+
+// 3️⃣ Load profiles for visible stories
+const userIds = Array.from(
+new Set(oneStoryPerUser.map((s) => s.user_id))
+);
+
+if (!userIds.length) {
+setProfilesById({});
+return;
+}
+
+const { data: profiles, error: profilesError } = await supabase
+.from("profiles")
+.select("id, username, avatar_url")
+.in("id", userIds);
+
+if (profilesError) {
+setProfilesById({});
+return;
+}
+
+const profileMap: Record<string, ProfileRow> = {};
+(profiles ?? []).forEach((p) => {
+profileMap[p.id] = p;
+});
+
+setProfilesById(profileMap);
+};
+
+useEffect(() => {
+refreshStories();
+}, []);
+
 return (
+<div
+style={{
+paddingLeft: 16,
+paddingRight: 16,
+paddingTop: 96, // pushes below TopNav
+paddingBottom: 16,
+}}
+>
+{error && (
 <div style={{ padding: 24, color: "white" }}>
 <div
 style={{
@@ -49,35 +108,13 @@ padding: 16,
 borderRadius: 12,
 }}
 >
-Stories query failed: {storiesError.message}
+Stories query failed: {error}
 </div>
 </div>
-);
-}
+)}
 
-const storyRows = (stories ?? []) as StoryRow[];
-const userIds = Array.from(new Set(storyRows.map((s) => s.user_id)));
+<StoriesBar stories={stories} profilesById={profilesById} />
 
-let profilesById: Record<string, ProfileRow> = {};
-if (userIds.length) {
-const { data: profiles } = await supabase
-.from("profiles")
-.select("id,username,avatar_url")
-.in("id", userIds);
-
-if (profiles) {
-profilesById = Object.fromEntries(
-(profiles as ProfileRow[]).map((p) => [p.id, p])
-);
-}
-}
-
-return (
-<div style={{ paddingLeft: 16, paddingRight: 16, paddingTop: 32, paddingBottom: 16 }}>
-{/* STORIES: top of feed */}
-<StoriesBar stories={storyRows} profilesById={profilesById} />
-
-{/* Posts feed (placeholder for now) */}
 <div style={{ marginTop: 16 }}>
 <div
 style={{

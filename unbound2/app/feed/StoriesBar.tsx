@@ -1,12 +1,14 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useMemo, useState } from "react";
 import styles from "./StoriesBar.module.css";
+import StoriesViewer, { type Story } from "./StoriesViewer";
 
 type StoryRow = {
 id: string;
 user_id: string;
 media_url: string | null;
+caption?: string | null;
 };
 
 type ProfileRow = {
@@ -20,8 +22,38 @@ stories: StoryRow[];
 profilesById: Record<string, ProfileRow | undefined>;
 };
 
+// 1x1 transparent gif so StoriesViewer always has a valid src
+const FALLBACK_IMG =
+"data:image/gif;base64,R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs=";
+
 export default function StoriesBar({ stories, profilesById }: Props) {
 const [showCreate, setShowCreate] = useState(false);
+
+// viewer state (YOU ALREADY HAD THIS ✅)
+const [openIndex, setOpenIndex] = useState<number | null>(null);
+const hasViewerOpen = openIndex !== null && openIndex >= 0;
+
+const openStory = (idx: number) => setOpenIndex(idx);
+const closeStory = () => setOpenIndex(null);
+
+/**
+* StoriesViewer expects media_url: string (not null)
+* So we map your rows -> Story, using story.media_url first,
+* otherwise profile avatar, otherwise a 1x1 fallback.
+*/
+const viewerStories: Story[] = useMemo(() => {
+return stories.map((s) => {
+const profile = profilesById[s.user_id];
+const media = s.media_url || profile?.avatar_url || FALLBACK_IMG;
+
+return {
+id: s.id,
+user_id: s.user_id,
+media_url: media,
+caption: s.caption ?? null,
+};
+});
+}, [stories, profilesById]);
 
 return (
 <>
@@ -41,7 +73,7 @@ aria-label="Create story"
 </button>
 
 {/* EXISTING STORIES */}
-{stories.map((story) => {
+{stories.map((story, idx) => {
 const profile = profilesById[story.user_id];
 
 return (
@@ -51,18 +83,14 @@ type="button"
 className={styles.storyBubble}
 title={profile?.username ? profile.username : "Story"}
 aria-label="Open story"
-onClick={() => {
-// TODO: open story viewer for story.id
-// (we’ll wire this next)
-}}
+onClick={() => openStory(idx)} // YOU ALREADY HAD THIS ✅
 >
-{profile?.avatar_url ? (
+{story.media_url ? (
 // eslint-disable-next-line @next/next/no-img-element
-<img
-src={profile.avatar_url}
-alt=""
-className={styles.storyAvatar}
-/>
+<img src={story.media_url} alt="" className={styles.storyAvatar} />
+) : profile?.avatar_url ? (
+// eslint-disable-next-line @next/next/no-img-element
+<img src={profile.avatar_url} alt="" className={styles.storyAvatar} />
 ) : (
 <div className={styles.storyFallback}>
 {profile?.username?.[0]?.toUpperCase() || "U"}
@@ -73,7 +101,15 @@ className={styles.storyAvatar}
 })}
 </div>
 
-{/* CREATE STORY MODAL */}
+{/* ✅ NEW: STORY VIEWER (auto-advance + swipe-down exit) */}
+<StoriesViewer
+open={hasViewerOpen}
+stories={viewerStories}
+initialIndex={openIndex ?? 0}
+onClose={closeStory}
+/>
+
+{/* CREATE STORY MODAL (your existing one) */}
 {showCreate && (
 <div
 className={styles.modalBackdrop}
@@ -81,10 +117,7 @@ onClick={() => setShowCreate(false)}
 role="dialog"
 aria-modal="true"
 >
-<div
-className={styles.modalCard}
-onClick={(e) => e.stopPropagation()}
->
+<div className={styles.modalCard} onClick={(e) => e.stopPropagation()}>
 <div className={styles.modalHeader}>
 <h3 className={styles.modalTitle}>Create story</h3>
 <button
@@ -98,9 +131,7 @@ aria-label="Close"
 </div>
 
 <div className={styles.storyPreview}>
-<div className={styles.previewPlaceholder}>
-Add a photo or video
-</div>
+<div className={styles.previewPlaceholder}>Add a photo or video</div>
 </div>
 
 <button type="button" className={styles.uploadBtn}>
@@ -108,8 +139,8 @@ Add photo / video
 </button>
 
 <div className={styles.modalHint}>
-Next: we’ll wire this button to open a file picker and upload to
-Supabase Storage + insert into <code>public.stories</code>.
+Upload goes to Storage bucket <code>stories</code> and inserts into{" "}
+<code>public.stories</code>.
 </div>
 </div>
 </div>
