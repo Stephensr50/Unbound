@@ -2,19 +2,66 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+
+const UNREAD_KEY = "unbound_unread_messages";
+const UNREAD_EVENT = "unbound:unread";
 
 export default function TopNav() {
 const pathname = usePathname();
 const router = useRouter();
 const [q, setQ] = useState("");
+const [unread, setUnread] = useState(0);
 
-useEffect(() => {
+// helper: read unread count
+const readUnread = () => {
+try {
+const raw = localStorage.getItem(UNREAD_KEY);
+const n = raw ? Number(raw) : 0;
+return Number.isFinite(n) ? n : 0;
+} catch {
+return 0;
+}
+};
+
 // keep search input synced if you land on /search?q=...
+useEffect(() => {
 try {
 const url = new URL(window.location.href);
 setQ(url.searchParams.get("q") ?? "");
 } catch {}
+}, [pathname]);
+
+// load unread + subscribe to changes
+useEffect(() => {
+setUnread(readUnread());
+
+const onCustom = () => setUnread(readUnread());
+const onStorage = (e: StorageEvent) => {
+if (e.key === UNREAD_KEY) setUnread(readUnread());
+};
+
+window.addEventListener(UNREAD_EVENT, onCustom);
+window.addEventListener("storage", onStorage);
+
+return () => {
+window.removeEventListener(UNREAD_EVENT, onCustom);
+window.removeEventListener("storage", onStorage);
+};
+}, []);
+
+// when you enter messages, clear unread
+useEffect(() => {
+const onMessagesRoute =
+pathname === "/messages" || (pathname ? pathname.startsWith("/messages/") : false);
+
+if (onMessagesRoute) {
+try {
+localStorage.setItem(UNREAD_KEY, "0");
+setUnread(0);
+window.dispatchEvent(new Event(UNREAD_EVENT));
+} catch {}
+}
 }, [pathname]);
 
 const isActive = (href: string) => {
@@ -24,7 +71,7 @@ return pathname === href || pathname.startsWith(href + "/");
 };
 
 const tabStyle = (active: boolean): React.CSSProperties => ({
-fontFamily: "inherit",
+fontFamily: '"Gloock", serif',
 fontSize: 16,
 fontWeight: 700,
 letterSpacing: "0.2px",
@@ -36,6 +83,10 @@ textShadow: active
 ? "0 0 14px rgba(168,85,247,0.9), 0 0 26px rgba(168,85,247,0.55)"
 : "none",
 transition: "all 160ms ease",
+position: "relative",
+display: "inline-flex",
+alignItems: "center",
+gap: 8,
 });
 
 const onSubmit = (e: React.FormEvent) => {
@@ -55,7 +106,6 @@ zIndex: 999999,
 pointerEvents: "auto",
 }}
 >
-{/* Center pill */}
 <div
 style={{
 display: "flex",
@@ -71,20 +121,43 @@ boxShadow:
 border: "1px solid rgba(168,85,247,0.22)",
 }}
 >
-{/* Tabs (centered, spaced) */}
 <div style={{ display: "flex", alignItems: "center", gap: 22 }}>
 <Link href="/feed" style={tabStyle(isActive("/feed"))}>
 Feed
 </Link>
+
 <Link href="/explore" style={tabStyle(isActive("/explore"))}>
 Explore
 </Link>
+
 <Link href="/profile" style={tabStyle(isActive("/profile"))}>
 Profile
 </Link>
+
+<Link href="/messages" style={tabStyle(isActive("/messages"))}>
+Messages
+{unread > 0 && (
+<span
+style={{
+minWidth: 18,
+height: 18,
+padding: "0 6px",
+borderRadius: 999,
+fontSize: 12,
+fontWeight: 900,
+lineHeight: "18px",
+color: "rgba(0,0,0,0.9)",
+background: "rgba(168,85,247,1)",
+boxShadow: "0 0 14px rgba(168,85,247,0.85)",
+}}
+>
+{unread > 99 ? "99+" : unread}
+</span>
+)}
+</Link>
 </div>
 
-{/* Search pill (purple, NOT white, NOT rectangle) */}
+{/* Search pill */}
 <form onSubmit={onSubmit} style={{ display: "flex", alignItems: "center" }}>
 <div
 style={{
@@ -97,7 +170,6 @@ background: "rgba(168,85,247,0.12)",
 border: "1px solid rgba(168,85,247,0.22)",
 }}
 >
-{/* Outline magnifier icon (no fill) */}
 <svg
 viewBox="0 0 24 24"
 width="18"
@@ -128,6 +200,7 @@ outline: "none",
 color: "rgba(168,85,247,1)",
 fontSize: 14,
 fontWeight: 700,
+fontFamily: '"Gloock", serif',
 }}
 />
 </div>
