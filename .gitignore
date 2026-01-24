@@ -36,3 +36,5 @@ yarn-error.log*
 *.tsbuildinfo
 
 pnpm-lock.yaml.BAK
+package-lock.json.bak
+package-lock.json
