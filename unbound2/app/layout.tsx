@@ -22,8 +22,7 @@ return (
 <html lang="en">
 <body className={`unbound-bg ${gloock.className}`}>
 <TopNav />
-<div style={{ height: 50 }} />
-{children}
+<main className="app-shell">{children}</main>
 </body>
 </html>
 );

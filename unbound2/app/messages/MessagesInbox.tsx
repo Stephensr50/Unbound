@@ -2,125 +2,85 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import { createClient } from "@supabase/supabase-js";
 
-type Thread = {
+const supabase = createClient(
+process.env.NEXT_PUBLIC_SUPABASE_URL!,
+process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+);
+
+type ConversationRow = {
 id: string;
-label: string;
+last_message_at: string | null;
+messages: {
+body: string;
+created_at: string;
+}[];
 };
-
-const THREADS: Thread[] = [{ id: "1", label: "Conversation 1" }];
-
-const STORAGE_KEY = "unbound_unread_threads";
-const UNREAD_EVENT = "unbound:unread";
-
-function loadUnread(): Record<string, number> {
-try {
-const raw = localStorage.getItem(STORAGE_KEY);
-const parsed = raw ? JSON.parse(raw) : {};
-return parsed && typeof parsed === "object" ? parsed : {};
-} catch {
-return {};
-}
-}
-
-function seedUnreadIfMissing() {
-try {
-const existing = loadUnread();
-const hasAny = Object.keys(existing).length > 0;
-
-if (!hasAny) {
-// Seed ONLY the threads that actually exist in the UI
-const seeded: Record<string, number> = {};
-for (const t of THREADS) seeded[t.id] = 0;
-
-// Optional: give Conversation 1 a fake unread count
-seeded["1"] = 2;
-
-localStorage.setItem(STORAGE_KEY, JSON.stringify(seeded));
-}
-} catch {
-// ignore
-}
-}
 
 export default function MessagesInbox() {
-const [unread, setUnread] = useState<Record<string, number>>({});
+const [threads, setThreads] = useState<ConversationRow[]>([]);
+const [loading, setLoading] = useState(true);
 
 useEffect(() => {
-const refresh = () => setUnread(loadUnread());
+async function loadInbox() {
+setLoading(true);
 
-// 1) seed once (if missing), then load
-seedUnreadIfMissing();
-refresh();
+const { data, error } = await supabase
+.from("conversations")
+.select(`
+id,
+last_message_at,
+messages (
+body,
+created_at
+)
+`)
+.order("last_message_at", { ascending: false });
 
-// 2) update when thread page marks read (same tab)
-window.addEventListener(UNREAD_EVENT, refresh);
+if (error) {
+console.error("Inbox load error:", error);
+} else {
+setThreads(data ?? []);
+}
 
-// 3) update if localStorage changes in another tab
-const onStorage = (e: StorageEvent) => {
-if (e.key === STORAGE_KEY) refresh();
-};
-window.addEventListener("storage", onStorage);
+setLoading(false);
+}
 
-// 4) update when you come back to this tab
-const onFocus = () => refresh();
-window.addEventListener("focus", onFocus);
-
-return () => {
-window.removeEventListener(UNREAD_EVENT, refresh);
-window.removeEventListener("storage", onStorage);
-window.removeEventListener("focus", onFocus);
-};
+loadInbox();
 }, []);
 
-return (
-<div style={{ maxWidth: 760, margin: "0 auto", padding: "16px" }}>
-<h2 style={{ fontSize: 42, marginBottom: 14 }}>Inbox</h2>
+if (loading) {
+return <div className="p-4 text-gray-400">Loading messages…</div>;
+}
 
-<ul style={{ listStyle: "none", padding: 0 }}>
-{THREADS.map((t) => {
-const count = unread[t.id] ?? 0;
+if (!threads.length) {
+return <div className="p-4 text-gray-400">No conversations yet</div>;
+}
 
 return (
-<li key={t.id} style={{ marginBottom: 10 }}>
+<div className="flex flex-col gap-3 p-4">
+{threads.map((thread) => {
+const last = thread.messages?.[0];
+
+return (
 <Link
-href={`/messages/${t.id}`}
-style={{
-fontSize: 18,
-color: "rgba(168,85,247,1)",
-textDecoration: "none",
-display: "inline-flex",
-alignItems: "center",
-gap: 8,
-}}
+key={thread.id}
+href={`/messages/${thread.id}`}
+className="rounded-lg border border-white/10 p-3 hover:bg-white/5 transition"
 >
-{t.label}
+<div className="text-sm text-white">
+{last?.body ?? "New conversation"}
+</div>
 
-{count > 0 && (
-<span
-style={{
-minWidth: 20,
-height: 20,
-padding: "0 6px",
-borderRadius: 999,
-fontSize: 12,
-fontWeight: 700,
-display: "inline-flex",
-alignItems: "center",
-justifyContent: "center",
-background: "rgba(168,85,247,0.9)",
-color: "black",
-boxShadow: "0 0 10px rgba(168,85,247,0.8)",
-}}
->
-{count}
-</span>
-)}
+<div className="text-xs text-gray-400 mt-1">
+{last
+? new Date(last.created_at).toLocaleString()
+: ""}
+</div>
 </Link>
-</li>
 );
 })}
-</ul>
 </div>
 );
 }

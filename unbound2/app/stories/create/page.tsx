@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { supabase } from "@/app/lib/supabaseClient";
+import { supabase } from "@/app/supabaseClient";
 
 export default function CreateStoryPage() {
 const router = useRouter();

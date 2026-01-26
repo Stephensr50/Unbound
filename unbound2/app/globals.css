@@ -11,9 +11,19 @@ min-height: 100vh;
 background-color: #000;
 background-image: url("/rope-bg.jpg");
 background-repeat: repeat;
-background-position: center;
+background-position: center top 400px;
 background-size: 700px auto;
 color: #fff;
+
+/* App content container — pushes every page below the sticky TopNav */
+.app-shell {
+padding-top: 60px; /* start here */
+padding-left: 24px;
+padding-right: 24px;
+padding-bottom: 96px;
+min-height: 100vh;
+box-sizing: border-box;
+}
 /* ===== TopNav (center pill, purple only) ===== */
 .topnav-wrap {
 position: sticky;
@@ -1393,6 +1403,26 @@ font-weight: 600;
 color: rgba(255,255,255,0.60);
 font-size: 12px;
 margin-top: 2px;
+
+/* FIX: allow clicks through the rope background overlay */
+.unbound-bg::before,
+.unbound-bg::after {
+pointer-events: none !important;
+
+/* FIX: ensure the auth card is above any overlay */
+.auth-card,
+.auth-wrap,
+.auth-container,
+.signup-card,
+.login-card {
+position: relative;
+z-index: 50;
+}
+}
+
+ {
+
+}
 }
 }
 }

@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import StoriesBar from "./StoriesBar";
-import { supabase } from "@/app/lib/supabaseClient";
+import { supabase } from "@/app/supabaseClient";
 
 type StoryRow = {
 id: string;
@@ -91,10 +91,11 @@ refreshStories();
 
 return (
 <div
+
 style={{
 paddingLeft: 16,
 paddingRight: 16,
-paddingTop: 96, // pushes below TopNav
+paddingTop: 25, // pushes below TopNav
 paddingBottom: 16,
 }}
 >
