@@ -24,41 +24,57 @@ align-items: center;
 justify-content: center;
 
 position: relative;
+
+/* Important: prevents “boxy glow” artifacts */
 overflow: visible;
 isolation: isolate;
+transform: translateZ(0);
 }
 
-/* ================================
-REAL STORY BUBBLES
-SOLID GLOW RING
-================================ */
-.storyBubble {
-border: 2px solid rgba(150, 79, 237, 0.6);
-box-shadow:
-0 0 14px rgba(180, 120, 255, 0.35),
-inset 0 0 10px rgba(180, 120, 255, 0.15);
-}
-
-/* pulse behind real stories */
+/* =========================================================
+REAL STORY BUBBLES — SOLID GLOW RING (premium, not boxy)
+We avoid huge box-shadows on a big pseudo-element because
+that’s what reveals a rectangle. Instead:
+- crisp ring
+- radial gradient glow
+- smaller, softer aura
+========================================================= */
 .storyBubble::after {
 content: "";
 position: absolute;
-inset: -0.5px;
+inset: -1px; /* tighter = less chance you see bounds */
 border-radius: 999px;
-border: 2px solid rgba(186, 50, 223, 0.6);
-box-shadow: 0 0 18px rgba(180, 120, 255, 0.45);
-opacity: 0.5;
-animation: storyPulse 2s ease-in-out infinite;
+pointer-events: none;
 z-index: 0;
+
+/* Crisp ring */
+border: 2px solid rgba(168, 85, 247, 0.45);
+
+/* Glow “body” (this reads like the Message button pop) */
+background: radial-gradient(
+closest-side,
+rgba(217, 70, 239, 0.22),
+rgba(168, 85, 247, 0.16) 55%,
+rgba(0, 0, 0, 0) 72%
+);
+
+/* Smaller aura so it doesn’t show a rectangle */
+box-shadow:
+0 0 0 1px rgba(168, 85, 247, 0.20),
+0 8px 20px rgba(168, 85, 247, 0.32);
+
+opacity: 0.9;
+animation: storyPulse 1.7s ease-in-out infinite;
 }
 
 /* ================================
 CREATE STORY (+)
-DOTTED RING ONLY
+DOTTED RING ONLY — synced pulse
 ================================ */
 .addStory {
 border: 2px dotted rgba(180, 120, 255, 0.85);
-box-shadow: 0 0 12px rgba(180, 120, 255, 0.25);
+/* keep base subtle; pulse lives in ::after */
+box-shadow: 0 0 10px rgba(180, 120, 255, 0.20);
 }
 
 .addStory span {
@@ -69,16 +85,31 @@ position: relative;
 z-index: 1;
 }
 
-/* dotted pulse */
+/* Dotted ring glow (synced with stories) */
 .addStory::after {
 content: "";
 position: absolute;
-inset: -6px;
+inset: -1px; /* was -6px (too big; causes mismatch + boxiness) */
 border-radius: 999px;
-border: 2px dotted rgba(180, 120, 255, 0.8);
-opacity: 0.55;
-animation: storyPulse 2s ease-in-out infinite;
+pointer-events: none;
 z-index: 0;
+
+border: 2px dotted rgba(180, 120, 255, 0.75);
+
+/* Same glow strategy: gradient + smaller aura */
+background: radial-gradient(
+closest-side,
+rgba(217, 70, 239, 0.16),
+rgba(168, 85, 247, 0.12) 55%,
+rgba(0, 0, 0, 0) 72%
+);
+
+box-shadow:
+0 0 0 1px rgba(168, 85, 247, 0.16),
+0 8px 20px rgba(168, 85, 247, 0.26);
+
+opacity: 0.75;
+animation: storyPulse 1.6s ease-in-out infinite;
 }
 
 /* ================================
@@ -112,32 +143,56 @@ z-index: 1;
 }
 
 /* ================================
-HOVER
+HOVER (keep tasteful)
 ================================ */
 .storyBubble:hover,
 .addStory:hover {
 transform: translateY(-1px);
-border-color: rgba(200, 150, 255, 0.9);
-box-shadow:
-0 0 18px rgba(200, 150, 255, 0.5),
-inset 0 0 12px rgba(200, 150, 255, 0.2);
+}
+
+.storyBubble:hover::after,
+.addStory:hover::after {
+/* Slightly hotter on hover */
+opacity: 1;
+filter: brightness(1.05);
 }
 
 /* ================================
-PULSE ANIMATION
+PULSE ANIMATION (pop, but not boxy)
+The key is: don’t expand to 40-50px glows here.
+Keep the aura under control, let gradient do the “volume.”
 ================================ */
 @keyframes storyPulse {
 0% {
+opacity: 0.70;
 transform: scale(1);
-opacity: 0.55;
+box-shadow:
+0 0 0 1px rgba(168, 85, 247, 0.18),
+0 7px 18px rgba(168, 85, 247, 0.24);
 }
+
 50% {
-transform: scale(1.12);
-opacity: 0.25;
+opacity: 1;
+transform: scale(1.03);
+box-shadow:
+0 0 0 1px rgba(168, 85, 247, 0.26),
+0 10px 24px rgba(217, 70, 239, 0.38);
 }
+
 100% {
+opacity: 0.70;
 transform: scale(1);
-opacity: 0.55;
+box-shadow:
+0 0 0 1px rgba(168, 85, 247, 0.18),
+0 7px 18px rgba(168, 85, 247, 0.24);
+}
+}
+
+/* Optional: respect reduced motion */
+@media (prefers-reduced-motion: reduce) {
+.storyBubble::after,
+.addStory::after {
+animation: none;
 }
 }
 

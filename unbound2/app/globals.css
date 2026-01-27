@@ -11,7 +11,7 @@ min-height: 100vh;
 background-color: #000;
 background-image: url("/rope-bg.jpg");
 background-repeat: repeat;
-background-position: center top 400px;
+background-position: center top -5px;
 background-size: 700px auto;
 color: #fff;
 
@@ -361,23 +361,23 @@ pointer-events: none;
 @keyframes storyPulse {
 0% {
 box-shadow:
-0 0 6px rgba(168, 85, 247, 0.6),
-0 0 14px rgba(168, 85, 247, 0.4),
-0 0 26px rgba(168, 85, 247, 0.25);
+0 0 0 1px rgba(168,85,247,0.25),
+0 6px 16px rgba(168,85,247,0.35),
+0 0 24px rgba(217,70,239,0.30);
 }
 
 50% {
 box-shadow:
-0 0 10px rgba(168, 85, 247, 0.9),
-0 0 22px rgba(168, 85, 247, 0.7),
-0 0 42px rgba(168, 85, 247, 0.45);
+0 0 0 1px rgba(168,85,247,0.45),
+0 12px 30px rgba(217,70,239,0.75),
+0 0 38px rgba(217,70,239,0.55);
 }
 
 100% {
 box-shadow:
-0 0 6px rgba(168, 85, 247, 0.6),
-0 0 14px rgba(168, 85, 247, 0.4),
-0 0 26px rgba(168, 85, 247, 0.25);
+0 0 0 1px rgba(168,85,247,0.25),
+0 6px 16px rgba(168,85,247,0.35),
+0 0 24px rgba(217,70,239,0.30);
 
 @keyframes storyPulse {
 0% {
@@ -1417,6 +1417,40 @@ pointer-events: none !important;
 .login-card {
 position: relative;
 z-index: 50;
+
+@keyframes unboundPulse {
+0% {
+box-shadow:
+0 0 0 1px rgba(168,85,247,0.25),
+0 8px 22px rgba(168,85,247,0.45),
+0 0 26px rgba(217,70,239,0.35);
+}
+
+50% {
+box-shadow:
+0 0 0 1px rgba(168,85,247,0.45),
+0 14px 34px rgba(217,70,239,0.85),
+0 0 44px rgba(217,70,239,0.65);
+}
+
+100% {
+box-shadow:
+0 0 0 1px rgba(168,85,247,0.25),
+0 8px 22px rgba(168,85,247,0.45),
+0 0 26px rgba(217,70,239,0.35);
+
+.unboundPulse {
+animation: unboundPulse .5s ease-in-out infinite !important;
+display: inline-block;
+will-change: transform;
+}
+
+@keyframes unboundPulse {
+0%, 100% { transform: scale(1); }
+50% { transform: scale(1.05); }
+}
+}
+}
 }
 }
 
