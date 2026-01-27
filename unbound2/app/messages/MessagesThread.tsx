@@ -76,7 +76,16 @@ function loadFromLocalStorage() {
 try {
 const raw = localStorage.getItem(lsKey(threadId));
 if (!raw) return [];
-const parsed = JSON.parse(raw);
+let parsed: any[] = [];
+
+if (raw && typeof raw === "string") {
+try {
+parsed = JSON.parse(raw);
+} catch (e) {
+console.warn("Failed to parse messages JSON:", raw);
+parsed = [];
+}
+}
 return Array.isArray(parsed) ? (parsed as MessageRow[]) : [];
 } catch {
 return [];
