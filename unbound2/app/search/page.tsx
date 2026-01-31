@@ -1,38 +1,14 @@
-"use client";
-
-import { useEffect, useState } from "react";
-import { useSearchParams } from "next/navigation";
 import SearchBox from "./SearchBox";
 
-export default function SearchPage() {
-const sp = useSearchParams();
+export const dynamic = "force-dynamic";
 
-// read q from the URL
-const urlQ = sp.get("q") ?? "";
+export default async function SearchPage({
+searchParams,
+}: {
+searchParams: Promise<{ q?: string }>;
+}) {
+const sp = await searchParams;
+const q = (sp.q ?? "").toString();
 
-// keep a state copy that updates whenever the URL changes
-const [q, setQ] = useState(urlQ);
-
-useEffect(() => {
-setQ(urlQ);
-}, [urlQ]);
-
-return (
-<div style={{ padding: 24 }}>
-<h1>Search</h1>
-
-{/* key forces the SearchBox to re-mount when q changes */}
-<div style={{ maxWidth: 640 }}>
-<SearchBox key={q} initialValue={q} />
-</div>
-
-<p style={{ marginTop: 16 }}>
-Query value: <strong>{q || "(empty)"}</strong>
-</p>
-
-<p style={{ marginTop: 24, opacity: 0.8 }}>
-Results placeholder — we&apos;ll wire real results next.
-</p>
-</div>
-);
+return <SearchBox initialValue={q} />;
 }
