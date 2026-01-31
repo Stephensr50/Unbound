@@ -1,11 +1,35 @@
+/* =========================================================
+Unbound — globals.css (clean)
+- Valid CSS (no nesting)
+- No clipped glows (stories/buttons)
+- Keeps horizontal overflow controlled
+========================================================= */
 
+/* ---------- Root + Resets ---------- */
+:root {
+--ub-purple: #a855f7;
+--ub-purple-soft: rgba(168, 85, 247, 0.22);
+--ub-purple-glow: rgba(168, 85, 247, 0.75);
+}
 
 html,
 body {
 height: 100%;
 margin: 0;
+
+/* Keep sideways overflow clean, allow page scrolling */
+overflow-x: hidden;
+overflow-y: auto;
+
 }
 
+*,
+*::before,
+*::after {
+box-sizing: border-box;
+}
+
+/* ---------- Rope background wrapper ---------- */
 .unbound-bg {
 min-height: 100vh;
 background-color: #000;
@@ -15,22 +39,41 @@ background-position: center top -5px;
 background-size: 700px auto;
 color: #fff;
 
-/* App content container — pushes every page below the sticky TopNav */
+/* IMPORTANT: do not clip glows */
+overflow-x: hidden;
+overflow-y: visible;
+
+position: relative;
+}
+
+/* If you ever use overlay pseudo-elements, never block clicks */
+.unbound-bg::before,
+.unbound-bg::after {
+pointer-events: none !important;
+}
+
+/* ---------- App shell (push below sticky/fixed nav) ---------- */
 .app-shell {
-padding-top: 60px; /* start here */
+padding-top: 60px; /* pushes below TopNav */
 padding-left: 24px;
 padding-right: 24px;
 padding-bottom: 96px;
 min-height: 100vh;
-box-sizing: border-box;
+
+/* IMPORTANT: do not clip glows */
+overflow-x: hidden;
+overflow-y: visible;
 }
-/* ===== TopNav (center pill, purple only) ===== */
+
+/* =========================================================
+TopNav (center pill, purple)
+========================================================= */
 .topnav-wrap {
 position: sticky;
 top: 14px;
 z-index: 50;
 display: flex;
-justify-content: center; /* top center */
+justify-content: center;
 padding: 10px 12px;
 }
 
@@ -39,8 +82,8 @@ display: flex;
 align-items: center;
 gap: 14px;
 padding: 10px 14px;
-border-radius: 999px; /* rounded pill */
-background: rgba(168, 85, 247, 0.22); /* purple glass */
+border-radius: 999px;
+background: rgba(168, 85, 247, 0.22);
 backdrop-filter: blur(14px);
 -webkit-backdrop-filter: blur(14px);
 box-shadow:
@@ -51,11 +94,11 @@ box-shadow:
 .topnav-links {
 display: flex;
 align-items: center;
-gap: 16px; /* THIS makes words separated */
+gap: 16px;
 }
 
 .topnav-link {
-color: rgba(168, 85, 247, 0.95); /* purple */
+color: rgba(168, 85, 247, 0.95);
 text-decoration: none;
 font-size: 16px;
 letter-spacing: 0.2px;
@@ -92,8 +135,8 @@ width: 180px;
 max-width: 42vw;
 background: rgba(168, 85, 247, 0.16);
 color: rgba(168, 85, 247, 1);
-border: none; /* NO WHITE BORDER */
-outline: none; /* NO OUTLINE BORDER */
+border: none;
+outline: none;
 border-radius: 999px;
 padding: 8px 12px;
 }
@@ -108,8 +151,8 @@ place-items: center;
 width: 34px;
 height: 34px;
 border-radius: 999px;
-border: none; /* NO WHITE BORDER */
-background: transparent; /* keep it clean */
+border: none;
+background: transparent;
 color: rgba(168, 85, 247, 0.95);
 cursor: pointer;
 }
@@ -121,14 +164,11 @@ filter: brightness(1.15);
 .topnav-icon {
 width: 18px;
 height: 18px;
-/* ===== Unbound TopNav (centered purple pill) ===== */
-
-:root {
---ub-purple: #a855f7; /* main purple */
---ub-purple-soft: rgba(168, 85, 247, 0.22);
---ub-purple-glow: rgba(168, 85, 247, 0.75);
 }
 
+/* =========================================================
+Alternate / Forced TopNav (if you ever used this variant)
+========================================================= */
 .ub-topnav-wrap {
 position: sticky;
 top: 0;
@@ -138,22 +178,22 @@ padding: 14px 12px 0;
 
 .ub-topnav {
 width: fit-content;
-margin: 0 auto; /* centers it */
+margin: 0 auto;
 display: flex;
 align-items: center;
 gap: 14px;
-
 padding: 10px 14px;
-border-radius: 999px; /* pill */
+border-radius: 999px;
 background: rgba(0, 0, 0, 0.35);
 border: 1px solid var(--ub-purple-soft);
 backdrop-filter: blur(10px);
+-webkit-backdrop-filter: blur(10px);
 }
 
 .ub-tabs {
 display: flex;
 align-items: center;
-gap: 14px; /* spaces the words */
+gap: 14px;
 }
 
 .ub-tab {
@@ -161,7 +201,6 @@ color: var(--ub-purple);
 text-decoration: none;
 font-weight: 700;
 letter-spacing: 0.2px;
-text-shadow: none;
 opacity: 0.9;
 }
 
@@ -181,9 +220,8 @@ text-shadow:
 display: flex;
 align-items: center;
 gap: 8px;
-
 padding: 6px 10px;
-border-radius: 999px; /* rounded corners */
+border-radius: 999px;
 border: 1px solid var(--ub-purple-soft);
 background: rgba(168, 85, 247, 0.12);
 }
@@ -191,7 +229,7 @@ background: rgba(168, 85, 247, 0.12);
 .ub-search-icon {
 width: 18px;
 height: 18px;
-color: var(--ub-purple); /* purple icon */
+color: var(--ub-purple);
 flex: 0 0 auto;
 }
 
@@ -200,376 +238,32 @@ width: 180px;
 background: transparent;
 border: none;
 outline: none;
-color: var(--ub-purple); /* purple text */
+color: var(--ub-purple);
 font-weight: 600;
 }
 
 .ub-search-input::placeholder {
-color: rgba(168, 85, 247, 0.75); /* purple placeholder */
-
-/* ===== TOP NAV ===== */
-
-.topnav {
-position: fixed;
-top: 0;
-left: 0;
-right: 0;
-height: 56px;
-display: flex;
-align-items: center;
-justify-content: space-between;
-padding: 0 24px;
-z-index: 1000;
-background: rgba(0, 0, 0, 0.45);
-backdrop-filter: blur(10px);
+color: rgba(168, 85, 247, 0.75);
 }
 
-.topnav-left {
-display: flex;
-gap: 24px;
-}
-
-.topnav-link {
-color: rgba(168, 85, 247, 0.6);
-font-weight: 600;
-text-decoration: none;
-transition: color 0.2s, text-shadow 0.2s;
-}
-
-.topnav-link:hover {
-color: rgba(168, 85, 247, 0.9);
-}
-
-.topnav-link.active {
-color: rgb(168, 85, 247);
-text-shadow: 0 0 12px rgba(168, 85, 247, 0.8);
-}
-
-/* Search */
-
-.ub-search-input {
-background: rgba(0, 0, 0, 0.4);
-border: none;
-outline: none;
-padding: 8px 14px;
-border-radius: 999px;
-color: rgb(168, 85, 247);
-font-weight: 500;
-}
-
-.ub-search-input::placeholder {
-color: rgba(168, 85, 247, 0.6);
-
-
-/* ===== UNBOUND TOP NAV (FORCED STYLES) ===== */
-
-.ub-topnav {
-position: fixed;
-top: 0;
-left: 0;
-right: 0;
-height: 64px;
-z-index: 9999;
-display: flex;
-align-items: center;
-justify-content: center;
-
-background: rgba(0, 0, 0, 0.45);
-backdrop-filter: blur(10px);
-}
-
-/* center everything inside, keep it a nice width */
-.ub-topnav-inner {
-width: min(1100px, calc(100% - 32px));
-display: grid;
-grid-template-columns: 1fr auto 1fr;
-align-items: center;
-}
-
-/* links centered */
-.ub-topnav-links {
-grid-column: 2;
-display: flex;
-gap: 26px;
-align-items: center;
-justify-content: center;
-}
-
-.ub-navlink {
-font-weight: 600;
-text-decoration: none;
-
-color: rgba(168, 85, 247, 0.65) !important;
-text-shadow: none !important;
-
-transition: color 0.2s ease, text-shadow 0.2s ease;
-}
-
-.ub-navlink:hover {
-color: rgba(168, 85, 247, 0.95) !important;
-}
-
-.ub-navlink.active {
-color: rgba(168, 85, 247, 1) !important;
-text-shadow: 0 0 14px rgba(168, 85, 247, 0.9) !important;
-}
-
-/* search pinned to the right */
-.ub-topnav-search {
-grid-column: 3;
-justify-self: end;
-}
-
-/* FORCE pill and NO white fill/border */
-.ub-topnav .ub-search-input {
-width: 240px;
-height: 38px;
-
-padding: 0 14px !important;
-border-radius: 999px !important;
-
-background: rgba(0, 0, 0, 0.35) !important;
-border: 1px solid rgba(168, 85, 247, 0.25) !important; /* subtle, not white */
-outline: none !important;
-
-color: rgba(168, 85, 247, 1) !important;
-font-weight: 600 !important;
-
-box-shadow: 0 0 0 1px rgba(168, 85, 247, 0.05) inset !important;
-}
-
-.ub-topnav .ub-search-input::placeholder {
-color: rgba(168, 85, 247, 0.55) !important;
-
-/* STORY RING — PURPLE GLOW + PULSE */
-.ub-story-ring {
-position: absolute;
-inset: -3px;
-border-radius: 999px;
-
-border: 2px solid #8b5cf6;
-
-box-shadow:
-0 0 6px rgba(168, 85, 247, 0.7),
-0 0 14px rgba(168, 85, 247, 0.5),
-0 0 26px rgba(168, 85, 247, 0.35);
-
-animation: storyPulse 2.2s ease-in-out infinite;
-pointer-events: none;
-}
-
-@keyframes storyPulse {
-0% {
-box-shadow:
-0 0 0 1px rgba(168,85,247,0.25),
-0 6px 16px rgba(168,85,247,0.35),
-0 0 24px rgba(217,70,239,0.30);
-}
-
-50% {
-box-shadow:
-0 0 0 1px rgba(168,85,247,0.45),
-0 12px 30px rgba(217,70,239,0.75),
-0 0 38px rgba(217,70,239,0.55);
-}
-
-100% {
-box-shadow:
-0 0 0 1px rgba(168,85,247,0.25),
-0 6px 16px rgba(168,85,247,0.35),
-0 0 24px rgba(217,70,239,0.30);
-
-@keyframes storyPulse {
-0% {
-box-shadow:
-0 0 6px rgba(168, 85, 247, 0.7),
-0 0 14px rgba(168, 85, 247, 0.5),
-0 0 26px rgba(168, 85, 247, 0.35);
-opacity: 0.9;
-}
-
-50% {
-box-shadow:
-0 0 10px rgba(168, 85, 247, 0.9),
-0 0 22px rgba(168, 85, 247, 0.7),
-0 0 40px rgba(168, 85, 247, 0.45);
-opacity: 1;
-}
-
-100% {
-box-shadow:
-0 0 6px rgba(168, 85, 247, 0.7),
-0 0 14px rgba(168, 85, 247, 0.5),
-0 0 26px rgba(168, 85, 247, 0.35);
-opacity: 0.9;
-/* =========================
-STORIES — SAFE DEFAULTS
-(paste-only block)
-========================= */
-
-/* the parent wrapper that the ring needs */
-.ub-story-wrap {
-position: relative;
-width: 64px;
-height: 64px;
-border-radius: 999px;
-}
-
-/* the avatar image itself */
-.ub-story-avatar {
-width: 100%;
-height: 100%;
-border-radius: 999px;
-object-fit: cover;
-position: relative;
-z-index: 2;
-}
-
-/* the purple ring overlay */
-.ub-story-ring {
-position: absolute;
-inset: -3px;
-border-radius: 999px;
-
-border: 2px solid #a855f7;
-box-shadow:
-0 0 6px rgba(168, 85, 247, 0.7),
-0 0 14px rgba(168, 85, 247, 0.5),
-0 0 26px rgba(168, 85, 247, 0.35);
-
-animation: ubStoryPulse 2.2s ease-in-out infinite;
-pointer-events: none;
-z-index: 1;
-}
-
-@keyframes ubStoryPulse {
-0%, 100% { transform: scale(1); filter: brightness(1); opacity: 0.95; }
-50% { transform: scale(1.045); filter: brightness(1.25); opacity: 1; }
-
-/* =========================
-STORIES — BUBBLES + PURPLE GLOW
-========================= */
-
-.ub-stories-bar {
-width: 100%;
-display: flex;
-justify-content: center;
-padding: 14px 0 8px;
-}
-
-.ub-stories-scroll {
-width: min(980px, calc(100% - 28px));
-display: flex;
-gap: 14px;
-align-items: flex-start;
-overflow-x: auto;
-padding: 10px 10px 6px;
-border-radius: 18px;
-
-background: rgba(0, 0, 0, 0.28);
-backdrop-filter: blur(10px);
--webkit-backdrop-filter: blur(10px);
-
-border: 1px solid rgba(168, 85, 247, 0.22);
-box-shadow: 0 0 18px rgba(168, 85, 247, 0.14);
-}
-
-.ub-stories-scroll::-webkit-scrollbar {
-height: 8px;
-}
-.ub-stories-scroll::-webkit-scrollbar-thumb {
-background: rgba(168, 85, 247, 0.35);
-border-radius: 999px;
-}
-
-.ub-story {
-appearance: none;
-border: 0;
-background: transparent;
-padding: 0;
-margin: 0;
-cursor: pointer;
-color: inherit;
-
-display: flex;
-flex-direction: column;
-align-items: center;
-gap: 8px;
-
-min-width: 72px;
-}
-
-.ub-story-wrap {
-position: relative;
-width: 64px;
-height: 64px;
-border-radius: 999px;
-}
-
-.ub-story-fallback {
-width: 64px;
-height: 64px;
-border-radius: 999px;
-
-display: grid;
-place-items: center;
-
-background: rgba(0, 0, 0, 0.55);
-border: 1px solid rgba(255, 255, 255, 0.10);
-box-shadow: inset 0 0 18px rgba(0, 0, 0, 0.55);
-
-font-weight: 700;
-letter-spacing: 0.5px;
-color: rgba(235, 225, 255, 0.9);
-z-index: 2;
-position: relative;
-}
-
-/* Purple glowing ring with pulse */
-.ub-story-ring {
-position: absolute;
-inset: -3px;
-border-radius: 999px;
-
-border: 2px solid #a855f7;
-box-shadow:
-0 0 6px rgba(168, 85, 247, 0.75),
-0 0 14px rgba(168, 85, 247, 0.55),
-0 0 28px rgba(168, 85, 247, 0.38);
-
-animation: ubStoryPulse 2.2s ease-in-out infinite;
-pointer-events: none;
-z-index: 1;
-}
-
-@keyframes ubStoryPulse {
-0%, 100% { transform: scale(1); filter: brightness(1); opacity: 0.95; }
-50% { transform: scale(1.06); filter: brightness(1.25); opacity: 1; }
-}
-
-.ub-story-name {
-font-size: 12px;
-line-height: 1.1;
-max-width: 72px;
-text-align: center;
-
-white-space: nowrap;
-overflow: hidden;
-text-overflow: ellipsis;
-
-color: rgba(220, 200, 255, 0.92);
-text-shadow: 0 0 12px rgba(168, 85, 247, 0.28);
-
-/* STORIES BAR */
+/* =========================================================
+Stories (global baseline, safe)
+NOTE: Your real story styling should live in module CSS,
+but these keep older components from breaking.
+========================================================= */
 .ub-stories-wrap {
-padding: 10px 14px 6px;
+width: 100%;
+padding: 10px 12px 6px;
 }
 
 .ub-stories-scroll {
 display: flex;
+align-items: center;
 gap: 12px;
 overflow-x: auto;
-padding: 6px 2px 10px;
+overflow-y: hidden;
+padding: 8px 2px 10px;
+-webkit-overflow-scrolling: touch;
 scrollbar-width: none;
 }
 
@@ -578,566 +272,64 @@ display: none;
 }
 
 .ub-story-bubble {
-position: relative;
-width: 74px;
-flex: 0 0 auto;
-background: transparent;
-border: 0;
-padding: 0;
-cursor: pointer;
-text-align: center;
-}
-
-.ub-story-avatar {
-width: 56px;
-height: 56px;
-margin: 0 auto;
-border-radius: 999px;
-display: grid;
-place-items: center;
-background: rgba(255, 255, 255, 0.08);
-color: rgba(255, 255, 255, 0.92);
-font-weight: 800;
-letter-spacing: 0.5px;
-position: relative;
-z-index: 2;
-}
-
-.ub-story-name {
-display: block;
-margin-top: 6px;
-font-size: 12px;
-color: rgba(255, 255, 255, 0.72);
-white-space: nowrap;
-overflow: hidden;
-text-overflow: ellipsis;
-}
-
-/* STORY RING — PURPLE GLOW + PULSE */
-.ub-story-ring {
-position: absolute;
-left: 50%;
-top: 6px;
-width: 62px;
-height: 62px;
-transform: translateX(-50%);
-border-radius: 999px;
-border: 2px solid #8b5cf6;
-
-box-shadow:
-0 0 6px rgba(168, 85, 247, 0.70),
-0 0 14px rgba(168, 85, 247, 0.50),
-0 0 26px rgba(168, 85, 247, 0.35);
-
-animation: storyPulse 2.2s ease-in-out infinite;
-pointer-events: none;
-z-index: 1;
-}
-
-@keyframes storyPulse {
-0% {
-transform: translateX(-50%) scale(1);
-box-shadow:
-0 0 6px rgba(168, 85, 247, 0.60),
-0 0 14px rgba(168, 85, 247, 0.42),
-0 0 26px rgba(168, 85, 247, 0.30);
-}
-50% {
-transform: translateX(-50%) scale(1.06);
-box-shadow:
-0 0 10px rgba(168, 85, 247, 0.85),
-0 0 22px rgba(168, 85, 247, 0.60),
-0 0 36px rgba(168, 85, 247, 0.42);
-}
-100% {
-transform: translateX(-50%) scale(1);
-box-shadow:
-0 0 6px rgba(168, 85, 247, 0.60),
-0 0 14px rgba(168, 85, 247, 0.42),
-0 0 26px rgba(168, 85, 247, 0.30);
-}
-}
-
-/* QUICK STORY VIEWER */
-.ub-story-modal {
-position: fixed;
-inset: 0;
-background: rgba(0, 0, 0, 0.65);
-display: grid;
-place-items: center;
-z-index: 9999;
-}
-
-.ub-story-card {
-width: min(520px, calc(100vw - 28px));
-border-radius: 16px;
-padding: 18px;
-background: rgba(10, 10, 10, 0.88);
-border: 1px solid rgba(168, 85, 247, 0.25);
-box-shadow:
-0 0 18px rgba(168, 85, 247, 0.18),
-0 0 40px rgba(0, 0, 0, 0.55);
-}
-
-.ub-story-title {
-color: rgba(255, 255, 255, 0.92);
-font-weight: 800;
-margin-bottom: 10px;
-}
-
-.ub-story-body {
-color: rgba(255, 255, 255, 0.75);
-}
-
-.ub-story-close {
-position: fixed;
-top: 14px;
-right: 14px;
-background: rgba(20, 20, 20, 0.85);
-border: 1px solid rgba(168, 85, 247, 0.35);
-color: rgba(255, 255, 255, 0.9);
-padding: 10px 12px;
-border-radius: 12px;
-cursor: pointer;
-/* ===== UNBOUND STORIES — FORCE DARK + PURPLE GLOW (kills white blocks) ===== */
-
-.ub-stories-wrap{
-padding: 10px 12px;
-}
-
-.ub-stories-scroll{
-display: flex;
-gap: 12px;
-overflow-x: auto;
-padding: 8px 2px 6px;
-}
-
-.ub-stories-scroll::-webkit-scrollbar{
-height: 6px;
-}
-.ub-stories-scroll::-webkit-scrollbar-thumb{
-background: rgba(168,85,247,0.35);
-border-radius: 999px;
-}
-
-/* the clickable “bubble” (button) */
-.ub-story-bubble{
-appearance: none;
--webkit-appearance: none;
-
-border: 0 !important;
-background: transparent !important; /* <-- this is what kills the white blocks */
-padding: 0 !important;
-margin: 0;
-
-width: 74px;
-flex: 0 0 auto;
-
-cursor: pointer;
-text-align: center;
-color: rgba(255,255,255,0.9);
-}
-
-/* wrapper for ring + avatar */
-.ub-story-avatarWrap{
-position: relative;
-width: 62px;
-height: 62px;
-margin: 0 auto 6px;
-}
-
-/* purple glow ring */
-.ub-story-ring{
-position: absolute;
-inset: -3px;
-border-radius: 999px;
-
-border: 2px solid rgba(168,85,247,0.85);
-box-shadow:
-0 0 6px rgba(168,85,247,0.75),
-0 0 14px rgba(168,85,247,0.55),
-0 0 26px rgba(168,85,247,0.35);
-
-animation: storyPulse 2.2s ease-in-out infinite;
-pointer-events: none;
-}
-
-@keyframes storyPulse{
-0%, 100%{
-transform: scale(1);
-filter: brightness(1);
-}
-50%{
-transform: scale(1.03);
-filter: brightness(1.2);
-}
-}
-
-/* the avatar circle */
-.ub-story-avatar{
-position: relative;
-z-index: 2;
-
-display: grid;
-place-items: center;
-
-width: 62px;
-height: 62px;
-border-radius: 999px;
-
-background: rgba(0,0,0,0.35);
-outline: 1px solid rgba(255,255,255,0.10);
-
-color: rgba(255,255,255,0.92);
-font-weight: 900;
-}
-
-/* the name under the avatar */
-.ub-story-name{
-font-size: 12px;
-line-height: 14px;
-color: rgba(255,255,255,0.75);
-white-space: nowrap;
-overflow: hidden;
-text-overflow: ellipsis;
-/* ===== KILL DEFAULT BUTTON "WHITE BLOCK" LOOK ===== */
-.ub-story-bubble {
-background: transparent !important;
-border: 0 !important;
-padding: 0 !important;
-appearance: none;
--webkit-appearance: none;
-/* === RESET BROWSER BUTTON STYLES FOR STORY BUBBLES === */
-button.ub-story-bubble {
 all: unset; /* nukes browser button defaults */
-display: flex; /* we control layout now */
-flex-direction: column;
-align-items: center;
-gap: 6px;
-width: 74px;
-cursor: pointer;
 box-sizing: border-box;
-/* HARD RESET: story button must NOT look like a browser button */
-button.ub-story-bubble {
-appearance: none !important;
--webkit-appearance: none !important;
-
-background: transparent !important;
-background-color: transparent !important;
-
-border: 0 !important;
-outline: none !important;
-box-shadow: none !important;
-
-padding: 0 !important;
-margin: 0 !important;
-
-font: inherit !important;
-color: inherit !important;
-
-display: inline-flex !important;
-flex-direction: column !important;
-align-items: center !important;
-
-cursor: pointer !important;
-}
-
-/* If anything inside is turning into a white block, force it transparent too */
-button.ub-story-bubble * {
-background: transparent !important;
-background-color: transparent !important;
-/* STORIES LAYOUT */
-.ub-stories-wrap {
-width: 100%;
-padding: 10px 12px 0;
-}
-
-.ub-stories-scroll {
-display: flex;
-gap: 12px;
-overflow-x: auto;
-padding: 8px 2px 10px;
-}
-
-.ub-stories-scroll::-webkit-scrollbar {
-height: 6px;
-}
-
-.ub-story-bubble {
 width: 74px;
-flex: 0 0 auto;
-
-/* IMPORTANT: no browser button styling anymore */
-background: transparent;
-border: 0;
-padding: 0;
-margin: 0;
-
-display: inline-flex;
+display: flex;
 flex-direction: column;
 align-items: center;
-text-align: center;
-
 cursor: pointer;
 user-select: none;
+color: rgba(255, 255, 255, 0.9);
 }
 
 .ub-story-avatarWrap {
 position: relative;
 width: 62px;
 height: 62px;
+margin: 0 auto 6px;
+border-radius: 999px;
 }
 
 .ub-story-avatar {
+position: relative;
+z-index: 2;
 width: 62px;
 height: 62px;
 border-radius: 999px;
-
 display: grid;
 place-items: center;
-
-background: rgba(0, 0, 0, 0.45);
-color: rgba(255, 255, 255, 0.9);
-font-weight: 800;
-letter-spacing: 0.5px;
+background: rgba(0, 0, 0, 0.35);
+outline: 1px solid rgba(255, 255, 255, 0.10);
+color: rgba(255, 255, 255, 0.92);
+font-weight: 900;
 }
 
-/* PURPLE GLOW RING + PULSE */
 .ub-story-ring {
 position: absolute;
 inset: -3px;
 border-radius: 999px;
-
-border: 2px solid #8b5cf6;
+border: 2px solid rgba(168, 85, 247, 0.85);
 box-shadow:
-0 0 6px rgba(168, 85, 247, 0.7),
-0 0 14px rgba(168, 85, 247, 0.5),
+0 0 6px rgba(168, 85, 247, 0.75),
+0 0 14px rgba(168, 85, 247, 0.55),
 0 0 26px rgba(168, 85, 247, 0.35);
-
-animation: storyPulse 2.2s ease-in-out infinite;
+animation: ubStoryPulse 2.2s ease-in-out infinite;
 pointer-events: none;
+z-index: 1;
 }
 
-@keyframes storyPulse {
+@keyframes ubStoryPulse {
 0%, 100% {
 transform: scale(1);
-opacity: 0.9;
+filter: brightness(1);
+opacity: 0.95;
 }
 50% {
 transform: scale(1.04);
-opacity: 0.65;
+filter: brightness(1.2);
+opacity: 1;
 }
-}
-
-.ub-story-name {
-margin-top: 8px;
-font-size: 12px;
-line-height: 1.1;
-color: rgba(255, 255, 255, 0.85);
-}
-
-/* (Optional) simple modal styling */
-.ub-story-modal {
-position: fixed;
-inset: 0;
-z-index: 50;
-}
-
-.ub-story-backdrop {
-position: absolute;
-inset: 0;
-background: rgba(0,0,0,0.65);
-}
-
-.ub-story-sheet {
-position: relative;
-z-index: 51;
-width: min(520px, calc(100% - 24px));
-margin: 80px auto 0;
-border-radius: 16px;
-background: rgba(10,10,10,0.85);
-border: 1px solid rgba(168, 85, 247, 0.35);
-box-shadow: 0 0 20px rgba(168, 85, 247, 0.18);
-overflow: hidden;
-}
-
-.ub-story-sheetTop {
-display: flex;
-justify-content: space-between;
-align-items: center;
-padding: 12px 14px;
-border-bottom: 1px solid rgba(255,255,255,0.08);
-}
-
-.ub-story-sheetTitle {
-color: rgba(255,255,255,0.9);
-font-weight: 700;
-}
-
-.ub-story-close {
-background: transparent;
-border: 1px solid rgba(168, 85, 247, 0.5);
-color: rgba(255,255,255,0.9);
-border-radius: 999px;
-padding: 6px 10px;
-cursor: pointer;
-}
-
-.ub-story-sheetBody {
-padding: 18px 14px;
-color: rgba(255,255,255,0.85);
-/* FIX: Stories should be a horizontal row (no white blocks, no vertical stack) */
-.ub-stories-wrap {
-width: 100%;
-}
-
-.ub-stories-scroll {
-display: flex !important;
-flex-direction: row !important;
-align-items: center;
-gap: 12px;
-
-overflow-x: auto;
-overflow-y: hidden;
-
-padding: 10px 12px;
--webkit-overflow-scrolling: touch;
-}
-
-/* Prevent each story from becoming a full-width row */
-.ub-story-bubble {
-flex: 0 0 auto !important;
-width: 74px;
-/* FIX: ub-story-bubble is now a DIV, not a button */
-.ub-story-bubble {
-display: inline-flex;
-flex-direction: column;
-align-items: center;
-justify-content: center;
-
-background: transparent !important;
-background-color: transparent !important;
-border: none !important;
-box-shadow: none !important;
-
-padding: 0 !important;
-margin: 0 !important;
-
-cursor: pointer;
-}
-
-/* Force horizontal layout */
-.ub-stories-scroll {
-display: flex !important;
-flex-direction: row !important;
-gap: 12px;
-overflow-x: auto;
-overflow-y: hidden;
-}
-
-/* Make sure items don’t stretch */
-.ub-stories-scroll > .ub-story-bubble {
-flex: 0 0 auto;
-/* === STORY BUBBLE HARD RESET === */
-.ub-story-bubble {
-all: unset;
-display: flex;
-flex-direction: column;
-align-items: center;
-justify-content: center;
-cursor: pointer;
-}
-
-/* Kill ALL white backgrounds inside stories */
-.ub-story-bubble,
-.ub-story-bubble * {
-background: transparent !important;
-background-color: transparent !important;
-border: 0 !important;
-box-shadow: none !important;
-}
-
-/* Name under avatar */
-.ub-story-name {
-margin-top: 6px;
-font-size: 12px;
-line-height: 1;
-text-align: center;
-color: rgba(255,255,255,0.8);
-background: transparent !important;
-display: block;
-}
-
-/* Keep story row horizontal */
-.ub-stories-scroll {
-display: flex;
-flex-direction: row;
-gap: 14px;
-overflow-x: auto;
-overflow-y: hidden;.ub-story-bubble {
-border: none;
-background: transparent;
-padding: 0;
-margin: 0;
-appearance: none;
--webkit-appearance: none;
-font: inherit;
-color: inherit;
-/* ===== Unbound Stories (known-good baseline) ===== */
-
-.ub-stories-wrap {
-padding: 10px 12px 6px;
-}
-
-.ub-stories-scroll {
-display: flex;
-gap: 10px;
-overflow-x: auto;
-padding-bottom: 6px;
-}
-
-.ub-stories-scroll::-webkit-scrollbar {
-height: 8px;
-}
-
-.ub-story-bubble {
-/* this nukes the white blocks */
-all: unset;
-box-sizing: border-box;
-
-width: 74px;
-display: flex;
-flex-direction: column;
-align-items: center;
-
-cursor: pointer;
-user-select: none;
-}
-
-.ub-story-ring {
-width: 54px;
-height: 54px;
-border-radius: 999px;
-
-/* purple glow ring */
-background: transparent;
-box-shadow:
-0 0 0 2px rgba(168, 85, 247, 0.95),
-0 0 14px rgba(168, 85, 247, 0.55);
-}
-
-.ub-story-initial {
-margin-top: -43px; /* pull letter into the ring */
-width: 54px;
-height: 54px;
-display: grid;
-place-items: center;
-
-border-radius: 999px;
-background: rgba(0, 0, 0, 0.45);
-color: rgba(255, 255, 255, 0.92);
-font-weight: 800;
-letter-spacing: 0.5px;
 }
 
 .ub-story-name {
@@ -1145,16 +337,16 @@ margin-top: 6px;
 font-size: 12px;
 line-height: 1.1;
 text-align: center;
-color: rgba(255, 255, 255, 0.85);
+color: rgba(255, 255, 255, 0.80);
 
-/* prevents wrapping/looking messy */
 max-width: 74px;
 white-space: nowrap;
-overflow: hidden;
+overflow-x: hidden;
+overflow-y: auto;
 text-overflow: ellipsis;
 }
 
-/* Modal */
+/* Story modal baseline */
 .ub-story-modal {
 position: fixed;
 inset: 0;
@@ -1167,7 +359,6 @@ place-items: center;
 position: fixed;
 inset: 0;
 background: rgba(0, 0, 0, 0.65);
-border: 0;
 }
 
 .ub-story-sheet {
@@ -1177,7 +368,9 @@ border-radius: 16px;
 background: rgba(0, 0, 0, 0.72);
 border: 1px solid rgba(168, 85, 247, 0.35);
 box-shadow: 0 0 30px rgba(0, 0, 0, 0.6);
-overflow: hidden;
+overflow-x: hidden;
+overflow-y: auto;
+
 z-index: 1;
 }
 
@@ -1207,22 +400,16 @@ border: 1px solid rgba(168, 85, 247, 0.35);
 padding: 18px 14px;
 }
 
-.ub-story-placeholder {
-height: 240px;
-border-radius: 14px;
-border: 1px dashed rgba(255, 255, 255, 0.2);
-display: grid;
-place-items: center;
-color: rgba(255, 255, 255, 0.75);
-/* ===== Unbound: Profile + Follows UI ===== */
-
+/* =========================================================
+Profile / Cards / Modals (common)
+========================================================= */
 .ub-card {
 max-width: 640px;
 margin: 24px auto;
 padding: 18px;
 border-radius: 18px;
-border: 1px solid rgba(255,255,255,0.12);
-background: rgba(0,0,0,0.55);
+border: 1px solid rgba(255, 255, 255, 0.12);
+background: rgba(0, 0, 0, 0.55);
 backdrop-filter: blur(14px);
 -webkit-backdrop-filter: blur(14px);
 }
@@ -1237,9 +424,10 @@ gap: 14px;
 width: 64px;
 height: 64px;
 border-radius: 999px;
-overflow: hidden;
-border: 1px solid rgba(255,255,255,0.12);
-background: rgba(255,255,255,0.06);
+overflow-x: hidden;
+overflow-y: auto;
+border: 1px solid rgba(255, 255, 255, 0.12);
+background: rgba(255, 255, 255, 0.06);
 flex: 0 0 auto;
 }
 
@@ -1250,21 +438,21 @@ object-fit: cover;
 }
 
 .ub-name {
-color: rgba(255,255,255,0.95);
+color: rgba(255, 255, 255, 0.95);
 font-size: 18px;
 font-weight: 700;
 line-height: 1.2;
 }
 
 .ub-handle {
-color: rgba(255,255,255,0.65);
+color: rgba(255, 255, 255, 0.65);
 font-size: 13px;
 margin-top: 2px;
 }
 
 .ub-bio {
 margin-top: 12px;
-color: rgba(255,255,255,0.75);
+color: rgba(255, 255, 255, 0.75);
 font-size: 14px;
 }
 
@@ -1279,23 +467,23 @@ gap: 10px;
 text-align: left;
 padding: 12px;
 border-radius: 14px;
-border: 1px solid rgba(255,255,255,0.12);
-background: rgba(255,255,255,0.06);
+border: 1px solid rgba(255, 255, 255, 0.12);
+background: rgba(255, 255, 255, 0.06);
 cursor: pointer;
 }
 
 .ub-statbtn:hover {
-background: rgba(255,255,255,0.10);
+background: rgba(255, 255, 255, 0.10);
 }
 
 .ub-statnum {
-color: rgba(255,255,255,0.95);
+color: rgba(255, 255, 255, 0.95);
 font-weight: 800;
 font-size: 18px;
 }
 
 .ub-statlabel {
-color: rgba(255,255,255,0.60);
+color: rgba(255, 255, 255, 0.60);
 font-size: 13px;
 margin-top: 2px;
 }
@@ -1312,15 +500,15 @@ align-items: center;
 justify-content: center;
 padding: 9px 14px;
 border-radius: 999px;
-border: 1px solid rgba(255,255,255,0.14);
-background: rgba(255,255,255,0.06);
-color: rgba(255,255,255,0.92);
+border: 1px solid rgba(255, 255, 255, 0.14);
+background: rgba(255, 255, 255, 0.06);
+color: rgba(255, 255, 255, 0.92);
 font-size: 13px;
 text-decoration: none;
 }
 
 .ub-pill:hover {
-background: rgba(255,255,255,0.10);
+background: rgba(255, 255, 255, 0.10);
 }
 
 /* Modal */
@@ -1331,7 +519,7 @@ z-index: 50;
 display: flex;
 align-items: center;
 justify-content: center;
-background: rgba(0,0,0,0.65);
+background: rgba(0, 0, 0, 0.65);
 padding: 16px;
 }
 
@@ -1339,8 +527,8 @@ padding: 16px;
 width: 100%;
 max-width: 440px;
 border-radius: 18px;
-border: 1px solid rgba(255,255,255,0.12);
-background: rgba(0,0,0,0.72);
+border: 1px solid rgba(255, 255, 255, 0.12);
+background: rgba(0, 0, 0, 0.72);
 backdrop-filter: blur(16px);
 -webkit-backdrop-filter: blur(16px);
 padding: 14px;
@@ -1355,14 +543,14 @@ padding-bottom: 8px;
 }
 
 .ub-modalTitle {
-color: rgba(255,255,255,0.95);
+color: rgba(255, 255, 255, 0.95);
 font-weight: 700;
 }
 
 .ub-modalClose {
-border: 1px solid rgba(255,255,255,0.14);
-background: rgba(255,255,255,0.06);
-color: rgba(255,255,255,0.85);
+border: 1px solid rgba(255, 255, 255, 0.14);
+background: rgba(255, 255, 255, 0.06);
+color: rgba(255, 255, 255, 0.85);
 border-radius: 999px;
 padding: 6px 10px;
 cursor: pointer;
@@ -1384,32 +572,28 @@ align-items: center;
 gap: 12px;
 padding: 10px;
 border-radius: 14px;
-border: 1px solid rgba(255,255,255,0.12);
-background: rgba(255,255,255,0.06);
+border: 1px solid rgba(255, 255, 255, 0.12);
+background: rgba(255, 255, 255, 0.06);
 text-decoration: none;
 }
 
 .ub-userRow:hover {
-background: rgba(255,255,255,0.10);
+background: rgba(255, 255, 255, 0.10);
 }
 
 .ub-userName {
-color: rgba(255,255,255,0.92);
+color: rgba(255, 255, 255, 0.92);
 font-size: 14px;
 font-weight: 600;
 }
 
 .ub-userHandle {
-color: rgba(255,255,255,0.60);
+color: rgba(255, 255, 255, 0.60);
 font-size: 12px;
 margin-top: 2px;
+}
 
-/* FIX: allow clicks through the rope background overlay */
-.unbound-bg::before,
-.unbound-bg::after {
-pointer-events: none !important;
-
-/* FIX: ensure the auth card is above any overlay */
+/* ---------- Auth card above overlays ---------- */
 .auth-card,
 .auth-wrap,
 .auth-container,
@@ -1417,30 +601,11 @@ pointer-events: none !important;
 .login-card {
 position: relative;
 z-index: 50;
-
-@keyframes unboundPulse {
-0% {
-box-shadow:
-0 0 0 1px rgba(168,85,247,0.25),
-0 8px 22px rgba(168,85,247,0.45),
-0 0 26px rgba(217,70,239,0.35);
 }
 
-50% {
-box-shadow:
-0 0 0 1px rgba(168,85,247,0.45),
-0 14px 34px rgba(217,70,239,0.85),
-0 0 44px rgba(217,70,239,0.65);
-}
-
-100% {
-box-shadow:
-0 0 0 1px rgba(168,85,247,0.25),
-0 8px 22px rgba(168,85,247,0.45),
-0 0 26px rgba(217,70,239,0.35);
-
+/* ---------- Utility pulse (optional) ---------- */
 .unboundPulse {
-animation: unboundPulse .5s ease-in-out infinite !important;
+animation: unboundPulse 0.5s ease-in-out infinite !important;
 display: inline-block;
 will-change: transform;
 }
@@ -1449,34 +614,36 @@ will-change: transform;
 0%, 100% { transform: scale(1); }
 50% { transform: scale(1.05); }
 }
-}
-}
-}
+
+
+/* =========================
+UNBOUND: STOP CLIPPING STORY GLOWS
+(override any earlier overflow:hidden)
+========================= */
+
+/* Keep sideways overflow clean, but allow vertical effects (glows, shadows) */
+html,
+body {
+overflow-x: hidden !important;
+overflow-y: auto !important;
 }
 
- {
+/* Your rope background wrapper must not clip children */
+.unbound-bg {
+overflow: visible !important;
+}
 
+/* App content wrapper must not clip either */
+.app-shell {
+overflow: visible !important;
 }
+
+/* In Next, main can end up being the clipping parent */
+main {
+overflow: visible !important;
 }
-}
-}
-}
-}
-}
-}
-}
-}
-}
-}
-}
-}
-}
-}
-}
-}
-}
-}
-}
-}
-}
+
+/* If anything wraps feed content in a layout, also don’t clip */
+#\_\_next {
+overflow: visible !important;
 }

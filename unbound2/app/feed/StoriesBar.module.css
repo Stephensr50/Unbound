@@ -1,11 +1,33 @@
 /* ================================
 STORIES ROW
 ================================ */
+
+/* ✅ NEW: wrapper lets glow spill outside the scroller */
+.storiesWrap {
+position: relative;
+z-index: 30;
+overflow: visible;
+}
+
+/* ✅ Scroller stays scroller; we give it vertical room */
 .storiesRow {
+position: relative;
+z-index: 30;
+
 display: flex;
+align-items: center;
 gap: 14px;
-padding: 14px 16px;
+
+/* Give the ring room so it doesn't get clipped */
+padding: 44px 16px;
+
+
 overflow-x: auto;
+
+/* IMPORTANT: keep this hidden inside the scroller; wrapper is what stays visible */
+overflow-y: hidden;
+
+-webkit-overflow-scrolling: touch;
 }
 
 /* ================================
@@ -13,6 +35,8 @@ SHARED BASE (ALL BUBBLES)
 ================================ */
 .storyBubble,
 .addStory {
+position: relative;
+z-index: 21;
 width: 62px;
 height: 62px;
 border-radius: 999px;
@@ -25,6 +49,9 @@ justify-content: center;
 
 position: relative;
 
+/* KEY: create room so avatar doesn't cover the ring */
+box-sizing: border-box;
+
 /* Important: prevents “boxy glow” artifacts */
 overflow: visible;
 isolation: isolate;
@@ -33,24 +60,17 @@ transform: translateZ(0);
 
 /* =========================================================
 REAL STORY BUBBLES — SOLID GLOW RING (premium, not boxy)
-We avoid huge box-shadows on a big pseudo-element because
-that’s what reveals a rectangle. Instead:
-- crisp ring
-- radial gradient glow
-- smaller, softer aura
 ========================================================= */
 .storyBubble::after {
 content: "";
 position: absolute;
-inset: -1px; /* tighter = less chance you see bounds */
+inset: -1px; /* tight */
 border-radius: 999px;
 pointer-events: none;
 z-index: 0;
 
-/* Crisp ring */
 border: 2px solid rgba(168, 85, 247, 0.45);
 
-/* Glow “body” (this reads like the Message button pop) */
 background: radial-gradient(
 closest-side,
 rgba(217, 70, 239, 0.22),
@@ -58,7 +78,6 @@ rgba(168, 85, 247, 0.16) 55%,
 rgba(0, 0, 0, 0) 72%
 );
 
-/* Smaller aura so it doesn’t show a rectangle */
 box-shadow:
 0 0 0 1px rgba(168, 85, 247, 0.20),
 0 8px 20px rgba(168, 85, 247, 0.32);
@@ -73,7 +92,6 @@ DOTTED RING ONLY — synced pulse
 ================================ */
 .addStory {
 border: 2px dotted rgba(180, 120, 255, 0.85);
-/* keep base subtle; pulse lives in ::after */
 box-shadow: 0 0 10px rgba(180, 120, 255, 0.20);
 }
 
@@ -89,14 +107,13 @@ z-index: 1;
 .addStory::after {
 content: "";
 position: absolute;
-inset: -1px; /* was -6px (too big; causes mismatch + boxiness) */
+inset: -1px;
 border-radius: 999px;
 pointer-events: none;
 z-index: 0;
 
 border: 2px dotted rgba(180, 120, 255, 0.75);
 
-/* Same glow strategy: gradient + smaller aura */
 background: radial-gradient(
 closest-side,
 rgba(217, 70, 239, 0.16),
@@ -152,15 +169,12 @@ transform: translateY(-1px);
 
 .storyBubble:hover::after,
 .addStory:hover::after {
-/* Slightly hotter on hover */
 opacity: 1;
 filter: brightness(1.05);
 }
 
 /* ================================
-PULSE ANIMATION (pop, but not boxy)
-The key is: don’t expand to 40-50px glows here.
-Keep the aura under control, let gradient do the “volume.”
+PULSE ANIMATION
 ================================ */
 @keyframes storyPulse {
 0% {

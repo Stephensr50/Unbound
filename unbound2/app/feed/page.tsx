@@ -97,6 +97,8 @@ paddingLeft: 16,
 paddingRight: 16,
 paddingTop: 25, // pushes below TopNav
 paddingBottom: 16,
+overflow: "visible",
+position: "relative",
 }}
 >
 {error && (
@@ -114,7 +116,7 @@ Stories query failed: {error}
 </div>
 )}
 
-<StoriesBar stories={stories} profilesById={profilesById} />
+<StoriesBar/>
 
 <div style={{ marginTop: 16 }}>
 <div
@@ -127,6 +129,8 @@ color: "rgba(255,255,255,.80)",
 }}
 >
 Posts will go here next.
+postion: relative;
+z-index: 0;
 </div>
 </div>
 </div>

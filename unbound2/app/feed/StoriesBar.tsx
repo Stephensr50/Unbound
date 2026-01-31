@@ -1,14 +1,16 @@
 "use client";
 
-import React, { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { createClient } from "@supabase/supabase-js";
 import styles from "./StoriesBar.module.css";
-import StoriesViewer, { type Story } from "./StoriesViewer";
+import StoryModal from "../components/StoryModal";
 
 type StoryRow = {
 id: string;
 user_id: string;
-media_url: string | null;
-caption?: string | null;
+media_url: string;
+caption: string | null;
+created_at?: string;
 };
 
 type ProfileRow = {
@@ -17,134 +19,370 @@ username: string | null;
 avatar_url: string | null;
 };
 
-type Props = {
-stories: StoryRow[];
-profilesById: Record<string, ProfileRow | undefined>;
+function getSupabase() {
+const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+if (!url || !key) {
+throw new Error(
+"Missing NEXT_PUBLIC_SUPABASE_URL or NEXT_PUBLIC_SUPABASE_ANON_KEY"
+);
+}
+return createClient(url, key);
+}
+
+export default function StoriesBar() {
+const supabase = useMemo(() => getSupabase(), []);
+
+const [stories, setStories] = useState<
+(StoryRow & { profile?: ProfileRow | null })[]
+>([]);
+
+const [openCreate, setOpenCreate] = useState(false);
+
+// Viewer modal state
+const [openView, setOpenView] = useState(false);
+const [selectedStory, setSelectedStory] = useState<StoryRow | null>(null);
+
+// Create story state
+const fileInputRef = useRef<HTMLInputElement | null>(null);
+const [pickedFile, setPickedFile] = useState<File | null>(null);
+const [caption, setCaption] = useState("");
+const [busy, setBusy] = useState(false);
+const [msg, setMsg] = useState("");
+
+// Logged-in user id (for Delete button)
+const [myUserId, setMyUserId] = useState<string | null>(null);
+
+async function refreshStories() {
+try {
+const { data, error } = await supabase
+.from("stories")
+.select("id,user_id,media_url,caption,created_at")
+.order("created_at", { ascending: false })
+.limit(30);
+
+if (error) throw error;
+setStories((data ?? []) as any);
+} catch {
+// swallow to keep UI stable
+}
+}
+
+// Load stories
+useEffect(() => {
+let alive = true;
+
+(async () => {
+try {
+const { data, error } = await supabase
+.from("stories")
+.select("id,user_id,media_url,caption,created_at")
+.order("created_at", { ascending: false })
+.limit(30);
+
+if (error) throw error;
+if (!alive) return;
+
+setStories((data ?? []) as any);
+} catch {
+// swallow
+}
+})();
+
+return () => {
+alive = false;
 };
+}, [supabase]);
 
-// 1x1 transparent gif so StoriesViewer always has a valid src
-const FALLBACK_IMG =
-"data:image/gif;base64,R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs=";
+// Load current user id
+useEffect(() => {
+let alive = true;
 
-export default function StoriesBar({ stories, profilesById }: Props) {
-const [showCreate, setShowCreate] = useState(false);
+(async () => {
+try {
+const { data, error } = await supabase.auth.getUser();
+if (error) return;
+if (!alive) return;
+setMyUserId(data?.user?.id ?? null);
+} catch {
+// ignore
+}
+})();
 
-// viewer state (YOU ALREADY HAD THIS ✅)
-const [openIndex, setOpenIndex] = useState<number | null>(null);
-const hasViewerOpen = openIndex !== null && openIndex >= 0;
-
-const openStory = (idx: number) => setOpenIndex(idx);
-const closeStory = () => setOpenIndex(null);
-
-/**
-* StoriesViewer expects media_url: string (not null)
-* So we map your rows -> Story, using story.media_url first,
-* otherwise profile avatar, otherwise a 1x1 fallback.
-*/
-const viewerStories: Story[] = useMemo(() => {
-return stories.map((s) => {
-const profile = profilesById[s.user_id];
-const media = s.media_url || profile?.avatar_url || FALLBACK_IMG;
-
-return {
-id: s.id,
-user_id: s.user_id,
-media_url: media,
-caption: s.caption ?? null,
+return () => {
+alive = false;
 };
+}, [supabase]);
+
+// ONE bubble per user (latest story)
+const dedupedStories = useMemo(() => {
+const map = new Map<string, StoryRow>();
+
+const sorted = [...stories].sort((a, b) => {
+const aT = a.created_at ? +new Date(a.created_at) : 0;
+const bT = b.created_at ? +new Date(b.created_at) : 0;
+return bT - aT;
 });
-}, [stories, profilesById]);
+
+for (const s of sorted) {
+if (!map.has(s.user_id)) map.set(s.user_id, s);
+}
+
+return Array.from(map.values());
+}, [stories]);
+
+function openFilePicker() {
+fileInputRef.current?.click();
+}
+
+function openStoryViewer(story: StoryRow) {
+setSelectedStory(story);
+setOpenView(true);
+}
+
+function closeStoryViewer() {
+setOpenView(false);
+setSelectedStory(null);
+}
+
+async function deleteSelectedStory() {
+if (!selectedStory) return;
+
+try {
+setMsg("");
+
+const { data: authData, error: authErr } = await supabase.auth.getUser();
+if (authErr) throw authErr;
+
+const user = authData?.user;
+if (!user) {
+setMsg("You are not logged in.");
+return;
+}
+
+// Delete only if it's yours
+const { error } = await supabase
+.from("stories")
+.delete()
+.eq("id", selectedStory.id)
+.eq("user_id", user.id);
+
+if (error) {
+setMsg(error.message);
+return;
+}
+
+await refreshStories();
+} catch (e: any) {
+setMsg(e?.message || "Delete failed.");
+}
+}
+
+async function postStory() {
+try {
+setMsg("");
+if (!pickedFile) {
+setMsg("Pick a photo/video first.");
+return;
+}
+
+setBusy(true);
+
+const { data: authData, error: authErr } = await supabase.auth.getUser();
+if (authErr) throw authErr;
+const user = authData?.user;
+if (!user) {
+setMsg("You are not logged in.");
+return;
+}
+
+// Upload to Storage bucket: stories
+const ext = pickedFile.name.split(".").pop() || "jpg";
+const path = `${user.id}/${crypto.randomUUID()}.${ext}`;
+
+const { error: upErr } = await supabase.storage
+.from("stories")
+.upload(path, pickedFile, { upsert: false });
+
+if (upErr) throw upErr;
+
+const { data: pub } = supabase.storage.from("stories").getPublicUrl(path);
+const mediaUrl = pub?.publicUrl;
+if (!mediaUrl) throw new Error("Could not get public URL for uploaded file.");
+
+const { error: insErr } = await supabase.from("stories").insert({
+user_id: user.id,
+media_url: mediaUrl,
+caption: caption.trim() || null,
+});
+
+if (insErr) throw insErr;
+
+setMsg("Posted ✅");
+setPickedFile(null);
+setCaption("");
+setOpenCreate(false);
+
+await refreshStories();
+} catch (e: any) {
+setMsg(e?.message || "Failed to post story.");
+} finally {
+setBusy(false);
+}
+}
 
 return (
 <>
-{/* STORIES ROW */}
+{/* ✅ NEW: wrapper so glow can spill outside the scroller */}
+<div className={styles.storiesWrap}>
 <div className={styles.storiesRow}>
-{/* ADD STORY (FIRST ITEM) */}
+{/* Add story bubble */}
 <button
 type="button"
 className={styles.addStory}
-onClick={() => setShowCreate(true)}
 title="Create story"
 aria-label="Create story"
+onClick={() => {
+setMsg("");
+setPickedFile(null);
+setCaption("");
+setOpenCreate(true);
+}}
 >
-<div className={styles.addStoryInner}>
-<span className={styles.addStoryPlus}>+</span>
-</div>
+<span>+</span>
 </button>
 
-{/* EXISTING STORIES */}
-{stories.map((story, idx) => {
-const profile = profilesById[story.user_id];
-
-return (
+{/* Existing story bubbles */}
+{dedupedStories.map((s) => (
 <button
-key={story.id}
+key={s.id}
 type="button"
 className={styles.storyBubble}
-title={profile?.username ? profile.username : "Story"}
+title="Story"
 aria-label="Open story"
-onClick={() => openStory(idx)} // YOU ALREADY HAD THIS ✅
+onClick={() => openStoryViewer(s)}
 >
-{story.media_url ? (
-// eslint-disable-next-line @next/next/no-img-element
-<img src={story.media_url} alt="" className={styles.storyAvatar} />
-) : profile?.avatar_url ? (
-// eslint-disable-next-line @next/next/no-img-element
-<img src={profile.avatar_url} alt="" className={styles.storyAvatar} />
-) : (
-<div className={styles.storyFallback}>
-{profile?.username?.[0]?.toUpperCase() || "U"}
-</div>
-)}
+<img className={styles.storyAvatar} src={s.media_url} alt="story" />
 </button>
-);
-})}
+))}
+</div>
 </div>
 
-{/* ✅ NEW: STORY VIEWER (auto-advance + swipe-down exit) */}
-<StoriesViewer
-open={hasViewerOpen}
-stories={viewerStories}
-initialIndex={openIndex ?? 0}
-onClose={closeStory}
+{/* Hidden file input */}
+<input
+ref={fileInputRef}
+type="file"
+accept="image/*,video/*"
+style={{ display: "none" }}
+onChange={(e) => setPickedFile(e.target.files?.[0] ?? null)}
 />
 
-{/* CREATE STORY MODAL (your existing one) */}
-{showCreate && (
+{/* Create Story Modal */}
+{openCreate ? (
 <div
 className={styles.modalBackdrop}
-onClick={() => setShowCreate(false)}
-role="dialog"
-aria-modal="true"
+onClick={() => !busy && setOpenCreate(false)}
+style={{ pointerEvents: "auto" }}
 >
-<div className={styles.modalCard} onClick={(e) => e.stopPropagation()}>
+<div
+className={styles.modalCard}
+onClick={(e) => e.stopPropagation()}
+style={{ zIndex: 9999, pointerEvents: "auto" }}
+>
 <div className={styles.modalHeader}>
-<h3 className={styles.modalTitle}>Create story</h3>
+<div style={{ fontSize: 18, fontWeight: 800 }}>Create story</div>
 <button
 type="button"
 className={styles.closeBtn}
-onClick={() => setShowCreate(false)}
+onClick={() => !busy && setOpenCreate(false)}
 aria-label="Close"
 >
-✕
+×
 </button>
 </div>
 
-<div className={styles.storyPreview}>
-<div className={styles.previewPlaceholder}>Add a photo or video</div>
-</div>
+<div style={{ opacity: 0.9, marginBottom: 10 }}>Add a photo or video</div>
 
-<button type="button" className={styles.uploadBtn}>
-Add photo / video
+<button
+type="button"
+className={styles.uploadBtn}
+onClick={openFilePicker}
+disabled={busy}
+style={{ pointerEvents: "auto" }}
+>
+{pickedFile ? "Change photo / video" : "Add photo / video"}
 </button>
 
-<div className={styles.modalHint}>
-Upload goes to Storage bucket <code>stories</code> and inserts into{" "}
-<code>public.stories</code>.
+{pickedFile ? (
+<div style={{ marginTop: 10, fontSize: 13, opacity: 0.85 }}>
+Selected: {pickedFile.name}
+</div>
+) : null}
+
+<input
+value={caption}
+onChange={(e) => setCaption(e.target.value)}
+placeholder="Caption (optional)"
+disabled={busy}
+style={{
+marginTop: 12,
+width: "100%",
+padding: "10px 12px",
+borderRadius: 10,
+border: "1px solid rgba(180, 120, 255, 0.35)",
+background: "rgba(0,0,0,0.35)",
+color: "white",
+}}
+/>
+
+<button
+type="button"
+className={styles.uploadBtn}
+onClick={postStory}
+disabled={busy || !pickedFile}
+style={{ marginTop: 12, opacity: busy || !pickedFile ? 0.55 : 1 }}
+>
+{busy ? "Posting..." : "Post story"}
+</button>
+
+<div style={{ marginTop: 10, fontSize: 12, opacity: 0.8 }}>
+Upload goes to Storage bucket <b>stories</b> and inserts into{" "}
+<b>public.stories</b>.
+</div>
+
+{msg ? <div style={{ marginTop: 10, opacity: 0.9 }}>{msg}</div> : null}
 </div>
 </div>
-</div>
+) : null}
+
+{/* Story Viewer Modal */}
+<StoryModal
+open={openView}
+onClose={closeStoryViewer}
+stories={dedupedStories}
+startIndex={Math.max(
+0,
+dedupedStories.findIndex((s) => s.id === selectedStory?.id)
 )}
+myUserId={myUserId}
+onDeleteCurrent={async (story) => {
+// reuse your existing delete logic, but delete by the passed story
+const { data: authData, error: authErr } = await supabase.auth.getUser();
+if (authErr) throw authErr;
+const user = authData?.user;
+if (!user) throw new Error("You are not logged in.");
+
+const { error } = await supabase
+.from("stories")
+.delete()
+.eq("id", story.id)
+.eq("user_id", user.id);
+
+if (error) throw error;
+
+await refreshStories();
+}}
+/>
 </>
 );
 }

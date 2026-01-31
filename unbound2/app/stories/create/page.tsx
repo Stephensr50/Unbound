@@ -1,84 +1,136 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
+import { createClient } from "@supabase/supabase-js";
 import { useRouter } from "next/navigation";
-import { supabase } from "@/app/supabaseClient";
+
+function getSupabase() {
+const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+
+if (!url || !key) {
+throw new Error("Missing NEXT_PUBLIC_SUPABASE_URL or NEXT_PUBLIC_SUPABASE_ANON_KEY");
+}
+
+return createClient(url, key);
+}
 
 export default function CreateStoryPage() {
+const supabase = useMemo(() => getSupabase(), []);
 const router = useRouter();
+
 const [file, setFile] = useState<File | null>(null);
-const [loading, setLoading] = useState(false);
+const [caption, setCaption] = useState("");
+const [busy, setBusy] = useState(false);
+const [msg, setMsg] = useState<string>("");
 
-const handlePostStory = async () => {
-if (!file) return;
-
-setLoading(true);
-
-const {
-data: { user },
-} = await supabase.auth.getUser();
-
-if (!user) {
-setLoading(false);
+async function onPost() {
+try {
+setMsg("");
+if (!file) {
+setMsg("Pick a photo first.");
 return;
 }
 
-const ext = file.name.split(".").pop();
+setBusy(true);
+
+// 1) Get logged-in user
+const { data: authData, error: authErr } = await supabase.auth.getUser();
+if (authErr) throw authErr;
+const user = authData?.user;
+if (!user) {
+setMsg("You are not logged in.");
+return;
+}
+
+// 2) Upload to Storage
+const ext = file.name.split(".").pop() || "jpg";
 const filePath = `${user.id}/${crypto.randomUUID()}.${ext}`;
 
-// Upload to storage
-const { error: uploadError } = await supabase.storage
+const { error: upErr } = await supabase.storage
 .from("stories")
-.upload(filePath, file);
+.upload(filePath, file, { upsert: false });
 
-if (uploadError) {
-console.error("Upload error:", uploadError);
-setLoading(false);
-return;
-}
+if (upErr) throw upErr;
 
-const { data: publicUrl } = supabase.storage
+// 3) Get public URL (or signed URL if your bucket is private)
+const { data: pub } = supabase.storage.from("stories").getPublicUrl(filePath);
+const publicUrl = pub?.publicUrl;
+if (!publicUrl) throw new Error("Could not get public URL for uploaded story.");
+
+// 4) Insert story row
+const { error: insErr } = await supabase
 .from("stories")
-.getPublicUrl(filePath);
-
-const expiresAt = new Date();
-expiresAt.setHours(expiresAt.getHours() + 24);
-
-// Insert story record
-const { error: insertError } = await supabase.from("stories").insert({
+.insert({
 user_id: user.id,
-media_url: publicUrl.publicUrl,
-media_type: file.type.startsWith("video") ? "video" : "image",
-expires_at: expiresAt.toISOString(),
+media_url: publicUrl,
+caption: caption.trim() || null,
 });
 
-if (insertError) {
-console.error("Insert error:", insertError);
-setLoading(false);
-return;
+if (insErr) throw insErr;
+
+setMsg("Posted ✅");
+router.push("/feed");
+router.refresh();
+} catch (e: any) {
+setMsg(e?.message || "Failed to post story.");
+} finally {
+setBusy(false);
+}
 }
 
-router.push("/feed");
-};
-
 return (
-<div className="min-h-screen flex flex-col items-center justify-center gap-6 p-6 text-white">
-<h1 className="text-xl font-semibold">Post a Story</h1>
+<div style={{ maxWidth: 520, margin: "0 auto", padding: 18 }}>
+<h1 style={{ fontSize: 26, marginBottom: 12 }}>Create Story</h1>
 
+<div style={{ marginBottom: 12 }}>
 <input
 type="file"
-accept="image/*,video/*"
-onChange={(e) => setFile(e.target.files?.[0] || null)}
-className="text-sm"
+accept="image/*"
+onChange={(ev) => setFile(ev.target.files?.[0] ?? null)}
+disabled={busy}
 />
+</div>
+
+<div style={{ marginBottom: 12 }}>
+<input
+value={caption}
+onChange={(e) => setCaption(e.target.value)}
+placeholder="Caption (optional)"
+disabled={busy}
+style={{
+width: "100%",
+padding: "10px 12px",
+borderRadius: 10,
+border: "1px solid rgba(180, 120, 255, 0.35)",
+background: "rgba(0,0,0,0.35)",
+color: "white",
+}}
+/>
+</div>
 
 <button
-onClick={handlePostStory}
-disabled={!file || loading}
-className="px-6 py-2 rounded-full bg-purple-600 disabled:opacity-50"
+onClick={onPost}
+disabled={busy}
+style={{
+width: "100%",
+padding: "12px 14px",
+borderRadius: 12,
+border: "1px solid rgba(180, 120, 255, 0.55)",
+background: "rgba(140, 80, 255, 0.18)",
+color: "white",
+cursor: busy ? "not-allowed" : "pointer",
+boxShadow: "0 0 18px rgba(180,120,255,0.25)",
+}}
 >
-{loading ? "Posting…" : "Post Story"}
+{busy ? "Posting..." : "Post Story"}
 </button>
+
+{msg ? (
+<div style={{ marginTop: 12, opacity: 0.9 }}>
+{msg}
+</div>
+) : null}
 </div>
 );
 }
