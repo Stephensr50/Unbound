@@ -6,7 +6,7 @@ import { createClient } from "@supabase/supabase-js";
 
 type Msg = {
 id: string;
-thread_id: string;
+conversation_id: number; // int8
 sender_id: string;
 body: string;
 created_at: string;
@@ -19,10 +19,32 @@ if (!url || !key) throw new Error("Missing NEXT_PUBLIC_SUPABASE env vars");
 return createClient(url, key);
 }
 
+function formatSupabaseError(e: any) {
+// Supabase errors often have: message, details, hint, code
+if (!e) return "Unknown error";
+if (typeof e === "string") return e;
+
+const parts = [
+e.message ? `message: ${e.message}` : null,
+e.details ? `details: ${e.details}` : null,
+e.hint ? `hint: ${e.hint}` : null,
+e.code ? `code: ${e.code}` : null,
+].filter(Boolean);
+
+return parts.length ? parts.join(" | ") : JSON.stringify(e);
+}
+
 export default function ThreadView() {
 const supabase = useMemo(() => getSupabase(), []);
 const params = useParams();
-const threadId = typeof params?.id === "string" ? params.id : "";
+
+// /messages/[id] where id is your conversation_id (int8)
+const rawId = typeof params?.id === "string" ? params.id : "";
+const conversationId = useMemo(() => {
+if (!rawId) return null;
+const n = Number(rawId);
+return Number.isFinite(n) ? n : null;
+}, [rawId]);
 
 const [myId, setMyId] = useState<string | null>(null);
 const [items, setItems] = useState<Msg[]>([]);
@@ -35,11 +57,13 @@ let alive = true;
 
 (async () => {
 try {
-const { data } = await supabase.auth.getUser();
+const { data, error } = await supabase.auth.getUser();
 if (!alive) return;
+if (error) throw error;
 setMyId(data?.user?.id ?? null);
-} catch {
-// ignore
+} catch (e) {
+if (!alive) return;
+setMyId(null);
 }
 })();
 
@@ -49,30 +73,40 @@ alive = false;
 }, [supabase]);
 
 async function load() {
-if (!threadId) return;
+if (conversationId === null) {
+setItems([]);
+setErr("Invalid conversation id in the URL.");
+return;
+}
+
 try {
 setErr("");
+
 const { data, error } = await supabase
 .from("messages")
-.select("id,thread_id,sender_id,body,created_at")
-.eq("thread_id", threadId)
+.select("id,conversation_id,sender_id,body,created_at")
+.eq("conversation_id", conversationId)
 .order("created_at", { ascending: true })
 .limit(200);
 
 if (error) throw error;
+
 setItems((data ?? []) as Msg[]);
 } catch (e: any) {
-setErr(e?.message || "Failed to load messages.");
+setErr(formatSupabaseError(e));
 }
 }
 
 useEffect(() => {
 load();
 // eslint-disable-next-line react-hooks/exhaustive-deps
-}, [threadId]);
+}, [conversationId]);
 
 async function send() {
-if (!threadId) return;
+if (conversationId === null) {
+setErr("Invalid conversation id in the URL.");
+return;
+}
 if (!text.trim()) return;
 
 try {
@@ -81,34 +115,62 @@ setErr("");
 
 const { data: authData, error: authErr } = await supabase.auth.getUser();
 if (authErr) throw authErr;
+
 const user = authData?.user;
 if (!user) {
 setErr("You are not logged in.");
 return;
 }
 
-const { error } = await supabase.from("messages").insert({
-thread_id: threadId,
+const payload = {
+conversation_id: conversationId, // ✅ int8 number
 sender_id: user.id,
 body: text.trim(),
-});
+};
+
+console.log("INSERT payload:", payload);
+
+const { data, error } = await supabase
+.from("messages")
+.insert(payload)
+.select("id,conversation_id,sender_id,body,created_at");
+
+console.log("INSERT data:", data);
+console.log("INSERT error:", error);
 
 if (error) throw error;
 
 setText("");
 await load();
 } catch (e: any) {
-setErr(e?.message || "Send failed.");
+// If the error is coming from PostgREST, this will show the real reason
+setErr(formatSupabaseError(e));
 } finally {
 setBusy(false);
 }
 }
 
 return (
-<div style={{ maxWidth: 780, margin: "0 auto", padding: "10px 0", position: "relative", zIndex: 60 }}>
-<div style={{ color: "rgba(255,255,255,0.9)", fontWeight: 800, marginBottom: 10 }}>
+<div
+style={{
+maxWidth: 780,
+margin: "0 auto",
+padding: "10px 0",
+position: "relative",
+zIndex: 60,
+}}
+>
+<div
+style={{
+color: "rgba(255,255,255,0.9)",
+fontWeight: 800,
+marginBottom: 10,
+}}
+>
 THREAD VIEW ACTIVE
-Conversation {threadId}
+<div style={{ opacity: 0.85, marginTop: 4 }}>
+Conversation {conversationId ?? "?"}
+</div>
 </div>
 
 <div
@@ -142,7 +204,9 @@ maxWidth: "78%",
 padding: "10px 12px",
 borderRadius: 14,
 border: "1px solid rgba(168,85,247,0.28)",
-background: mine ? "rgba(168,85,247,0.18)" : "rgba(0,0,0,0.35)",
+background: mine
+? "rgba(168,85,247,0.18)"
+: "rgba(0,0,0,0.35)",
 color: "rgba(255,255,255,0.92)",
 whiteSpace: "pre-wrap",
 }}
@@ -195,7 +259,11 @@ Send
 </button>
 </div>
 
-{err ? <div style={{ opacity: 0.85, color: "#ffd1ff" }}>{err}</div> : null}
+{err ? (
+<div style={{ opacity: 0.9, color: "#ffd1ff", whiteSpace: "pre-wrap" }}>
+{err}
+</div>
+) : null}
 </div>
 </div>
 );
