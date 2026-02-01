@@ -19,6 +19,11 @@ if (!url || !key) throw new Error("Missing NEXT_PUBLIC_SUPABASE env vars");
 return createClient(url, key);
 }
 
+function shortId(id: string | null) {
+if (!id) return "null";
+return `${id.slice(0, 6)}…${id.slice(-4)}`;
+}
+
 export default function ThreadView() {
 const supabase = useMemo(() => getSupabase(), []);
 const params = useParams();
@@ -29,9 +34,11 @@ const conversationId = Number.parseInt(rawId, 10);
 const [msgs, setMsgs] = useState<MsgRow[]>([]);
 const [text, setText] = useState("");
 const [status, setStatus] = useState<string>("");
-const [loading, setLoading] = useState(true); // first load only
-const bottomRef = useRef<HTMLDivElement | null>(null);
+const [loading, setLoading] = useState(true);
 
+const [myUserId, setMyUserId] = useState<string | null>(null);
+
+const bottomRef = useRef<HTMLDivElement | null>(null);
 const inFlightRef = useRef(false);
 const lastTopIdRef = useRef<number>(0);
 const lastSigRef = useRef<string>("");
@@ -40,6 +47,28 @@ function scrollToBottom() {
 requestAnimationFrame(() =>
 bottomRef.current?.scrollIntoView({ behavior: "smooth" })
 );
+}
+
+async function refreshAuth() {
+const { data, error } = await supabase.auth.getSession();
+if (error) {
+setMyUserId(null);
+return null;
+}
+const id = data.session?.user?.id ?? null;
+setMyUserId(id);
+return id;
+}
+
+async function signOut() {
+setStatus("");
+const { error } = await supabase.auth.signOut();
+if (error) {
+setStatus(`Sign out error: ${error.message}`);
+return;
+}
+setMyUserId(null);
+setStatus("Signed out. Now sign in as the other user in this window.");
 }
 
 async function loadMessages(opts?: { silent?: boolean }) {
@@ -65,25 +94,24 @@ return;
 }
 
 setStatus("");
-
 const rows = (data ?? []) as MsgRow[];
 
-// signature avoids pointless rerenders
-const sig = rows.map((m) => `${m.id}:${m.created_at}:${m.body ?? ""}`).join("|");
+const sig = rows
+.map((m) => `${m.id}:${m.created_at}:${m.body ?? ""}:${m.sender_id ?? "null"}`)
+.join("|");
+
 if (sig !== lastSigRef.current) {
 lastSigRef.current = sig;
 setMsgs(rows);
-// track latest message id so our checker is cheap
 const lastId = rows.length ? rows[rows.length - 1].id : 0;
 lastTopIdRef.current = lastId;
 scrollToBottom();
 }
 }
 
-// Cheap “is there anything new?” check
 async function checkForNew() {
 if (!Number.isFinite(conversationId)) return;
-if (document.visibilityState !== "visible") return; // don’t spam in background
+if (document.visibilityState !== "visible") return;
 if (inFlightRef.current) return;
 
 const { data, error } = await supabase
@@ -110,11 +138,18 @@ setStatus("Bad conversation id in URL.");
 return;
 }
 
+// Force-refresh auth right before insert so it can't be "stale"
+const uid = await refreshAuth();
+if (!uid) {
+setStatus("Not signed in in this window. Sign in before sending.");
+return;
+}
+
 setStatus("");
 
 const { error } = await supabase.from("messages").insert({
 conversation_id: conversationId,
-sender_id: null, // still nullable until auth is wired
+sender_id: uid,
 body: trimmed,
 });
 
@@ -124,22 +159,29 @@ return;
 }
 
 setText("");
-// refresh immediately for the sender
 await loadMessages({ silent: true });
 }
 
+// Load auth + keep updated
+useEffect(() => {
+refreshAuth();
+const { data: sub } = supabase.auth.onAuthStateChange(() => {
+refreshAuth();
+});
+return () => sub.subscription.unsubscribe();
+// eslint-disable-next-line react-hooks/exhaustive-deps
+}, []);
+
+// Load messages + auto-check
 useEffect(() => {
 if (!Number.isFinite(conversationId)) return;
 
-// first load
 loadMessages({ silent: false });
 
-// silent “new message” checker
 const t = window.setInterval(() => {
 checkForNew();
-}, 1200); // ~1.2s feels instant without looking like it’s “refreshing”
+}, 1200);
 
-// also refresh when user comes back to the tab
 const onFocus = () => checkForNew();
 const onVis = () => {
 if (document.visibilityState === "visible") checkForNew();
@@ -158,6 +200,57 @@ document.removeEventListener("visibilitychange", onVis);
 
 return (
 <div style={{ padding: "18px 14px", maxWidth: 720, margin: "0 auto" }}>
+{/* AUTH BAR */}
+<div
+style={{
+display: "flex",
+justifyContent: "space-between",
+alignItems: "center",
+gap: 10,
+marginBottom: 12,
+padding: "10px 12px",
+borderRadius: 12,
+border: "1px solid rgba(185,110,255,0.35)",
+background: "rgba(155,60,255,0.10)",
+}}
+>
+<div style={{ fontSize: 12, color: "rgba(255,255,255,0.88)" }}>
+ME: <b style={{ color: "#ffd1ff" }}>{shortId(myUserId)}</b>
+</div>
+
+<div style={{ display: "flex", gap: 8 }}>
+<button
+onClick={refreshAuth}
+style={{
+padding: "9px 12px",
+borderRadius: 12,
+border: "1px solid rgba(185, 110, 255, 0.55)",
+background: "rgba(155, 60, 255, 0.14)",
+color: "white",
+cursor: "pointer",
+fontWeight: 700,
+}}
+>
+Refresh
+</button>
+
+<button
+onClick={signOut}
+style={{
+padding: "9px 12px",
+borderRadius: 12,
+border: "1px solid rgba(255, 120, 120, 0.45)",
+background: "rgba(255, 80, 80, 0.12)",
+color: "white",
+cursor: "pointer",
+fontWeight: 700,
+}}
+>
+Sign out
+</button>
+</div>
+</div>
+
 <div style={{ opacity: 0.8, marginBottom: 10 }}>
 Conversation{" "}
 <b>#{Number.isFinite(conversationId) ? conversationId : "?"}</b>
@@ -179,7 +272,8 @@ overflow: "auto",
 <div style={{ opacity: 0.7 }}>No messages yet.</div>
 ) : (
 msgs.map((m) => {
-const mine = false; // when auth is wired: m.sender_id === user.id
+const mine = !!myUserId && !!m.sender_id && m.sender_id === myUserId;
+
 return (
 <div
 key={m.id}
@@ -196,9 +290,11 @@ padding: "10px 14px",
 borderRadius: 18,
 border: "1px solid rgba(185, 110, 255, 0.55)",
 background: mine
-? "rgba(155, 60, 255, 0.28)"
+? "rgba(185, 110, 255, 0.30)"
 : "rgba(90, 25, 170, 0.22)",
-boxShadow: "0 0 18px rgba(185,110,255,0.18)",
+boxShadow: mine
+? "0 0 24px rgba(185,110,255,0.28)"
+: "0 0 18px rgba(185,110,255,0.18)",
 color: "rgba(255,255,255,0.95)",
 lineHeight: 1.35,
 }}

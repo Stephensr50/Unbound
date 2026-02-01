@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { createClient } from "@supabase/supabase-js";
 
 type ProfileRow = {
@@ -15,6 +16,8 @@ avatar_url: string | null;
 type ModalType = "followers" | "following";
 
 export default function ProfilePage() {
+const router = useRouter();
+
 // Browser-safe Supabase client (uses NEXT_PUBLIC keys)
 const supabase = useMemo(() => {
 const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
@@ -36,15 +39,26 @@ const [modalType, setModalType] = useState<ModalType>("followers");
 const [modalLoading, setModalLoading] = useState(false);
 const [modalUsers, setModalUsers] = useState<ProfileRow[]>([]);
 
-// 1) Get logged-in user
+const [status, setStatus] = useState<string>("");
+
+// 1) Get logged-in user (safe if logged out)
 useEffect(() => {
 (async () => {
-const { data, error } = await supabase.auth.getUser();
-if (error) {
-console.error(error);
-return;
+try {
+const { data } = await supabase.auth.getSession();
+const uid = data.session?.user?.id ?? null;
+setMyUserId(uid);
+
+if (!uid) {
+setMyProfile(null);
+setStatus("Not signed in.");
 }
-setMyUserId(data.user?.id ?? null);
+} catch (e) {
+console.error(e);
+setMyUserId(null);
+setMyProfile(null);
+setStatus("Not signed in.");
+}
 })();
 }, [supabase]);
 
@@ -112,9 +126,8 @@ return;
 }
 
 const ids =
-(rows ?? []).map((r: any) =>
-isFollowers ? r.follower_id : r.following_id
-) ?? [];
+(rows ?? []).map((r: any) => (isFollowers ? r.follower_id : r.following_id)) ??
+[];
 
 if (ids.length === 0) {
 setModalUsers([]);
@@ -205,10 +218,11 @@ btnRow: {
 display: "flex",
 gap: 10,
 marginTop: 14,
+flexWrap: "wrap" as const,
 } as const,
 
 btn: {
-flex: 1,
+flex: "1 1 0",
 height: 44,
 borderRadius: 10,
 border: "1px solid rgba(255,255,255,0.14)",
@@ -221,6 +235,21 @@ alignItems: "center",
 justifyContent: "center",
 cursor: "pointer",
 textDecoration: "none",
+} as const,
+
+btnDanger: {
+flex: "1 1 0",
+height: 44,
+borderRadius: 10,
+border: "1px solid rgba(255,120,120,0.45)",
+background: "rgba(255,80,80,0.12)",
+color: "rgba(255,255,255,0.95)",
+fontWeight: 800,
+fontSize: 14,
+display: "flex",
+alignItems: "center",
+justifyContent: "center",
+cursor: "pointer",
 } as const,
 
 statsWrap: {
@@ -336,7 +365,6 @@ userHandle: { fontSize: 12, color: "rgba(255,255,255,0.60)" } as const,
 // ---------------------------------------------------
 
 async function shareProfile() {
-// If you have a public profile route later, swap this to your real URL.
 const shareText = `Check out my Unbound profile: ${window.location.href}`;
 
 try {
@@ -358,8 +386,24 @@ alert(shareText);
 }
 }
 
+async function signOut() {
+setStatus("");
+const { error } = await supabase.auth.signOut();
+if (error) {
+setStatus(`Sign out error: ${error.message}`);
+return;
+}
+
+// Clear local state so UI updates instantly
+setMyUserId(null);
+setMyProfile(null);
+
+// Redirect to login page (adjust if your route is different)
+router.push("/login");
+}
+
 return (
-<div style={{...S.page, marginTop: "80px"}}>
+<div style={{ ...S.page, marginTop: "80px" }}>
 <div style={S.card}>
 <div style={S.headerRow}>
 <div style={S.avatar}>
@@ -405,7 +449,17 @@ Edit Profile
 <button type="button" style={S.btn} onClick={shareProfile}>
 Share Profile
 </button>
+
+<button type="button" style={S.btnDanger} onClick={signOut}>
+Sign Out
+</button>
 </div>
+
+{status ? (
+<div style={{ marginTop: 10, color: "#ffb3b3", padding: "0 2px" }}>
+{status}
+</div>
+) : null}
 
 {/* Stats row like FetLife */}
 <div style={S.statsWrap}>
@@ -418,7 +472,10 @@ title="Friends (coming soon)"
 <div style={S.statLabel}>Friends</div>
 </div>
 
-<div style={{ ...S.stat, ...S.statMiddle }} onClick={() => openModal("followers")}>
+<div
+style={{ ...S.stat, ...S.statMiddle }}
+onClick={() => openModal("followers")}
+>
 <div style={S.statNum}>{followersCount}</div>
 <div style={S.statLabel}>Followers</div>
 </div>
@@ -444,11 +501,23 @@ Close
 </div>
 
 {modalLoading ? (
-<div style={{ padding: 18, textAlign: "center", color: "rgba(255,255,255,0.70)" }}>
+<div
+style={{
+padding: 18,
+textAlign: "center",
+color: "rgba(255,255,255,0.70)",
+}}
+>
 Loading…
 </div>
 ) : modalUsers.length === 0 ? (
-<div style={{ padding: 18, textAlign: "center", color: "rgba(255,255,255,0.70)" }}>
+<div
+style={{
+padding: 18,
+textAlign: "center",
+color: "rgba(255,255,255,0.70)",
+}}
+>
 No one yet.
 </div>
 ) : (
@@ -470,7 +539,11 @@ onClick={() => setModalOpen(false)}
 <img
 src={u.avatar_url}
 alt=""
-style={{ height: "100%", width: "100%", objectFit: "cover" }}
+style={{
+height: "100%",
+width: "100%",
+objectFit: "cover",
+}}
 />
 ) : (
 <div
@@ -492,7 +565,9 @@ fontSize: 12,
 
 <div style={{ minWidth: 0 }}>
 <div style={S.userName}>{label}</div>
-{u.username ? <div style={S.userHandle}>@{u.username}</div> : null}
+{u.username ? (
+<div style={S.userHandle}>@{u.username}</div>
+) : null}
 </div>
 </Link>
 );
