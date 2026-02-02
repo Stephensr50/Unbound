@@ -3,26 +3,23 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
-
-const UNREAD_KEY = "unbound_unread_messages";
-const UNREAD_EVENT = "unbound:unread";
+import { useUnreadCount } from "./useUnreadCount";
 
 export default function TopNav() {
 const pathname = usePathname();
 const router = useRouter();
-const [q, setQ] = useState("");
-const [unread, setUnread] = useState(0);
 
-// helper: read unread count
-const readUnread = () => {
-try {
-const raw = localStorage.getItem(UNREAD_KEY);
-const n = raw ? Number(raw) : 0;
-return Number.isFinite(n) ? n : 0;
-} catch {
-return 0;
-}
-};
+const [q, setQ] = useState("");
+
+// ✅ Single source of truth (DB-based)
+const unread = useUnreadCount();
+
+// No need for TopNav to do special polling fights anymore —
+// your hook handles it.
+const onAnyMessagesRoute = useMemo(() => {
+if (!pathname) return false;
+return pathname.startsWith("/messages");
+}, [pathname]);
 
 // keep search input synced if you land on /search?q=...
 useEffect(() => {
@@ -30,38 +27,6 @@ try {
 const url = new URL(window.location.href);
 setQ(url.searchParams.get("q") ?? "");
 } catch {}
-}, [pathname]);
-
-// load unread + subscribe to changes
-useEffect(() => {
-setUnread(readUnread());
-
-const onCustom = () => setUnread(readUnread());
-const onStorage = (e: StorageEvent) => {
-if (e.key === UNREAD_KEY) setUnread(readUnread());
-};
-
-window.addEventListener(UNREAD_EVENT, onCustom);
-window.addEventListener("storage", onStorage);
-
-return () => {
-window.removeEventListener(UNREAD_EVENT, onCustom);
-window.removeEventListener("storage", onStorage);
-};
-}, []);
-
-// when you enter messages, clear unread
-useEffect(() => {
-const onMessagesRoute =
-pathname === "/messages" || (pathname ? pathname.startsWith("/messages/") : false);
-
-if (onMessagesRoute) {
-try {
-localStorage.setItem(UNREAD_KEY, "0");
-setUnread(0);
-window.dispatchEvent(new Event(UNREAD_EVENT));
-} catch {}
-}
 }, [pathname]);
 
 const isActive = (href: string) => {
@@ -89,11 +54,33 @@ alignItems: "center",
 gap: 8,
 });
 
+// ✅ “FetLife-style” but PURPLE: square-ish badge, pops hard on rope bg
+const badgeStyle: React.CSSProperties = {
+minWidth: 18,
+height: 18,
+padding: "0 5px",
+borderRadius: 4,
+fontSize: 11,
+fontWeight: 900,
+lineHeight: "18px",
+color: "rgba(0,0,0,0.92)",
+background: "linear-gradient(180deg, #c084fc, #a855f7)",
+border: "1px solid rgba(255,255,255,0.35)",
+boxShadow:
+"0 0 14px rgba(168,85,247,0.85), 0 0 24px rgba(168,85,247,0.45)",
+display: "inline-flex",
+alignItems: "center",
+justifyContent: "center",
+transform: "translateY(-1px)",
+};
+
 const onSubmit = (e: React.FormEvent) => {
 e.preventDefault();
 const trimmed = q.trim();
 router.push(trimmed ? `/search?q=${encodeURIComponent(trimmed)}` : "/search");
 };
+
+const badgeText = unread > 99 ? "99+" : String(unread);
 
 return (
 <div
@@ -136,28 +123,11 @@ Profile
 
 <Link href="/messages" style={tabStyle(isActive("/messages"))}>
 Messages
-{unread > 0 && (
-<span
-style={{
-minWidth: 18,
-height: 18,
-padding: "0 6px",
-borderRadius: 999,
-fontSize: 12,
-fontWeight: 900,
-lineHeight: "18px",
-color: "rgba(0,0,0,0.9)",
-background: "rgba(168,85,247,1)",
-boxShadow: "0 0 14px rgba(168,85,247,0.85)",
-}}
->
-{unread > 99 ? "99+" : unread}
-</span>
-)}
+{/* ✅ Show badge even outside /messages (hook keeps it fresh) */}
+{unread > 0 ? <span style={badgeStyle}>{badgeText}</span> : null}
 </Link>
 </div>
 
-{/* Search pill */}
 <form onSubmit={onSubmit} style={{ display: "flex", alignItems: "center" }}>
 <div
 style={{
@@ -178,7 +148,13 @@ aria-hidden="true"
 style={{ color: "rgba(168,85,247,0.95)" }}
 fill="none"
 >
-<circle cx="11" cy="11" r="7" stroke="currentColor" strokeWidth="1.8" />
+<circle
+cx="11"
+cy="11"
+r="7"
+stroke="currentColor"
+strokeWidth="1.8"
+/>
 <path
 d="M20 20l-3.5-3.5"
 stroke="currentColor"

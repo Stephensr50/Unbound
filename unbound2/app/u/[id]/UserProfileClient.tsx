@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import MessageButton from "@/app/components/MessageButton";
 
 type ProfileRow = {
 id: string;
@@ -44,6 +44,8 @@ textDecoration: "none",
 background: "rgba(120, 60, 220, 0.22)",
 boxShadow: "0 0 18px rgba(170, 90, 255, 0.22)",
 whiteSpace: "nowrap",
+cursor: "pointer",
+fontWeight: 800,
 };
 
 const label = profile.display_name || profile.username || "Unknown";
@@ -53,18 +55,31 @@ return (
 {profile.avatar_url ? (
 <img src={profile.avatar_url} alt="" style={avatar} />
 ) : (
-<div style={{ ...avatar, display: "grid", placeItems: "center", opacity: 0.7 }}>?</div>
+<div
+style={{
+...avatar,
+display: "grid",
+placeItems: "center",
+opacity: 0.7,
+}}
+>
+?
+</div>
 )}
 
 <div style={{ minWidth: 0 }}>
 <div style={{ fontSize: 28, fontWeight: 900 }}>{label}</div>
-{profile.username ? <div style={{ opacity: 0.85, marginTop: 4 }}>@{profile.username}</div> : null}
-{profile.bio ? <div style={{ opacity: 0.92, marginTop: 10 }}>{profile.bio}</div> : null}
+{profile.username ? (
+<div style={{ opacity: 0.85, marginTop: 4 }}>@{profile.username}</div>
+) : null}
+{profile.bio ? (
+<div style={{ opacity: 0.92, marginTop: 10 }}>{profile.bio}</div>
+) : null}
 </div>
 
-<Link href={`/messages/${profile.id}`} style={msgBtn}>
-Message
-</Link>
+<div style={msgBtn as React.CSSProperties}>
+<MessageButton toUserId={profile.id} />
+</div>
 </div>
 );
 }
