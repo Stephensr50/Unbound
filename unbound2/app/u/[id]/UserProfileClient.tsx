@@ -38,11 +38,11 @@ const msgBtn: React.CSSProperties = {
 marginLeft: "auto",
 padding: "10px 14px",
 borderRadius: 12,
-border: "1px solid rgba(170, 90, 255, 0.55)",
+border: "none", // ← ADD THIS
 color: "rgba(235, 215, 255, 0.98)",
 textDecoration: "none",
 background: "rgba(120, 60, 220, 0.22)",
-boxShadow: "0 0 18px rgba(170, 90, 255, 0.22)",
+boxShadow: "0 0 18px rgba(90, 156, 255, 0.22)",
 whiteSpace: "nowrap",
 cursor: "pointer",
 fontWeight: 800,
