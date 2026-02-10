@@ -138,5 +138,5 @@ document.removeEventListener("visibilitychange", onVis);
 // eslint-disable-next-line react-hooks/exhaustive-deps
 }, []);
 
-return { unread, refresh };
+return { unread, refresh, supabase };
 }
