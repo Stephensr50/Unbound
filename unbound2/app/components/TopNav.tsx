@@ -12,7 +12,26 @@ const router = useRouter();
 const [q, setQ] = useState("");
 
 // ✅ Single source of truth (DB-based)
-const unread = useUnreadCount();
+const { unread, refresh, supabase } = useUnreadCount();
+
+useEffect(() => {
+const channel = supabase
+.channel("messages-badge")
+.on(
+"postgres_changes",
+{ event: "INSERT", schema: "public", table: "messages" },
+() => {
+refresh(); // updates unread count
+}
+)
+.subscribe();
+
+return () => {
+supabase.removeChannel(channel);
+};
+}, [supabase, refresh]);
+
+
 
 // No need for TopNav to do special polling fights anymore —
 // your hook handles it.
