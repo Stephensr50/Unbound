@@ -14,6 +14,7 @@ const [q, setQ] = useState("");
 // ✅ Single source of truth (DB-based)
 const { unread, refresh, supabase } = useUnreadCount();
 
+// ✅ Realtime: bump unread count when a new message row is inserted
 useEffect(() => {
 const channel = supabase
 .channel("messages-badge")
@@ -30,15 +31,6 @@ return () => {
 supabase.removeChannel(channel);
 };
 }, [supabase, refresh]);
-
-
-
-// No need for TopNav to do special polling fights anymore —
-// your hook handles it.
-const onAnyMessagesRoute = useMemo(() => {
-if (!pathname) return false;
-return pathname.startsWith("/messages");
-}, [pathname]);
 
 // keep search input synced if you land on /search?q=...
 useEffect(() => {
@@ -142,7 +134,6 @@ Profile
 
 <Link href="/messages" style={tabStyle(isActive("/messages"))}>
 Messages
-{/* ✅ Show badge even outside /messages (hook keeps it fresh) */}
 {unread > 0 ? <span style={badgeStyle}>{badgeText}</span> : null}
 </Link>
 </div>
@@ -167,13 +158,7 @@ aria-hidden="true"
 style={{ color: "rgba(168,85,247,0.95)" }}
 fill="none"
 >
-<circle
-cx="11"
-cy="11"
-r="7"
-stroke="currentColor"
-strokeWidth="1.8"
-/>
+<circle cx="11" cy="11" r="7" stroke="currentColor" strokeWidth="1.8" />
 <path
 d="M20 20l-3.5-3.5"
 stroke="currentColor"
