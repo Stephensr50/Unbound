@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type CSSProperties } from "react";
 import { createClient } from "@supabase/supabase-js";
 
 type ProfileRow = {
@@ -17,6 +17,10 @@ user_id: string;
 body: string | null;
 kind: string;
 created_at: string;
+
+// media support
+media_url: string | null;
+media_type: string | null;
 };
 
 function getSupabase() {
@@ -43,15 +47,19 @@ const [posts, setPosts] = useState<PostRow[]>([]);
 const [banner, setBanner] = useState<string | null>(null);
 
 useEffect(() => {
+let cancelled = false;
+
 (async () => {
 if (!profile?.id) return;
 
 const { data, error } = await supabase
 .from("posts")
-.select("id,user_id,body,kind,created_at")
-.eq("user_id", profile.id) // ✅ ONLY this user's posts
+.select("id,user_id,body,kind,created_at,media_url,media_type")
+.eq("user_id", profile.id)
 .order("created_at", { ascending: false })
 .limit(50);
+
+if (cancelled) return;
 
 if (error) {
 setBanner(error.message);
@@ -62,9 +70,13 @@ return;
 setBanner(null);
 setPosts((data ?? []) as PostRow[]);
 })();
-}, [profile.id, supabase]);
 
-const card: React.CSSProperties = {
+return () => {
+cancelled = true;
+};
+}, [profile?.id, supabase]);
+
+const card: CSSProperties = {
 width: "min(920px, 94vw)",
 margin: "22px auto 0",
 padding: 18,
@@ -73,6 +85,13 @@ background: "rgba(0,0,0,0.45)",
 border: "1px solid rgba(180,120,255,0.20)",
 boxShadow: "0 0 22px rgba(170,90,255,0.18)",
 color: "white",
+};
+
+const postCard: CSSProperties = {
+background: "rgba(0,0,0,0.35)",
+border: "1px solid rgba(180,120,255,0.14)",
+borderRadius: 14,
+padding: 14,
 };
 
 return (
@@ -88,9 +107,11 @@ borderRadius: 999,
 overflow: "hidden",
 border: "1px solid rgba(180,120,255,0.35)",
 background: "rgba(0,0,0,0.4)",
+flex: "0 0 auto",
 }}
 >
 {profile.avatar_url ? (
+// eslint-disable-next-line @next/next/no-img-element
 <img
 src={profile.avatar_url}
 alt=""
@@ -119,26 +140,51 @@ style={{ width: "100%", height: "100%", objectFit: "cover" }}
 <div style={{ fontWeight: 800, marginBottom: 12 }}>Posts</div>
 
 {banner ? (
-<div style={{ opacity: 0.8, fontSize: 13, marginBottom: 10 }}>
+<div style={{ opacity: 0.85, fontSize: 13, marginBottom: 10 }}>
 {banner}
 </div>
 ) : null}
 
 <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
 {posts.map((p) => (
-<div
-key={p.id}
-style={{
-background: "rgba(0,0,0,0.35)",
-border: "1px solid rgba(180,120,255,0.14)",
-borderRadius: 14,
-padding: 14,
-}}
->
-<div style={{ opacity: 0.6, fontSize: 12, marginBottom: 6 }}>
+<div key={p.id} style={postCard}>
+<div style={{ opacity: 0.6, fontSize: 12, marginBottom: 8 }}>
 {timeAgo(p.created_at)}
 </div>
+
+{/* MEDIA (image/video) */}
+{p.media_url ? (
+p.media_type?.startsWith("video") ? (
+<video
+src={p.media_url}
+controls
+playsInline
+style={{
+width: "100%",
+borderRadius: 14,
+marginBottom: 10,
+background: "rgba(0,0,0,0.35)",
+}}
+/>
+) : (
+// eslint-disable-next-line @next/next/no-img-element
+<img
+src={p.media_url}
+alt=""
+style={{
+width: "100%",
+borderRadius: 14,
+marginBottom: 10,
+display: "block",
+}}
+/>
+)
+) : null}
+
+{/* BODY */}
+{p.body ? (
 <div style={{ whiteSpace: "pre-wrap" }}>{p.body}</div>
+) : null}
 </div>
 ))}
 

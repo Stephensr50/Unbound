@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { createClient } from "@supabase/supabase-js";
+import StoriesBar from "./StoriesBar";
 
 function getSupabase() {
 const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
@@ -15,6 +16,8 @@ user_id: string;
 body: string | null;
 kind: string;
 created_at: string;
+media_url?: string | null;
+media_type?: string | null;
 };
 
 type CommentRow = {
@@ -91,8 +94,12 @@ const supabase = useMemo(() => getSupabase(), []);
 const [myUserId, setMyUserId] = useState<string | null>(null);
 const [posts, setPosts] = useState<PostRow[]>([]);
 const [text, setText] = useState("");
-const [posting, setPosting] = useState(false);
 
+// NEW: upload state
+const [file, setFile] = useState<File | null>(null);
+const [uploading, setUploading] = useState(false);
+
+const [posting, setPosting] = useState(false);
 const [profilesById, setProfilesById] = useState<Record<string, ProfileRow>>(
 {}
 );
@@ -102,14 +109,15 @@ const [commentCounts, setCommentCounts] = useState<Record<number, number>>({});
 const [likedByMe, setLikedByMe] = useState<Record<number, boolean>>({});
 
 const [openComments, setOpenComments] = useState<Record<number, boolean>>({});
-const [commentsByPost, setCommentsByPost] = useState<
-Record<number, CommentRow[]>
->({});
+const [commentsByPost, setCommentsByPost] = useState<Record<number, CommentRow[]>>(
+{}
+);
 const [commentDraft, setCommentDraft] = useState<Record<number, string>>({});
 const [busyPostId, setBusyPostId] = useState<number | null>(null);
 
 const [banner, setBanner] = useState<string | null>(null);
 
+// sparkle animation trigger per post
 const [spark, setSpark] = useState<Record<number, boolean>>({});
 
 async function refreshAuth() {
@@ -168,7 +176,7 @@ setCommentCounts(cc);
 async function loadPosts() {
 const { data, error } = await supabase
 .from("posts")
-.select("id,user_id,body,kind,created_at")
+.select("id,user_id,body,kind,created_at,media_url,media_type")
 .order("created_at", { ascending: false })
 .limit(50);
 
@@ -180,6 +188,7 @@ return;
 const rows = (data ?? []) as PostRow[];
 setPosts(rows);
 
+// fetch author profiles
 const uids = Array.from(new Set(rows.map((r) => r.user_id).filter(Boolean)));
 if (uids.length) {
 const { data: profs } = await supabase
@@ -192,7 +201,9 @@ for (const p of (profs ?? []) as ProfileRow[]) map[p.id] = p;
 setProfilesById(map);
 }
 
-if (rows.length) await loadCounts(rows.map((r) => r.id));
+if (rows.length) {
+await loadCounts(rows.map((r) => r.id));
+}
 }
 
 useEffect(() => {
@@ -202,36 +213,6 @@ await loadPosts();
 })();
 // eslint-disable-next-line react-hooks/exhaustive-deps
 }, []);
-
-async function submitPost() {
-const trimmed = text.trim();
-if (!trimmed) return;
-
-setPosting(true);
-
-const uid = myUserId ?? (await refreshAuth());
-if (!uid) {
-setBanner("Not signed in");
-setPosting(false);
-return;
-}
-
-const { error } = await supabase.from("posts").insert({
-user_id: uid,
-body: trimmed,
-kind: "text",
-});
-
-setPosting(false);
-
-if (error) {
-setBanner(error.message);
-return;
-}
-
-setText("");
-await loadPosts();
-}
 
 function triggerSpark(postId: number) {
 setSpark((m) => ({ ...m, [postId]: true }));
@@ -302,10 +283,7 @@ setBanner(error.message);
 return;
 }
 
-setCommentsByPost((m) => ({
-...m,
-[postId]: (data ?? []) as CommentRow[],
-}));
+setCommentsByPost((m) => ({ ...m, [postId]: (data ?? []) as CommentRow[] }));
 }
 
 async function addComment(postId: number) {
@@ -382,6 +360,91 @@ const p = profilesById[uid];
 return p?.username ? `@${p.username}` : "";
 };
 
+// ---------- NEW: Upload helper ----------
+async function uploadToStorage(uid: string, f: File) {
+// basic validation
+const isImage = f.type.startsWith("image/");
+const isVideo = f.type.startsWith("video/");
+if (!isImage && !isVideo) throw new Error("Please choose an image or video.");
+
+// Keep it sane for now (we can raise later)
+const maxMb = isVideo ? 60 : 15;
+if (f.size > maxMb * 1024 * 1024) {
+throw new Error(`File too large. Max ${maxMb}MB for this upload.`);
+}
+
+const ext = (f.name.split(".").pop() || "").toLowerCase();
+const safeExt = ext ? `.${ext}` : isImage ? ".jpg" : ".mp4";
+const name = `${Date.now()}-${crypto.randomUUID()}${safeExt}`;
+const path = `posts/${uid}/${name}`;
+
+const { error: upErr } = await supabase.storage
+.from("media")
+.upload(path, f, {
+contentType: f.type,
+cacheControl: "3600",
+upsert: false,
+});
+
+if (upErr) throw new Error(upErr.message);
+
+// public URL (because bucket is public)
+const { data } = supabase.storage.from("media").getPublicUrl(path);
+const publicUrl = data.publicUrl;
+
+return { publicUrl, mediaType: f.type, kind: isImage ? "image" : "video" };
+}
+
+async function submitPost() {
+const trimmed = text.trim();
+
+// must have either text or a file
+if (!trimmed && !file) return;
+
+setPosting(true);
+setBanner(null);
+
+try {
+const uid = myUserId ?? (await refreshAuth());
+if (!uid) throw new Error("Not signed in.");
+
+let media_url: string | null = null;
+let media_type: string | null = null;
+let kind = "text";
+
+if (file) {
+setUploading(true);
+const up = await uploadToStorage(uid, file);
+media_url = up.publicUrl;
+media_type = up.mediaType;
+kind = up.kind;
+setUploading(false);
+}
+
+const { error } = await supabase.from("posts").insert({
+user_id: uid,
+body: trimmed || null,
+kind,
+media_url,
+media_type,
+});
+
+if (error) throw new Error(error.message);
+
+// reset composer
+setText("");
+setFile(null);
+
+await loadPosts();
+} catch (e: any) {
+setBanner(String(e?.message || e));
+} finally {
+setUploading(false);
+setPosting(false);
+}
+}
+// ---------------------------------------
+
 return (
 <div style={{ maxWidth: 720, margin: "0 auto", padding: 16 }}>
 <style>{`
@@ -397,9 +460,13 @@ return (
 }
 `}</style>
 
+{/* Stories bar */}
+<StoriesBar />
+
 {banner ? (
 <div
 style={{
+marginTop: 12,
 marginBottom: 12,
 padding: 10,
 borderRadius: 14,
@@ -413,6 +480,7 @@ fontSize: 13,
 </div>
 ) : null}
 
+{/* Composer */}
 <div
 style={{
 background: "rgba(0,0,0,0.55)",
@@ -434,13 +502,47 @@ resize: "none",
 }}
 />
 
-<div style={{ display: "flex", justifyContent: "flex-end", marginTop: 10 }}>
-<button onClick={submitPost} disabled={posting} style={postBtn}>
-{posting ? "Posting…" : "Post"}
+{/* NEW: upload row */}
+<div style={{ display: "flex", gap: 10, alignItems: "center", marginTop: 10 }}>
+<label
+style={{
+...pillBtn,
+display: "inline-flex",
+alignItems: "center",
+gap: 8,
+cursor: "pointer",
+userSelect: "none",
+}}
+>
+<input
+type="file"
+accept="image/*,video/*"
+style={{ display: "none" }}
+onChange={(e) => {
+const f = e.target.files?.[0] || null;
+setFile(f);
+}}
+/>
+{file ? "Change media" : "Add photo/video"}
+</label>
+
+{file ? (
+<div style={{ opacity: 0.75, fontSize: 12, overflow: "hidden", textOverflow: "ellipsis" }}>
+{file.name}
+</div>
+) : (
+<div style={{ opacity: 0.55, fontSize: 12 }}>Optional</div>
+)}
+
+<div style={{ flex: 1 }} />
+
+<button onClick={submitPost} disabled={posting || uploading} style={postBtn}>
+{uploading ? "Uploading…" : posting ? "Posting…" : "Post"}
 </button>
 </div>
 </div>
 
+{/* Feed */}
 <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
 {posts.map((p) => {
 const spanks = likeCounts[p.id] ?? 0;
@@ -451,30 +553,57 @@ const isOpen = !!openComments[p.id];
 
 return (
 <div key={p.id} style={cardStyle}>
-<div
-style={{
-display: "flex",
-justifyContent: "space-between",
-marginBottom: 8,
-}}
->
+{/* Author + time */}
+<div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
 <div style={{ display: "flex", gap: 10, alignItems: "baseline" }}>
 <div style={{ fontWeight: 850, opacity: 0.95 }}>
 {authorName(p.user_id)}
 </div>
-<div style={{ opacity: 0.65, fontSize: 12 }}>
-{timeAgo(p.created_at)}
+<div style={{ opacity: 0.65, fontSize: 12 }}>{timeAgo(p.created_at)}</div>
 </div>
-</div>
-<div style={{ opacity: 0.55, fontSize: 12 }}>
-{authorHandle(p.user_id)}
-</div>
+<div style={{ opacity: 0.55, fontSize: 12 }}>{authorHandle(p.user_id)}</div>
 </div>
 
+{/* Media (NEW) */}
+{p.kind === "image" && p.media_url ? (
+// eslint-disable-next-line @next/next/no-img-element
+<img
+src={p.media_url}
+alt=""
+style={{
+width: "100%",
+borderRadius: 14,
+border: "1px solid rgba(180,120,255,0.14)",
+marginBottom: 10,
+objectFit: "cover",
+maxHeight: 520,
+}}
+/>
+) : null}
+
+{p.kind === "video" && p.media_url ? (
+<video
+src={p.media_url}
+controls
+style={{
+width: "100%",
+borderRadius: 14,
+border: "1px solid rgba(180,120,255,0.14)",
+marginBottom: 10,
+maxHeight: 520,
+background: "rgba(0,0,0,0.5)",
+}}
+/>
+) : null}
+
+{/* Text */}
+{p.body ? (
 <div style={{ fontSize: 16, lineHeight: 1.4, whiteSpace: "pre-wrap" }}>
 {p.body}
 </div>
+) : null}
 
+{/* Actions */}
 <div style={{ display: "flex", gap: 14, marginTop: 12, alignItems: "center" }}>
 <div
 onClick={() => !isBusy && toggleSpank(p.id)}
@@ -530,6 +659,7 @@ Comments {comments ? `· ${comments}` : ""}
 </button>
 </div>
 
+{/* Comments panel */}
 {isOpen ? (
 <div style={{ marginTop: 12 }}>
 <div style={{ display: "flex", gap: 10 }}>
@@ -542,11 +672,7 @@ placeholder="Write a comment…"
 style={{ ...inputStyle, flex: 1 }}
 />
 
-<button
-onClick={() => addComment(p.id)}
-disabled={isBusy}
-style={postBtn}
->
+<button onClick={() => addComment(p.id)} disabled={isBusy} style={postBtn}>
 {isBusy ? "…" : "Send"}
 </button>
 </div>

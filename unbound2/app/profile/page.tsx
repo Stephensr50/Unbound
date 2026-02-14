@@ -461,7 +461,7 @@ title="Friends (coming soon)"
 </div>
 
 {/* ✅ MY POSTS ON PROFILE */}
-{myUserId ? <ProfileFeedClient userId={myUserId} /> : null}
+{myUserId ? <ProfileFeedClient/> : null}
 
 {modalOpen && (
 <div style={S.modalBackdrop} onClick={() => setModalOpen(false)}>
