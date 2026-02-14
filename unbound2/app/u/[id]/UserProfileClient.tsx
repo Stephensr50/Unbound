@@ -1,6 +1,7 @@
 "use client";
 
-import MessageButton from "@/app/components/MessageButton";
+import { useEffect, useMemo, useState } from "react";
+import { createClient } from "@supabase/supabase-js";
 
 type ProfileRow = {
 id: string;
@@ -10,75 +11,141 @@ bio: string | null;
 avatar_url: string | null;
 };
 
+type PostRow = {
+id: number;
+user_id: string;
+body: string | null;
+kind: string;
+created_at: string;
+};
+
+function getSupabase() {
+const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
+return createClient(url, key);
+}
+
+function timeAgo(ts: string) {
+const then = new Date(ts).getTime();
+const now = Date.now();
+const s = Math.max(0, Math.floor((now - then) / 1000));
+if (s < 15) return "just now";
+if (s < 60) return `${s}s`;
+if (s < 3600) return `${Math.floor(s / 60)}m`;
+if (s < 86400) return `${Math.floor(s / 3600)}h`;
+return `${Math.floor(s / 86400)}d`;
+}
+
 export default function UserProfileClient({ profile }: { profile: ProfileRow }) {
+const supabase = useMemo(() => getSupabase(), []);
+
+const [posts, setPosts] = useState<PostRow[]>([]);
+const [banner, setBanner] = useState<string | null>(null);
+
+useEffect(() => {
+(async () => {
+if (!profile?.id) return;
+
+const { data, error } = await supabase
+.from("posts")
+.select("id,user_id,body,kind,created_at")
+.eq("user_id", profile.id) // ✅ ONLY this user's posts
+.order("created_at", { ascending: false })
+.limit(50);
+
+if (error) {
+setBanner(error.message);
+setPosts([]);
+return;
+}
+
+setBanner(null);
+setPosts((data ?? []) as PostRow[]);
+})();
+}, [profile.id, supabase]);
+
 const card: React.CSSProperties = {
 width: "min(920px, 94vw)",
 margin: "22px auto 0",
 padding: 18,
 borderRadius: 18,
 background: "rgba(0,0,0,0.45)",
-border: "1px solid rgba(255,255,255,0.14)",
-boxShadow: "0 0 22px rgba(170, 90, 255, 0.20)",
+border: "1px solid rgba(180,120,255,0.20)",
+boxShadow: "0 0 22px rgba(170,90,255,0.18)",
 color: "white",
-display: "flex",
-gap: 16,
-alignItems: "center",
 };
-
-const avatar: React.CSSProperties = {
-width: 62,
-height: 62,
-borderRadius: 999,
-objectFit: "cover",
-border: "1px solid rgba(255,255,255,0.18)",
-flex: "0 0 auto",
-};
-
-const msgBtn: React.CSSProperties = {
-marginLeft: "auto",
-padding: "10px 14px",
-borderRadius: 12,
-border: "none", // ← ADD THIS
-color: "rgba(235, 215, 255, 0.98)",
-textDecoration: "none",
-background: "rgba(120, 60, 220, 0.22)",
-boxShadow: "0 0 18px rgba(90, 156, 255, 0.22)",
-whiteSpace: "nowrap",
-cursor: "pointer",
-fontWeight: 800,
-};
-
-const label = profile.display_name || profile.username || "Unknown";
 
 return (
+<div style={{ paddingBottom: 40 }}>
+{/* Profile Header */}
 <div style={card}>
-{profile.avatar_url ? (
-<img src={profile.avatar_url} alt="" style={avatar} />
-) : (
+<div style={{ display: "flex", gap: 16, alignItems: "center" }}>
 <div
 style={{
-...avatar,
-display: "grid",
-placeItems: "center",
-opacity: 0.7,
+width: 92,
+height: 92,
+borderRadius: 999,
+overflow: "hidden",
+border: "1px solid rgba(180,120,255,0.35)",
+background: "rgba(0,0,0,0.4)",
 }}
 >
-?
+{profile.avatar_url ? (
+<img
+src={profile.avatar_url}
+alt=""
+style={{ width: "100%", height: "100%", objectFit: "cover" }}
+/>
+) : null}
 </div>
-)}
 
-<div style={{ minWidth: 0 }}>
-<div style={{ fontSize: 28, fontWeight: 900 }}>{label}</div>
+<div>
+<div style={{ fontSize: 28, fontWeight: 800 }}>
+{profile.display_name || profile.username || "User"}
+</div>
 {profile.username ? (
-<div style={{ opacity: 0.85, marginTop: 4 }}>@{profile.username}</div>
+<div style={{ opacity: 0.7 }}>@{profile.username}</div>
 ) : null}
+</div>
+</div>
+
 {profile.bio ? (
-<div style={{ opacity: 0.92, marginTop: 10 }}>{profile.bio}</div>
+<div style={{ marginTop: 14, opacity: 0.9 }}>{profile.bio}</div>
 ) : null}
 </div>
 
-<div style={msgBtn as React.CSSProperties}>
-<MessageButton toUserId={profile.id} />
+{/* Posts */}
+<div style={{ ...card, marginTop: 18 }}>
+<div style={{ fontWeight: 800, marginBottom: 12 }}>Posts</div>
+
+{banner ? (
+<div style={{ opacity: 0.8, fontSize: 13, marginBottom: 10 }}>
+{banner}
+</div>
+) : null}
+
+<div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+{posts.map((p) => (
+<div
+key={p.id}
+style={{
+background: "rgba(0,0,0,0.35)",
+border: "1px solid rgba(180,120,255,0.14)",
+borderRadius: 14,
+padding: 14,
+}}
+>
+<div style={{ opacity: 0.6, fontSize: 12, marginBottom: 6 }}>
+{timeAgo(p.created_at)}
+</div>
+<div style={{ whiteSpace: "pre-wrap" }}>{p.body}</div>
+</div>
+))}
+
+{posts.length === 0 ? (
+<div style={{ opacity: 0.6, fontSize: 13 }}>No posts yet.</div>
+) : null}
+</div>
 </div>
 </div>
 );

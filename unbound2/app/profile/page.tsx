@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { createClient } from "@supabase/supabase-js";
+import ProfileFeedClient from "./ProfileFeedClient";
 
 type ProfileRow = {
 id: string;
@@ -18,7 +19,6 @@ type ModalType = "followers" | "following";
 export default function ProfilePage() {
 const router = useRouter();
 
-// Browser-safe Supabase client (uses NEXT_PUBLIC keys)
 const supabase = useMemo(() => {
 const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const anon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
@@ -31,7 +31,6 @@ const [myProfile, setMyProfile] = useState<ProfileRow | null>(null);
 const [followersCount, setFollowersCount] = useState<number>(0);
 const [followingCount, setFollowingCount] = useState<number>(0);
 
-// (Optional) Friends count placeholder for now
 const friendsCount = 0;
 
 const [modalOpen, setModalOpen] = useState(false);
@@ -41,7 +40,6 @@ const [modalUsers, setModalUsers] = useState<ProfileRow[]>([]);
 
 const [status, setStatus] = useState<string>("");
 
-// 1) Get logged-in user (safe if logged out)
 useEffect(() => {
 (async () => {
 try {
@@ -62,12 +60,10 @@ setStatus("Not signed in.");
 })();
 }, [supabase]);
 
-// 2) Load my profile + counts
 useEffect(() => {
 if (!myUserId) return;
 
 (async () => {
-// Load profile
 const { data: p, error: pErr } = await supabase
 .from("profiles")
 .select("id, username, display_name, bio, avatar_url")
@@ -77,7 +73,6 @@ const { data: p, error: pErr } = await supabase
 if (pErr) console.error(pErr);
 setMyProfile((p as ProfileRow) ?? null);
 
-// Followers count = rows where following_id = me
 const { count: followers, error: fErr } = await supabase
 .from("follows")
 .select("*", { count: "exact", head: true })
@@ -86,7 +81,6 @@ const { count: followers, error: fErr } = await supabase
 if (fErr) console.error(fErr);
 setFollowersCount(followers ?? 0);
 
-// Following count = rows where follower_id = me
 const { count: following, error: foErr } = await supabase
 .from("follows")
 .select("*", { count: "exact", head: true })
@@ -102,7 +96,6 @@ setModalType(type);
 setModalOpen(true);
 }
 
-// 3) When modal opens, load users list
 useEffect(() => {
 if (!modalOpen) return;
 if (!myUserId) return;
@@ -126,15 +119,15 @@ return;
 }
 
 const ids =
-(rows ?? []).map((r: any) => (isFollowers ? r.follower_id : r.following_id)) ??
-[];
+(rows ?? []).map((r: any) =>
+isFollowers ? r.follower_id : r.following_id
+) ?? [];
 
 if (ids.length === 0) {
 setModalUsers([]);
 return;
 }
 
-// IMPORTANT: include bio here to match ProfileRow type
 const { data: profiles, error: profErr } = await supabase
 .from("profiles")
 .select("id, username, display_name, bio, avatar_url")
@@ -153,12 +146,10 @@ setModalLoading(false);
 })();
 }, [modalOpen, modalType, myUserId, supabase]);
 
-// UI helpers
 const title = myProfile?.display_name || myProfile?.username || "My Profile";
 const subtitle = myProfile?.username ? `@${myProfile.username}` : "";
-const locationLine = "Tacoma, Washington, United States"; // placeholder for now
+const locationLine = "Tacoma, Washington, United States";
 
-// --------- Styles (no Tailwind dependency) ----------
 const S = {
 page: {
 minHeight: "100vh",
@@ -179,11 +170,7 @@ backdropFilter: "blur(14px)",
 padding: 3,
 } as const,
 
-headerRow: {
-display: "flex",
-gap: 14,
-alignItems: "center",
-} as const,
+headerRow: { display: "flex", gap: 14, alignItems: "center" } as const,
 
 avatar: {
 height: 140,
@@ -315,10 +302,7 @@ borderBottom: "1px solid rgba(255,255,255,0.10)",
 marginBottom: 10,
 } as const,
 
-modalTitle: {
-fontWeight: 800,
-color: "rgba(255,255,255,0.92)",
-} as const,
+modalTitle: { fontWeight: 800, color: "rgba(255,255,255,0.92)" } as const,
 
 closeBtn: {
 border: "none",
@@ -362,7 +346,6 @@ flex: "0 0 auto",
 userName: { fontWeight: 700, fontSize: 14 } as const,
 userHandle: { fontSize: 12, color: "rgba(255,255,255,0.60)" } as const,
 };
-// ---------------------------------------------------
 
 async function shareProfile() {
 const shareText = `Check out my Unbound profile: ${window.location.href}`;
@@ -374,9 +357,7 @@ if (navigator.share) {
 await navigator.share({ text: shareText, url: window.location.href });
 return;
 }
-} catch {
-// ignore
-}
+} catch {}
 
 try {
 await navigator.clipboard.writeText(shareText);
@@ -394,11 +375,8 @@ setStatus(`Sign out error: ${error.message}`);
 return;
 }
 
-// Clear local state so UI updates instantly
 setMyUserId(null);
 setMyProfile(null);
-
-// Redirect to login page (adjust if your route is different)
 router.push("/login");
 }
 
@@ -440,7 +418,6 @@ fontSize: 18,
 </div>
 </div>
 
-{/* Buttons like FetLife */}
 <div style={S.btnRow}>
 <Link href="/edit-profile" style={S.btn}>
 Edit Profile
@@ -461,7 +438,6 @@ Sign Out
 </div>
 ) : null}
 
-{/* Stats row like FetLife */}
 <div style={S.statsWrap}>
 <div
 style={S.stat}
@@ -472,10 +448,7 @@ title="Friends (coming soon)"
 <div style={S.statLabel}>Friends</div>
 </div>
 
-<div
-style={{ ...S.stat, ...S.statMiddle }}
-onClick={() => openModal("followers")}
->
+<div style={{ ...S.stat, ...S.statMiddle }} onClick={() => openModal("followers")}>
 <div style={S.statNum}>{followersCount}</div>
 <div style={S.statLabel}>Followers</div>
 </div>
@@ -487,7 +460,9 @@ onClick={() => openModal("followers")}
 </div>
 </div>
 
-{/* Modal */}
+{/* ✅ MY POSTS ON PROFILE */}
+{myUserId ? <ProfileFeedClient userId={myUserId} /> : null}
+
 {modalOpen && (
 <div style={S.modalBackdrop} onClick={() => setModalOpen(false)}>
 <div style={S.modal} onClick={(e) => e.stopPropagation()}>
@@ -501,23 +476,11 @@ Close
 </div>
 
 {modalLoading ? (
-<div
-style={{
-padding: 18,
-textAlign: "center",
-color: "rgba(255,255,255,0.70)",
-}}
->
+<div style={{ padding: 18, textAlign: "center", color: "rgba(255,255,255,0.70)" }}>
 Loading…
 </div>
 ) : modalUsers.length === 0 ? (
-<div
-style={{
-padding: 18,
-textAlign: "center",
-color: "rgba(255,255,255,0.70)",
-}}
->
+<div style={{ padding: 18, textAlign: "center", color: "rgba(255,255,255,0.70)" }}>
 No one yet.
 </div>
 ) : (
@@ -539,11 +502,7 @@ onClick={() => setModalOpen(false)}
 <img
 src={u.avatar_url}
 alt=""
-style={{
-height: "100%",
-width: "100%",
-objectFit: "cover",
-}}
+style={{ height: "100%", width: "100%", objectFit: "cover" }}
 />
 ) : (
 <div
@@ -565,9 +524,7 @@ fontSize: 12,
 
 <div style={{ minWidth: 0 }}>
 <div style={S.userName}>{label}</div>
-{u.username ? (
-<div style={S.userHandle}>@{u.username}</div>
-) : null}
+{u.username ? <div style={S.userHandle}>@{u.username}</div> : null}
 </div>
 </Link>
 );

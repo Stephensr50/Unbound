@@ -85,7 +85,7 @@ strokeLinejoin="round"
 );
 }
 
-export default function FeedPage() {
+export default function ProfileFeedClient({ userId }: { userId: string }) {
 const supabase = useMemo(() => getSupabase(), []);
 
 const [myUserId, setMyUserId] = useState<string | null>(null);
@@ -109,7 +109,6 @@ const [commentDraft, setCommentDraft] = useState<Record<number, string>>({});
 const [busyPostId, setBusyPostId] = useState<number | null>(null);
 
 const [banner, setBanner] = useState<string | null>(null);
-
 const [spark, setSpark] = useState<Record<number, boolean>>({});
 
 async function refreshAuth() {
@@ -166,9 +165,11 @@ setCommentCounts(cc);
 }
 
 async function loadPosts() {
+// ✅ PROFILE MODE: only this user's posts
 const { data, error } = await supabase
 .from("posts")
 .select("id,user_id,body,kind,created_at")
+.eq("user_id", userId)
 .order("created_at", { ascending: false })
 .limit(50);
 
@@ -180,6 +181,7 @@ return;
 const rows = (data ?? []) as PostRow[];
 setPosts(rows);
 
+// (on profile, this will usually just be one user, but keep it consistent)
 const uids = Array.from(new Set(rows.map((r) => r.user_id).filter(Boolean)));
 if (uids.length) {
 const { data: profs } = await supabase
@@ -201,7 +203,7 @@ await refreshAuth();
 await loadPosts();
 })();
 // eslint-disable-next-line react-hooks/exhaustive-deps
-}, []);
+}, [userId]);
 
 async function submitPost() {
 const trimmed = text.trim();
@@ -413,6 +415,8 @@ fontSize: 13,
 </div>
 ) : null}
 
+{/* Composer (only enabled if this is YOUR profile) */}
+{myUserId === userId ? (
 <div
 style={{
 background: "rgba(0,0,0,0.55)",
@@ -440,7 +444,9 @@ resize: "none",
 </button>
 </div>
 </div>
+) : null}
 
+{/* Feed */}
 <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
 {posts.map((p) => {
 const spanks = likeCounts[p.id] ?? 0;
@@ -551,14 +557,7 @@ style={postBtn}
 </button>
 </div>
 
-<div
-style={{
-marginTop: 10,
-display: "flex",
-flexDirection: "column",
-gap: 10,
-}}
->
+<div style={{ marginTop: 10, display: "flex", flexDirection: "column", gap: 10 }}>
 {(commentsByPost[p.id] ?? []).map((c) => (
 <div
 key={c.id}
