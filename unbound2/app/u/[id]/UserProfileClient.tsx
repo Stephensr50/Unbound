@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useMemo, useState, type CSSProperties } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { createClient } from "@supabase/supabase-js";
+import PublicProfileActions from "./PublicProfileActions";
 
 type ProfileRow = {
 id: string;
@@ -17,15 +18,14 @@ user_id: string;
 body: string | null;
 kind: string;
 created_at: string;
-
-// media support
 media_url: string | null;
 media_type: string | null;
 };
 
 function getSupabase() {
-const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
+const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+if (!url || !key) throw new Error("Missing NEXT_PUBLIC_SUPABASE env vars");
 return createClient(url, key);
 }
 
@@ -44,13 +44,16 @@ export default function UserProfileClient({ profile }: { profile: ProfileRow }) 
 const supabase = useMemo(() => getSupabase(), []);
 
 const [posts, setPosts] = useState<PostRow[]>([]);
-const [banner, setBanner] = useState<string | null>(null);
+const [loading, setLoading] = useState(true);
+const [err, setErr] = useState<string | null>(null);
 
 useEffect(() => {
 let cancelled = false;
 
 (async () => {
-if (!profile?.id) return;
+try {
+setLoading(true);
+setErr(null);
 
 const { data, error } = await supabase
 .from("posts")
@@ -59,139 +62,210 @@ const { data, error } = await supabase
 .order("created_at", { ascending: false })
 .limit(50);
 
-if (cancelled) return;
-
-if (error) {
-setBanner(error.message);
-setPosts([]);
-return;
+if (error) throw error;
+if (!cancelled) setPosts((data ?? []) as PostRow[]);
+} catch (e: any) {
+if (!cancelled) setErr(String(e?.message || e));
+} finally {
+if (!cancelled) setLoading(false);
 }
-
-setBanner(null);
-setPosts((data ?? []) as PostRow[]);
 })();
 
 return () => {
 cancelled = true;
 };
-}, [profile?.id, supabase]);
+}, [supabase, profile.id]);
 
-const card: CSSProperties = {
+const wrap: React.CSSProperties = {
 width: "min(920px, 94vw)",
-margin: "22px auto 0",
-padding: 18,
-borderRadius: 18,
-background: "rgba(0,0,0,0.45)",
-border: "1px solid rgba(180,120,255,0.20)",
-boxShadow: "0 0 22px rgba(170,90,255,0.18)",
+margin: "22px auto 40px",
 color: "white",
 };
 
-const postCard: CSSProperties = {
+const panel: React.CSSProperties = {
+background: "rgba(0,0,0,0.55)",
+border: "1px solid rgba(180,120,255,0.18)",
+borderRadius: 18,
+padding: 18,
+boxShadow: "0 0 24px rgba(0,0,0,0.35)",
+};
+
+const headerRow: React.CSSProperties = {
+display: "flex",
+gap: 18,
+alignItems: "center",
+};
+
+const avatar: React.CSSProperties = {
+width: 86,
+height: 86,
+borderRadius: 999,
+objectFit: "cover",
+border: "1px solid rgba(180,120,255,0.22)",
+boxShadow: "0 0 18px rgba(192,38,211,0.18)",
+background: "rgba(0,0,0,0.4)",
+flex: "0 0 auto",
+};
+
+const nameStyle: React.CSSProperties = {
+fontSize: 40,
+fontWeight: 900,
+letterSpacing: 0.2,
+lineHeight: 1.05,
+textShadow: "0 0 22px rgba(192,38,211,0.20)",
+};
+
+const bioStyle: React.CSSProperties = {
+marginTop: 10,
+opacity: 0.9,
+fontSize: 15,
+lineHeight: 1.45,
+maxWidth: 740,
+};
+
+const divider: React.CSSProperties = {
+height: 1,
+background: "linear-gradient(90deg, rgba(180,120,255,0.0), rgba(180,120,255,0.28), rgba(180,120,255,0.0))",
+margin: "16px 0 14px",
+};
+
+const postsPanel: React.CSSProperties = {
+...panel,
+marginTop: 14,
+};
+
+const postCard: React.CSSProperties = {
 background: "rgba(0,0,0,0.35)",
 border: "1px solid rgba(180,120,255,0.14)",
-borderRadius: 14,
+borderRadius: 16,
 padding: 14,
 };
 
+const renderMedia = (p: PostRow) => {
+if (!p.media_url) return null;
+
+const isVideo =
+(p.media_type && p.media_type.startsWith("video/")) || p.kind === "video";
+const isImage =
+(p.media_type && p.media_type.startsWith("image/")) || p.kind === "image";
+
+if (isVideo) {
 return (
-<div style={{ paddingBottom: 40 }}>
-{/* Profile Header */}
-<div style={card}>
-<div style={{ display: "flex", gap: 16, alignItems: "center" }}>
-<div
-style={{
-width: 92,
-height: 92,
-borderRadius: 999,
-overflow: "hidden",
-border: "1px solid rgba(180,120,255,0.35)",
-background: "rgba(0,0,0,0.4)",
-flex: "0 0 auto",
-}}
->
-{profile.avatar_url ? (
-// eslint-disable-next-line @next/next/no-img-element
-<img
-src={profile.avatar_url}
-alt=""
-style={{ width: "100%", height: "100%", objectFit: "cover" }}
-/>
-) : null}
-</div>
-
-<div>
-<div style={{ fontSize: 28, fontWeight: 800 }}>
-{profile.display_name || profile.username || "User"}
-</div>
-{profile.username ? (
-<div style={{ opacity: 0.7 }}>@{profile.username}</div>
-) : null}
-</div>
-</div>
-
-{profile.bio ? (
-<div style={{ marginTop: 14, opacity: 0.9 }}>{profile.bio}</div>
-) : null}
-</div>
-
-{/* Posts */}
-<div style={{ ...card, marginTop: 18 }}>
-<div style={{ fontWeight: 800, marginBottom: 12 }}>Posts</div>
-
-{banner ? (
-<div style={{ opacity: 0.85, fontSize: 13, marginBottom: 10 }}>
-{banner}
-</div>
-) : null}
-
-<div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-{posts.map((p) => (
-<div key={p.id} style={postCard}>
-<div style={{ opacity: 0.6, fontSize: 12, marginBottom: 8 }}>
-{timeAgo(p.created_at)}
-</div>
-
-{/* MEDIA (image/video) */}
-{p.media_url ? (
-p.media_type?.startsWith("video") ? (
 <video
 src={p.media_url}
 controls
-playsInline
 style={{
 width: "100%",
 borderRadius: 14,
+border: "1px solid rgba(180,120,255,0.14)",
 marginBottom: 10,
-background: "rgba(0,0,0,0.35)",
+maxHeight: 520,
+background: "rgba(0,0,0,0.5)",
 }}
 />
-) : (
+);
+}
+
+if (isImage) {
 // eslint-disable-next-line @next/next/no-img-element
+return (
 <img
 src={p.media_url}
 alt=""
 style={{
 width: "100%",
 borderRadius: 14,
+border: "1px solid rgba(180,120,255,0.14)",
 marginBottom: 10,
-display: "block",
+objectFit: "cover",
+maxHeight: 620,
 }}
 />
-)
+);
+}
+
+return null;
+};
+
+return (
+<div style={wrap}>
+{/* Top profile panel */}
+<div style={panel}>
+<div style={headerRow}>
+{/* eslint-disable-next-line @next/next/no-img-element */}
+<img
+src={profile.avatar_url || "/default-avatar.png"}
+alt=""
+style={avatar}
+/>
+
+<div style={{ flex: 1, minWidth: 0 }}>
+<div style={nameStyle}>
+{profile.display_name || profile.username || "Profile"}
+</div>
+
+{profile.username ? (
+<div style={{ marginTop: 6, opacity: 0.65, fontSize: 13 }}>
+@{profile.username}
+</div>
 ) : null}
 
-{/* BODY */}
+{profile.bio ? <div style={bioStyle}>{profile.bio}</div> : null}
+
+{/* ✅ ACTIONS BAR — ALWAYS UNDER BIO */}
+<div style={{ marginTop: 14 }}>
+<PublicProfileActions targetProfileId={profile.id} />
+</div>
+</div>
+</div>
+</div>
+
+{/* Posts */}
+<div style={postsPanel}>
+<div style={{ fontSize: 22, fontWeight: 900, marginBottom: 10 }}>
+Posts
+</div>
+
+{err ? (
+<div
+style={{
+padding: 12,
+borderRadius: 14,
+background: "rgba(120,0,0,0.28)",
+border: "1px solid rgba(255,80,80,0.35)",
+color: "rgba(255,220,220,0.95)",
+fontSize: 13,
+}}
+>
+{err}
+</div>
+) : null}
+
+{loading ? (
+<div style={{ opacity: 0.7, padding: 10 }}>Loading…</div>
+) : posts.length === 0 ? (
+<div style={{ opacity: 0.7, padding: 10 }}>No posts yet.</div>
+) : (
+<div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+{posts.map((p) => (
+<div key={p.id} style={postCard}>
+<div style={{ opacity: 0.65, fontSize: 12, marginBottom: 8 }}>
+{timeAgo(p.created_at)}
+</div>
+
+{renderMedia(p)}
+
 {p.body ? (
-<div style={{ whiteSpace: "pre-wrap" }}>{p.body}</div>
+<div style={{ fontSize: 16, lineHeight: 1.4, whiteSpace: "pre-wrap" }}>
+{p.body}
+</div>
 ) : null}
 </div>
 ))}
-
-{posts.length === 0 ? (
-<div style={{ opacity: 0.6, fontSize: 13 }}>No posts yet.</div>
-) : null}
 </div>
+)}
+
+<div style={divider} />
 </div>
 </div>
 );

@@ -16,8 +16,8 @@ user_id: string;
 body: string | null;
 kind: string;
 created_at: string;
-media_url?: string | null;
-media_type?: string | null;
+media_url: string | null;
+media_type: string | null;
 };
 
 type CommentRow = {
@@ -95,7 +95,7 @@ const [myUserId, setMyUserId] = useState<string | null>(null);
 const [posts, setPosts] = useState<PostRow[]>([]);
 const [text, setText] = useState("");
 
-// NEW: upload state
+// upload state
 const [file, setFile] = useState<File | null>(null);
 const [uploading, setUploading] = useState(false);
 
@@ -109,9 +109,9 @@ const [commentCounts, setCommentCounts] = useState<Record<number, number>>({});
 const [likedByMe, setLikedByMe] = useState<Record<number, boolean>>({});
 
 const [openComments, setOpenComments] = useState<Record<number, boolean>>({});
-const [commentsByPost, setCommentsByPost] = useState<Record<number, CommentRow[]>>(
-{}
-);
+const [commentsByPost, setCommentsByPost] = useState<
+Record<number, CommentRow[]>
+>({});
 const [commentDraft, setCommentDraft] = useState<Record<number, string>>({});
 const [busyPostId, setBusyPostId] = useState<number | null>(null);
 
@@ -119,6 +119,12 @@ const [banner, setBanner] = useState<string | null>(null);
 
 // sparkle animation trigger per post
 const [spark, setSpark] = useState<Record<number, boolean>>({});
+
+// lightbox viewer (optional – not used yet, but harmless)
+const [viewer, setViewer] = useState<{
+url: string;
+type: "image" | "video";
+} | null>(null);
 
 async function refreshAuth() {
 const { data } = await supabase.auth.getSession();
@@ -283,7 +289,10 @@ setBanner(error.message);
 return;
 }
 
-setCommentsByPost((m) => ({ ...m, [postId]: (data ?? []) as CommentRow[] }));
+setCommentsByPost((m) => ({
+...m,
+[postId]: (data ?? []) as CommentRow[],
+}));
 }
 
 async function addComment(postId: number) {
@@ -360,14 +369,12 @@ const p = profilesById[uid];
 return p?.username ? `@${p.username}` : "";
 };
 
-// ---------- NEW: Upload helper ----------
+// Upload helper
 async function uploadToStorage(uid: string, f: File) {
-// basic validation
 const isImage = f.type.startsWith("image/");
 const isVideo = f.type.startsWith("video/");
 if (!isImage && !isVideo) throw new Error("Please choose an image or video.");
 
-// Keep it sane for now (we can raise later)
 const maxMb = isVideo ? 60 : 15;
 if (f.size > maxMb * 1024 * 1024) {
 throw new Error(`File too large. Max ${maxMb}MB for this upload.`);
@@ -375,12 +382,16 @@ throw new Error(`File too large. Max ${maxMb}MB for this upload.`);
 
 const ext = (f.name.split(".").pop() || "").toLowerCase();
 const safeExt = ext ? `.${ext}` : isImage ? ".jpg" : ".mp4";
-const name = `${Date.now()}-${crypto.randomUUID()}${safeExt}`;
+
+const uuid =
+typeof crypto !== "undefined" && "randomUUID" in crypto
+? (crypto as any).randomUUID()
+: `${Math.random().toString(16).slice(2)}${Date.now()}`;
+
+const name = `${Date.now()}-${uuid}${safeExt}`;
 const path = `posts/${uid}/${name}`;
 
-const { error: upErr } = await supabase.storage
-.from("media")
-.upload(path, f, {
+const { error: upErr } = await supabase.storage.from("media").upload(path, f, {
 contentType: f.type,
 cacheControl: "3600",
 upsert: false,
@@ -388,17 +399,12 @@ upsert: false,
 
 if (upErr) throw new Error(upErr.message);
 
-// public URL (because bucket is public)
 const { data } = supabase.storage.from("media").getPublicUrl(path);
-const publicUrl = data.publicUrl;
-
-return { publicUrl, mediaType: f.type, kind: isImage ? "image" : "video" };
+return { publicUrl: data.publicUrl, mediaType: f.type };
 }
 
 async function submitPost() {
 const trimmed = text.trim();
-
-// must have either text or a file
 if (!trimmed && !file) return;
 
 setPosting(true);
@@ -417,7 +423,7 @@ setUploading(true);
 const up = await uploadToStorage(uid, file);
 media_url = up.publicUrl;
 media_type = up.mediaType;
-kind = up.kind;
+kind = media_type.startsWith("video/") ? "video" : "image";
 setUploading(false);
 }
 
@@ -431,7 +437,6 @@ media_type,
 
 if (error) throw new Error(error.message);
 
-// reset composer
 setText("");
 setFile(null);
 
@@ -443,7 +448,90 @@ setUploading(false);
 setPosting(false);
 }
 }
-// ---------------------------------------
+
+async function deletePost(post: PostRow) {
+try {
+const uid = myUserId ?? (await refreshAuth());
+if (!uid) return;
+
+if (post.user_id !== uid) {
+setBanner("You can only delete your own posts.");
+return;
+}
+
+// If media exists, try to remove from storage too (best-effort)
+if (post.media_url) {
+try {
+const url = new URL(post.media_url);
+const path = url.pathname.split("/media/")[1]; // bucket = media
+if (path) await supabase.storage.from("media").remove([path]);
+} catch {
+// ignore
+}
+}
+
+const { error } = await supabase
+.from("posts")
+.delete()
+.eq("id", post.id)
+.eq("user_id", uid);
+
+if (error) throw error;
+
+setPosts((rows) => rows.filter((r) => r.id !== post.id));
+} catch (e: any) {
+setBanner(e.message || "Delete failed");
+}
+}
+
+// Render media based on media_url/media_type (more reliable than kind)
+const renderMedia = (p: PostRow) => {
+if (!p.media_url) return null;
+
+const isVideo =
+(p.media_type && p.media_type.startsWith("video/")) || p.kind === "video";
+const isImage =
+(p.media_type && p.media_type.startsWith("image/")) || p.kind === "image";
+
+if (isVideo) {
+return (
+<video
+src={p.media_url}
+controls
+style={{
+width: "100%",
+borderRadius: 14,
+border: "1px solid rgba(180,120,255,0.14)",
+marginBottom: 10,
+maxHeight: 520,
+background: "rgba(0,0,0,0.5)",
+}}
+/>
+);
+}
+
+if (isImage) {
+// eslint-disable-next-line @next/next/no-img-element
+return (
+<img
+src={p.media_url}
+alt=""
+style={{
+width: "100%",
+borderRadius: 14,
+border: "1px solid rgba(180,120,255,0.14)",
+marginBottom: 10,
+objectFit: "cover",
+maxHeight: 520,
+cursor: "pointer",
+}}
+onClick={() => setViewer({ url: p.media_url!, type: "image" })}
+/>
+);
+}
+
+return null;
+};
 
 return (
 <div style={{ maxWidth: 720, margin: "0 auto", padding: 16 }}>
@@ -502,8 +590,15 @@ resize: "none",
 }}
 />
 
-{/* NEW: upload row */}
-<div style={{ display: "flex", gap: 10, alignItems: "center", marginTop: 10 }}>
+{/* upload row */}
+<div
+style={{
+display: "flex",
+gap: 10,
+alignItems: "center",
+marginTop: 10,
+}}
+>
 <label
 style={{
 ...pillBtn,
@@ -527,7 +622,16 @@ setFile(f);
 </label>
 
 {file ? (
-<div style={{ opacity: 0.75, fontSize: 12, overflow: "hidden", textOverflow: "ellipsis" }}>
+<div
+style={{
+opacity: 0.75,
+fontSize: 12,
+overflow: "hidden",
+textOverflow: "ellipsis",
+whiteSpace: "nowrap",
+maxWidth: 260,
+}}
+>
 {file.name}
 </div>
 ) : (
@@ -536,7 +640,11 @@ setFile(f);
 
 <div style={{ flex: 1 }} />
 
-<button onClick={submitPost} disabled={posting || uploading} style={postBtn}>
+<button
+onClick={submitPost}
+disabled={posting || uploading}
+style={postBtn}
+>
 {uploading ? "Uploading…" : posting ? "Posting…" : "Post"}
 </button>
 </div>
@@ -551,60 +659,78 @@ const iSpanked = !!likedByMe[p.id];
 const isBusy = busyPostId === p.id;
 const isOpen = !!openComments[p.id];
 
+const isMine = myUserId && p.user_id === myUserId;
+
 return (
 <div key={p.id} style={cardStyle}>
 {/* Author + time */}
-<div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
+<div
+style={{
+display: "flex",
+justifyContent: "space-between",
+marginBottom: 8,
+}}
+>
 <div style={{ display: "flex", gap: 10, alignItems: "baseline" }}>
 <div style={{ fontWeight: 850, opacity: 0.95 }}>
 {authorName(p.user_id)}
 </div>
-<div style={{ opacity: 0.65, fontSize: 12 }}>{timeAgo(p.created_at)}</div>
+<div style={{ opacity: 0.65, fontSize: 12 }}>
+{timeAgo(p.created_at)}
 </div>
-<div style={{ opacity: 0.55, fontSize: 12 }}>{authorHandle(p.user_id)}</div>
 </div>
 
-{/* Media (NEW) */}
-{p.kind === "image" && p.media_url ? (
-// eslint-disable-next-line @next/next/no-img-element
-<img
-src={p.media_url}
-alt=""
-style={{
-width: "100%",
-borderRadius: 14,
-border: "1px solid rgba(180,120,255,0.14)",
-marginBottom: 10,
-objectFit: "cover",
-maxHeight: 520,
-}}
-/>
-) : null}
+<div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+<div style={{ opacity: 0.55, fontSize: 12 }}>
+{authorHandle(p.user_id)}
+</div>
 
-{p.kind === "video" && p.media_url ? (
-<video
-src={p.media_url}
-controls
+{isMine ? (
+<button
+onClick={() => deletePost(p)}
 style={{
-width: "100%",
-borderRadius: 14,
-border: "1px solid rgba(180,120,255,0.14)",
-marginBottom: 10,
-maxHeight: 520,
-background: "rgba(0,0,0,0.5)",
+border: "1px solid rgba(255,120,120,0.35)",
+background: "rgba(255,80,80,0.10)",
+color: "rgba(255,220,220,0.95)",
+borderRadius: 999,
+padding: "6px 10px",
+cursor: "pointer",
+fontWeight: 800,
+fontSize: 12,
 }}
-/>
+title="Delete post"
+>
+Delete
+</button>
 ) : null}
+</div>
+</div>
+
+{/* Media */}
+{renderMedia(p)}
 
 {/* Text */}
 {p.body ? (
-<div style={{ fontSize: 16, lineHeight: 1.4, whiteSpace: "pre-wrap" }}>
+<div
+style={{
+fontSize: 16,
+lineHeight: 1.4,
+whiteSpace: "pre-wrap",
+}}
+>
 {p.body}
 </div>
 ) : null}
 
 {/* Actions */}
-<div style={{ display: "flex", gap: 14, marginTop: 12, alignItems: "center" }}>
+<div
+style={{
+display: "flex",
+gap: 14,
+marginTop: 12,
+alignItems: "center",
+}}
+>
 <div
 onClick={() => !isBusy && toggleSpank(p.id)}
 style={{
@@ -672,7 +798,11 @@ placeholder="Write a comment…"
 style={{ ...inputStyle, flex: 1 }}
 />
 
-<button onClick={() => addComment(p.id)} disabled={isBusy} style={postBtn}>
+<button
+onClick={() => addComment(p.id)}
+disabled={isBusy}
+style={postBtn}
+>
 {isBusy ? "…" : "Send"}
 </button>
 </div>
@@ -695,7 +825,13 @@ borderRadius: 14,
 padding: 10,
 }}
 >
-<div style={{ opacity: 0.6, fontSize: 12, marginBottom: 6 }}>
+<div
+style={{
+opacity: 0.6,
+fontSize: 12,
+marginBottom: 6,
+}}
+>
 {timeAgo(c.created_at)}
 </div>
 <div style={{ whiteSpace: "pre-wrap" }}>{c.body}</div>
@@ -714,6 +850,55 @@ No comments yet.
 );
 })}
 </div>
+
+{/* Optional lightbox (only opens for images right now) */}
+{viewer ? (
+<div
+onClick={() => setViewer(null)}
+style={{
+position: "fixed",
+inset: 0,
+background: "rgba(0,0,0,0.72)",
+display: "flex",
+alignItems: "center",
+justifyContent: "center",
+zIndex: 9999,
+padding: 16,
+}}
+>
+<div
+onClick={(e) => e.stopPropagation()}
+style={{
+width: "min(920px, 96vw)",
+background: "rgba(0,0,0,0.85)",
+border: "1px solid rgba(180,120,255,0.22)",
+borderRadius: 16,
+padding: 12,
+}}
+>
+{viewer.type === "image" ? (
+// eslint-disable-next-line @next/next/no-img-element
+<img
+src={viewer.url}
+alt=""
+style={{ width: "100%", borderRadius: 12 }}
+/>
+) : (
+<video
+src={viewer.url}
+controls
+style={{ width: "100%", borderRadius: 12 }}
+/>
+)}
+
+<div style={{ display: "flex", justifyContent: "flex-end", marginTop: 10 }}>
+<button onClick={() => setViewer(null)} style={pillBtn}>
+Close
+</button>
+</div>
+</div>
+</div>
+) : null}
 </div>
 );
 }
