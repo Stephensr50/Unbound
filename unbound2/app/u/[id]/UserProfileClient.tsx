@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { createClient } from "@supabase/supabase-js";
 import PublicProfileActions from "./PublicProfileActions";
+import PostActions from "../../components/PostActions";
 
 type ProfileRow = {
 id: string;
@@ -260,6 +261,8 @@ fontSize: 13,
 {p.body}
 </div>
 ) : null}
+
+<PostActions postId={p.id} />
 </div>
 ))}
 </div>

@@ -1,9 +1,11 @@
 "use client";
 
+import React from "react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { useUnreadCount } from "./useUnreadCount";
+import { useUnreadNotifications } from "./useUnreadNotifications";
 
 export default function TopNav() {
 const pathname = usePathname();
@@ -18,17 +20,24 @@ useEffect(() => {
 setMounted(true);
 }, []);
 
-// ---------- unread badge ----------
+// ---------- badges ----------
 const { unread, refresh, supabase } = useUnreadCount();
+const { notifUnread, refreshNotifs } = useUnreadNotifications();
 
+// keep stable refs for realtime callbacks
 const refreshRef = useRef(refresh);
 useEffect(() => {
 refreshRef.current = refresh;
 }, [refresh]);
 
-// realtime subscription (stable)
+const refreshNotifsRef = useRef(refreshNotifs);
 useEffect(() => {
-const channel = supabase
+refreshNotifsRef.current = refreshNotifs;
+}, [refreshNotifs]);
+
+// realtime: messages badge
+useEffect(() => {
+const ch = supabase
 .channel("messages-badge")
 .on(
 "postgres_changes",
@@ -38,13 +47,14 @@ const channel = supabase
 .subscribe();
 
 return () => {
-supabase.removeChannel(channel);
+supabase.removeChannel(ch);
 };
 }, [supabase]);
 
-// safety refresh on route change
+// safety refresh on route change (messages + notifs)
 useEffect(() => {
 refresh();
+refreshNotifs();
 // eslint-disable-next-line react-hooks/exhaustive-deps
 }, [pathname]);
 
@@ -53,14 +63,10 @@ useEffect(() => {
 setQ(searchParams?.get("q") ?? "");
 }, [searchParams]);
 
-// ---------- hide on auth pages (NO hook-order break) ----------
-const hideOn = new Set([
-"/login",
-"/signup",
-"/forgot-password",
-"/reset-password",
-]);
+// ---------- hide on auth pages ----------
+const hideOn = new Set(["/login", "/signup", "/forgot-password", "/reset-password"]);
 const shouldHide = !!pathname && hideOn.has(pathname);
+if (shouldHide) return null;
 
 const isActive = (href: string) => {
 if (!pathname) return false;
@@ -97,24 +103,10 @@ lineHeight: "18px",
 color: "rgba(0,0,0,0.92)",
 background: "linear-gradient(180deg, #c084fc, #a855f7)",
 border: "1px solid rgba(255,255,255,0.35)",
-boxShadow:
-"0 0 14px rgba(168,85,247,0.85), 0 0 24px rgba(168,85,247,0.45)",
+boxShadow: "0 0 14px rgba(168,85,247,0.85), 0 0 24px rgba(168,85,247,0.45)",
 display: "inline-flex",
 alignItems: "center",
 justifyContent: "center",
-transform: "translateY(-1px)",
-};
-
-// Notifications dot (placeholder for now)
-const notifDotStyle: React.CSSProperties = {
-width: 10,
-height: 10,
-borderRadius: 999,
-background: "linear-gradient(180deg, #c084fc, #a855f7)",
-border: "1px solid rgba(255,255,255,0.35)",
-boxShadow:
-"0 0 12px rgba(168,85,247,0.85), 0 0 22px rgba(168,85,247,0.45)",
-display: "inline-block",
 transform: "translateY(-1px)",
 };
 
@@ -124,10 +116,8 @@ const trimmed = q.trim();
 router.push(trimmed ? `/search?q=${encodeURIComponent(trimmed)}` : "/search");
 };
 
-const badgeText = unread > 99 ? "99+" : String(unread);
-
-// ---------- render ----------
-if (shouldHide) return null;
+const msgBadgeText = unread > 99 ? "99+" : String(unread);
+const notifBadgeText = notifUnread > 99 ? "99+" : String(notifUnread);
 
 return (
 <div
@@ -149,30 +139,30 @@ borderRadius: 999,
 background: "rgba(0,0,0,0.40)",
 backdropFilter: "blur(12px)",
 WebkitBackdropFilter: "blur(12px)",
-boxShadow:
-"0 18px 55px rgba(0,0,0,0.55), 0 0 28px rgba(168,85,247,0.22)",
+boxShadow: "0 18px 55px rgba(0,0,0,0.55), 0 0 28px rgba(168,85,247,0.22)",
 border: "1px solid rgba(168,85,247,0.22)",
 }}
 >
 <Link href="/feed" style={tabStyle(isActive("/feed"))}>
 Feed
 </Link>
+
 <Link href="/explore" style={tabStyle(isActive("/explore"))}>
 Explore
 </Link>
+
 <Link href="/profile" style={tabStyle(isActive("/profile"))}>
 Profile
 </Link>
 
 <Link href="/messages" style={tabStyle(isActive("/messages"))}>
 Messages
-{unread > 0 && <span style={badgeStyle}>{badgeText}</span>}
+{unread > 0 && <span style={badgeStyle}>{msgBadgeText}</span>}
 </Link>
 
 <Link href="/notifications" style={tabStyle(isActive("/notifications"))}>
 Notifications
-{/* Placeholder: always shows a dot for now. We'll wire real count later. */}
-<span style={notifDotStyle} />
+{notifUnread > 0 && <span style={badgeStyle}>{notifBadgeText}</span>}
 </Link>
 
 <form onSubmit={onSubmit}>

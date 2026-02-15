@@ -95,7 +95,9 @@ padding: "10px 14px",
 borderRadius: 12,
 
 // brighter edge so it reads on rope bg
-border: "1px solid rgba(169, 85, 247, 0.71)",
+borderWidth: 1,
+borderStyle: "solid",
+borderColor: "rgba(169, 85, 247, 0.71)",
 
 // less black, more frosted
 background: "rgba(255, 255, 255, 0.21)",
@@ -272,10 +274,13 @@ if (error) throw error;
 
 setBanner("Friend request sent ✅");
 } catch (e: any) {
-setBanner(
-"Friend requests table not set up yet (we can add it next). Error: " +
-String(e?.message || e)
-);
+const msg = String(e?.message || e).toLowerCase();
+
+if (msg.includes("duplicate key") || msg.includes("unique")) {
+setBanner("Friend request already pending ✓");
+} else {
+setBanner(String(e?.message || e));
+}
 } finally {
 setFriendBusy(false);
 }
