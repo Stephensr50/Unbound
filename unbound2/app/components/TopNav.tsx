@@ -105,6 +105,19 @@ justifyContent: "center",
 transform: "translateY(-1px)",
 };
 
+// Notifications dot (placeholder for now)
+const notifDotStyle: React.CSSProperties = {
+width: 10,
+height: 10,
+borderRadius: 999,
+background: "linear-gradient(180deg, #c084fc, #a855f7)",
+border: "1px solid rgba(255,255,255,0.35)",
+boxShadow:
+"0 0 12px rgba(168,85,247,0.85), 0 0 22px rgba(168,85,247,0.45)",
+display: "inline-block",
+transform: "translateY(-1px)",
+};
+
 const onSubmit = (e: React.FormEvent) => {
 e.preventDefault();
 const trimmed = q.trim();
@@ -141,13 +154,25 @@ boxShadow:
 border: "1px solid rgba(168,85,247,0.22)",
 }}
 >
-<Link href="/feed" style={tabStyle(isActive("/feed"))}>Feed</Link>
-<Link href="/explore" style={tabStyle(isActive("/explore"))}>Explore</Link>
-<Link href="/profile" style={tabStyle(isActive("/profile"))}>Profile</Link>
+<Link href="/feed" style={tabStyle(isActive("/feed"))}>
+Feed
+</Link>
+<Link href="/explore" style={tabStyle(isActive("/explore"))}>
+Explore
+</Link>
+<Link href="/profile" style={tabStyle(isActive("/profile"))}>
+Profile
+</Link>
 
 <Link href="/messages" style={tabStyle(isActive("/messages"))}>
 Messages
 {unread > 0 && <span style={badgeStyle}>{badgeText}</span>}
+</Link>
+
+<Link href="/notifications" style={tabStyle(isActive("/notifications"))}>
+Notifications
+{/* Placeholder: always shows a dot for now. We'll wire real count later. */}
+<span style={notifDotStyle} />
 </Link>
 
 <form onSubmit={onSubmit}>
