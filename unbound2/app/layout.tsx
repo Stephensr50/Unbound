@@ -15,12 +15,12 @@ description: "Unbound",
 
 export default function RootLayout({
 children,
-}: Readonly<{
+}: {
 children: React.ReactNode;
-}>) {
+}) {
 return (
-<html lang="en">
-<body className={`unbound-bg ${gloock.className}`}>
+<html lang="en" suppressHydrationWarning>
+<body suppressHydrationWarning className={`unbound-bg ${gloock.className}`}>
 <TopNav />
 <main className="app-shell">{children}</main>
 </body>

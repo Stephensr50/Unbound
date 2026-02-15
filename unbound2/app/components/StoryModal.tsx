@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 type Story = {
 id: string;
@@ -22,327 +22,302 @@ open: boolean;
 onClose: () => void;
 stories: Story[];
 startIndex: number;
-myUserId: string | null;
-onDeleteCurrent: (story: Story) => Promise<void>;
+myUserId?: string | null;
+onDeleteCurrent?: (storyId: string) => void;
 }) {
-const cardRef = useRef<HTMLDivElement | null>(null);
-const startY = useRef<number | null>(null);
-const pointerIdRef = useRef<number | null>(null);
+const safeStories = Array.isArray(stories) ? stories : [];
+const maxIndex = Math.max(0, safeStories.length - 1);
 
-const [idx, setIdx] = useState(startIndex);
-const [dragY, setDragY] = useState(0);
-const [busy, setBusy] = useState(false);
+const initialIndex = useMemo(() => {
+const n = Number.isFinite(startIndex) ? startIndex : 0;
+return Math.min(Math.max(0, n), maxIndex);
+// eslint-disable-next-line react-hooks/exhaustive-deps
+}, [startIndex, safeStories.length]);
 
-// keep idx in sync when opening a new story
+const [idx, setIdx] = useState<number>(initialIndex);
+
+// When opened / startIndex changes, sync index
 useEffect(() => {
-if (open) setIdx(startIndex);
-}, [open, startIndex]);
-
-const story = stories[idx] ?? null;
-
-const isImage = useMemo(() => {
-const u = (story?.media_url || "").toLowerCase();
-return (
-u.includes(".jpg") ||
-u.includes(".jpeg") ||
-u.includes(".png") ||
-u.includes(".webp") ||
-u.includes("image")
-);
-}, [story?.media_url]);
+if (!open) return;
+setIdx(initialIndex);
+}, [open, initialIndex]);
 
 // ESC closes
 useEffect(() => {
 if (!open) return;
 const onKey = (e: KeyboardEvent) => {
-if (e.key === "Escape") closeNow();
-if (e.key === "ArrowRight") next();
-if (e.key === "ArrowLeft") prev();
+if (e.key === "Escape") onClose();
+if (e.key === "ArrowRight") goNext();
+if (e.key === "ArrowLeft") goPrev();
 };
 window.addEventListener("keydown", onKey);
 return () => window.removeEventListener("keydown", onKey);
 // eslint-disable-next-line react-hooks/exhaustive-deps
-}, [open, idx, stories.length]);
+}, [open, idx, safeStories.length]);
 
-// lock background scroll while open
-useEffect(() => {
-if (!open) return;
-const prev = document.body.style.overflow;
-document.body.style.overflow = "hidden";
-return () => {
-document.body.style.overflow = prev;
-};
-}, [open]);
+const current = safeStories[idx] ?? null;
 
-// auto-advance timer (images: 6s; videos: let the user control for now)
-useEffect(() => {
-if (!open) return;
-if (!story) return;
-if (!isImage) return; // keep videos manual for now (more reliable)
-
-const t = window.setTimeout(() => {
-next();
-}, 6000);
-
-return () => window.clearTimeout(t);
-// eslint-disable-next-line react-hooks/exhaustive-deps
-}, [open, idx, isImage, story?.id]);
-
-if (!open || !story) return null;
-
-const canDelete = !!myUserId && story.user_id === myUserId;
-
-const closeNow = () => {
-setDragY(0);
-startY.current = null;
-pointerIdRef.current = null;
+function closeNow() {
 onClose();
-};
-
-const next = () => {
-if (idx >= stories.length - 1) {
-closeNow();
-return;
 }
-setIdx((v) => Math.min(stories.length - 1, v + 1));
-};
 
-const prev = () => {
-setIdx((v) => Math.max(0, v - 1));
-};
-
-// swipe-down capture
-const onPointerDown = (e: React.PointerEvent) => {
-pointerIdRef.current = e.pointerId;
-startY.current = e.clientY;
-setDragY(0);
-cardRef.current?.setPointerCapture(e.pointerId);
-};
-
-const onPointerMove = (e: React.PointerEvent) => {
-if (pointerIdRef.current == null) return;
-if (e.pointerId !== pointerIdRef.current) return;
-if (startY.current == null) return;
-
-const delta = Math.max(0, e.clientY - startY.current);
-setDragY(delta);
-
-e.preventDefault();
-e.stopPropagation();
-};
-
-const onPointerUp = (e: React.PointerEvent) => {
-if (pointerIdRef.current == null) return;
-if (e.pointerId !== pointerIdRef.current) return;
-
-if (dragY > 120) closeNow();
-else setDragY(0);
-
-startY.current = null;
-pointerIdRef.current = null;
-};
-
-const doDelete = async () => {
-if (!canDelete || busy) return;
-setBusy(true);
-try {
-await onDeleteCurrent(story);
-
-// after delete, try to show next story; if none, close
-if (stories.length <= 1) closeNow();
-else if (idx >= stories.length - 1) setIdx((v) => Math.max(0, v - 1));
-else next();
-} finally {
-setBusy(false);
+function goNext() {
+if (!safeStories.length) return closeNow();
+if (idx >= maxIndex) return closeNow(); // end = close
+setIdx((v) => Math.min(v + 1, maxIndex));
 }
-};
+
+function goPrev() {
+if (!safeStories.length) return;
+setIdx((v) => Math.max(v - 1, 0));
+}
+
+const isVideo = !!current?.media_url && /\.(mp4|webm|mov)(\?|$)/i.test(current.media_url);
+const isMine = !!myUserId && !!current?.user_id && myUserId === current.user_id;
+
+if (!open) return null;
 
 return (
+<div style={overlay} role="dialog" aria-modal="true">
+{/* Backdrop click closes */}
 <div
+style={backdrop}
 onClick={closeNow}
-style={{
-position: "fixed",
-inset: 0,
-zIndex: 9999,
-background: "rgba(0,0,0,0.65)",
-backdropFilter: "blur(8px)",
-display: "flex",
-alignItems: "center",
-justifyContent: "center",
-padding: 16,
-}}
->
+aria-hidden="true"
+/>
+
+<div style={frame} onClick={(e) => e.stopPropagation()}>
+{/* Top bar */}
+<div style={topBar}>
+<div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+{safeStories.map((s, i) => (
 <div
-ref={cardRef}
-onClick={(e) => e.stopPropagation()}
-onPointerDown={onPointerDown}
-onPointerMove={onPointerMove}
-onPointerUp={onPointerUp}
-onPointerCancel={onPointerUp}
-style={{
-width: "min(520px, 92vw)",
-height: "min(820px, 86vh)",
-borderRadius: 18,
-background: "rgba(0,0,0,0.78)",
-border: "1px solid rgba(190,120,255,0.35)",
-boxShadow: "0 0 24px rgba(180,90,255,0.25)",
-overflow: "hidden",
-position: "relative",
-transform: `translateY(${dragY}px)`,
-transition: dragY === 0 ? "transform 160ms ease" : "none",
-touchAction: "none",
-userSelect: "none",
-}}
->
-{/* progress bars */}
-<div style={{ display: "flex", gap: 6, padding: "10px 12px 0" }}>
-{stories.map((_, i) => (
-<div
-key={i}
+key={s.id ?? String(i)}
 style={{
 height: 3,
-flex: 1,
+width: 28,
 borderRadius: 999,
 background:
-i < idx
-? "rgba(190,120,255,0.75)"
-: i === idx
-? "rgba(190,120,255,0.35)"
-: "rgba(255,255,255,0.12)",
+i === idx ? "rgba(168,85,247,0.95)" : "rgba(255,255,255,0.22)",
+boxShadow: i === idx ? "0 0 10px rgba(168,85,247,0.85)" : "none",
 }}
 />
 ))}
 </div>
 
-{/* Top bar */}
-<div
-style={{
-height: 52,
-display: "flex",
-alignItems: "center",
-justifyContent: "space-between",
-padding: "0 14px",
-borderBottom: "1px solid rgba(190,120,255,0.18)",
-}}
->
-<div style={{ opacity: 0.85, fontSize: 13 }}>
-{idx + 1} / {stories.length}
-</div>
-
 <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
-{canDelete && (
-<button
-onClick={doDelete}
-disabled={busy}
-style={{
-height: 34,
-padding: "0 12px",
-borderRadius: 999,
-border: "1px solid rgba(255,90,150,0.35)",
-background: "rgba(255,90,150,0.10)",
-color: "rgba(255,255,255,0.92)",
-cursor: busy ? "not-allowed" : "pointer",
-}}
->
-{busy ? "Deleting..." : "Delete"}
-</button>
-)}
-
-<button
-onClick={closeNow}
-style={{
-width: 36,
-height: 36,
-borderRadius: 999,
-border: "1px solid rgba(190,120,255,0.35)",
-background: "rgba(180,90,255,0.12)",
-color: "rgba(255,255,255,0.92)",
-cursor: "pointer",
-}}
-aria-label="Close"
->
-✕
-</button>
-</div>
-</div>
-
-{/* Tap zones for prev/next */}
-<div style={{ position: "relative", height: "calc(100% - 62px)" }}>
+{isMine && onDeleteCurrent && current?.id ? (
 <button
 type="button"
-onClick={prev}
-style={{
-position: "absolute",
-inset: 0,
-width: "50%",
-background: "transparent",
-border: "none",
-cursor: "pointer",
+onClick={() => onDeleteCurrent(current.id)}
+style={dangerBtn}
+>
+Delete
+</button>
+) : null}
+
+<button
+type="button"
+onClick={(e) => {
+e.stopPropagation();
+closeNow();
 }}
+style={closeBtn}
+aria-label="Close"
+title="Close"
+>
+×
+</button>
+</div>
+</div>
+
+{/* Tap zones: left = prev, right = next */}
+<div style={tapLayer}>
+<button
+type="button"
+onClick={(e) => {
+e.preventDefault();
+e.stopPropagation();
+goPrev();
+}}
+style={tapLeft}
 aria-label="Previous story"
 />
 <button
 type="button"
-onClick={next}
-style={{
-position: "absolute",
-top: 0,
-right: 0,
-bottom: 0,
-width: "50%",
-background: "transparent",
-border: "none",
-cursor: "pointer",
+onClick={(e) => {
+e.preventDefault();
+e.stopPropagation();
+goNext();
 }}
+style={tapRight}
 aria-label="Next story"
 />
+</div>
 
 {/* Media */}
-<div
-style={{
-height: "100%",
-display: "flex",
-flexDirection: "column",
-}}
->
-<div style={{ flex: 1, background: "rgba(0,0,0,0.55)" }}>
-{isImage ? (
-// eslint-disable-next-line @next/next/no-img-element
-<img
-src={story.media_url}
-alt="Story"
-style={{
-width: "100%",
-height: "100%",
-objectFit: "cover",
-pointerEvents: "none",
-}}
+<div style={mediaWrap}>
+{current?.media_url ? (
+isVideo ? (
+<video
+key={current.media_url}
+src={current.media_url}
+controls
+autoPlay
+playsInline
+style={media}
 />
 ) : (
-<video
-src={story.media_url}
-controls
-playsInline
-autoPlay
-style={{ width: "100%", height: "100%", objectFit: "cover" }}
+// eslint-disable-next-line @next/next/no-img-element
+<img
+key={current.media_url}
+src={current.media_url}
+alt=""
+style={media}
 />
+)
+) : (
+<div style={empty}>
+No story media.
+</div>
 )}
 </div>
 
-{story.caption ? (
-<div
-style={{
-padding: 12,
-borderTop: "1px solid rgba(190,120,255,0.18)",
-opacity: 0.9,
-}}
->
-{story.caption}
-</div>
+{/* Caption */}
+{current?.caption ? (
+<div style={caption}>{current.caption}</div>
 ) : null}
-</div>
-</div>
 </div>
 </div>
 );
 }
+
+const overlay: React.CSSProperties = {
+position: "fixed",
+inset: 0,
+zIndex: 999999,
+display: "grid",
+placeItems: "center",
+};
+
+const backdrop: React.CSSProperties = {
+position: "absolute",
+inset: 0,
+background: "rgba(0,0,0,0.72)",
+backdropFilter: "blur(6px)",
+WebkitBackdropFilter: "blur(6px)",
+};
+
+const frame: React.CSSProperties = {
+position: "relative",
+width: "min(520px, 94vw)",
+height: "min(860px, 90vh)",
+borderRadius: 18,
+overflow: "hidden",
+border: "1px solid rgba(168,85,247,0.22)",
+background: "rgba(0,0,0,0.55)",
+boxShadow: "0 20px 80px rgba(0,0,0,0.6), 0 0 30px rgba(168,85,247,0.18)",
+};
+
+const topBar: React.CSSProperties = {
+position: "absolute",
+top: 10,
+left: 10,
+right: 10,
+zIndex: 5,
+display: "flex",
+alignItems: "center",
+justifyContent: "space-between",
+gap: 12,
+padding: "10px 12px",
+borderRadius: 14,
+background: "rgba(0,0,0,0.35)",
+border: "1px solid rgba(168,85,247,0.18)",
+};
+
+const closeBtn: React.CSSProperties = {
+width: 36,
+height: 36,
+borderRadius: 999,
+border: "1px solid rgba(190,120,255,0.35)",
+background: "rgba(168,90,255,0.12)",
+color: "rgba(255,255,255,0.92)",
+cursor: "pointer",
+fontSize: 22,
+lineHeight: "34px",
+textAlign: "center",
+};
+
+const dangerBtn: React.CSSProperties = {
+height: 36,
+padding: "0 12px",
+borderRadius: 12,
+border: "1px solid rgba(255,120,120,0.35)",
+background: "rgba(120,0,0,0.25)",
+color: "rgba(255,230,230,0.95)",
+cursor: "pointer",
+fontWeight: 800,
+};
+
+const mediaWrap: React.CSSProperties = {
+position: "absolute",
+inset: 0,
+display: "grid",
+placeItems: "center",
+paddingTop: 70, // room for top bar
+paddingBottom: 44, // room for caption
+};
+
+const media: React.CSSProperties = {
+width: "100%",
+height: "100%",
+objectFit: "cover",
+};
+
+const caption: React.CSSProperties = {
+position: "absolute",
+left: 12,
+right: 12,
+bottom: 10,
+zIndex: 5,
+padding: "10px 12px",
+borderRadius: 14,
+background: "rgba(0,0,0,0.38)",
+border: "1px solid rgba(168,85,247,0.16)",
+color: "rgba(255,255,255,0.92)",
+fontSize: 14,
+};
+
+const empty: React.CSSProperties = {
+color: "rgba(255,255,255,0.75)",
+fontSize: 14,
+padding: 16,
+};
+
+const tapLayer: React.CSSProperties = {
+position: "absolute",
+inset: 0,
+zIndex: 4,
+};
+
+const tapBase: React.CSSProperties = {
+position: "absolute",
+top: 0,
+bottom: 0,
+border: "none",
+background: "transparent",
+cursor: "pointer",
+padding: 0,
+};
+
+const tapLeft: React.CSSProperties = {
+...tapBase,
+left: 0,
+width: "45%",
+};
+
+const tapRight: React.CSSProperties = {
+...tapBase,
+right: 0,
+width: "55%",
+};

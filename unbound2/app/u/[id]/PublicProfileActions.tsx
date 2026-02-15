@@ -40,6 +40,11 @@ const [followBusy, setFollowBusy] = useState(false);
 
 const [friendBusy, setFriendBusy] = useState(false);
 
+// Hover state for glow/lift
+const [hover, setHover] = useState<"message" | "follow" | "friend" | null>(
+null
+);
+
 async function refreshAuth() {
 const { data } = await supabase.auth.getSession();
 const uid = data.session?.user?.id ?? null;
@@ -84,22 +89,69 @@ setFollowing(isFollowing);
 // eslint-disable-next-line react-hooks/exhaustive-deps
 }, [targetProfileId]);
 
+// ===== Glass button styles (12px, more square, frosted) =====
 const btnBase: React.CSSProperties = {
 padding: "10px 14px",
-borderRadius: 999,
-border: "1px solid rgba(180,120,255,0.25)",
-background: "rgba(0,0,0,0.45)",
-color: "white",
-cursor: "pointer",
-fontWeight: 750,
+borderRadius: 12,
+
+// brighter edge so it reads on rope bg
+border: "1px solid rgba(169, 85, 247, 0.71)",
+
+// less black, more frosted
+background: "rgba(255, 255, 255, 0.21)",
+
+backdropFilter: "blur(12px)",
+WebkitBackdropFilter: "blur(12px)",
+
+// stronger text contrast
+color: "rgba(255,255,255,0.98)",
+fontFamily: '"Gloock", serif',
+
+fontWeight: 800,
 letterSpacing: 0.2,
+cursor: "pointer",
+
+// subtle base glow even when not hovered
+boxShadow: "0 0 12px rgba(168,85,247,0.25)",
+
+transition:
+"transform 140ms ease, box-shadow 140ms ease, border-color 140ms ease, background 140ms ease, opacity 140ms ease",
 };
 
 const primaryBtn: React.CSSProperties = {
 ...btnBase,
-border: "none",
-background: "linear-gradient(90deg,#7c3aed,#c026d3)",
-boxShadow: "0 0 14px rgba(168,85,247,0.55)",
+border: "1px solid rgba(168,85,247,0.55)",
+background:
+"linear-gradient(180deg, rgba(168,85,247,0.85), rgba(120,60,255,0.85))",
+color: "white",
+boxShadow:
+"0 0 18px rgba(168,85,247,0.55), inset 0 0 12px rgba(255,255,255,0.14)",
+};
+
+const disabledBtn: React.CSSProperties = {
+opacity: 0.65,
+cursor: "not-allowed",
+transform: "none",
+};
+
+const idleGlow = "0 0 12px rgba(168,85,247,0.25)";
+const hoverGlow = "0 0 26px rgba(168,85,247,0.75)";
+
+const applyHover = (
+base: React.CSSProperties,
+key: "message" | "follow" | "friend",
+disabled?: boolean
+): React.CSSProperties => {
+if (disabled) return { ...base, ...disabledBtn };
+const isOn = hover === key;
+return {
+...base,
+boxShadow: isOn
+? (base.boxShadow ? `${base.boxShadow}, ${hoverGlow}` : hoverGlow)
+: (base.boxShadow ? `${base.boxShadow}, ${idleGlow}` : idleGlow),
+transform: isOn ? "translateY(-1px)" : "translateY(0px)",
+borderColor: isOn ? "rgba(168,85,247,0.65)" : (base.borderColor as any),
+};
 };
 
 async function onMessage() {
@@ -251,18 +303,31 @@ fontSize: 13,
 ) : null}
 
 <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-<button onClick={onMessage} style={primaryBtn}>
+<button
+onClick={onMessage}
+style={applyHover(primaryBtn, "message", false)}
+onMouseEnter={() => setHover("message")}
+onMouseLeave={() => setHover(null)}
+>
 Message
 </button>
 
-<button onClick={toggleFollow} disabled={followBusy} style={btnBase}>
+<button
+onClick={toggleFollow}
+disabled={followBusy}
+style={applyHover(btnBase, "follow", followBusy)}
+onMouseEnter={() => !followBusy && setHover("follow")}
+onMouseLeave={() => setHover(null)}
+>
 {followBusy ? "…" : following ? "Following ✓" : "Follow"}
 </button>
 
 <button
 onClick={sendFriendRequest}
 disabled={friendBusy}
-style={btnBase}
+style={applyHover(btnBase, "friend", friendBusy)}
+onMouseEnter={() => !friendBusy && setHover("friend")}
+onMouseLeave={() => setHover(null)}
 >
 {friendBusy ? "…" : "Add Friend"}
 </button>

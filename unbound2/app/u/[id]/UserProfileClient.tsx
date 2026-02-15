@@ -99,7 +99,7 @@ alignItems: "center",
 const avatar: React.CSSProperties = {
 width: 86,
 height: 86,
-borderRadius: 999,
+borderRadius: 12,
 objectFit: "cover",
 border: "1px solid rgba(180,120,255,0.22)",
 boxShadow: "0 0 18px rgba(192,38,211,0.18)",

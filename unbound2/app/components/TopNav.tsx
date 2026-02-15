@@ -1,44 +1,66 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { useEffect, useRef, useState } from "react";
 import { useUnreadCount } from "./useUnreadCount";
 
 export default function TopNav() {
 const pathname = usePathname();
 const router = useRouter();
+const searchParams = useSearchParams();
 
+// ---------- state ----------
 const [q, setQ] = useState("");
+const [mounted, setMounted] = useState(false);
 
-// ✅ Single source of truth (DB-based)
+useEffect(() => {
+setMounted(true);
+}, []);
+
+// ---------- unread badge ----------
 const { unread, refresh, supabase } = useUnreadCount();
 
-// ✅ Realtime: bump unread count when a new message row is inserted
+const refreshRef = useRef(refresh);
+useEffect(() => {
+refreshRef.current = refresh;
+}, [refresh]);
+
+// realtime subscription (stable)
 useEffect(() => {
 const channel = supabase
 .channel("messages-badge")
 .on(
 "postgres_changes",
 { event: "INSERT", schema: "public", table: "messages" },
-() => {
-refresh(); // updates unread count
-}
+() => refreshRef.current?.()
 )
 .subscribe();
 
 return () => {
 supabase.removeChannel(channel);
 };
-}, [supabase, refresh]);
+}, [supabase]);
 
-// keep search input synced if you land on /search?q=...
+// safety refresh on route change
 useEffect(() => {
-try {
-const url = new URL(window.location.href);
-setQ(url.searchParams.get("q") ?? "");
-} catch {}
+refresh();
+// eslint-disable-next-line react-hooks/exhaustive-deps
 }, [pathname]);
+
+// sync search param
+useEffect(() => {
+setQ(searchParams?.get("q") ?? "");
+}, [searchParams]);
+
+// ---------- hide on auth pages (NO hook-order break) ----------
+const hideOn = new Set([
+"/login",
+"/signup",
+"/forgot-password",
+"/reset-password",
+]);
+const shouldHide = !!pathname && hideOn.has(pathname);
 
 const isActive = (href: string) => {
 if (!pathname) return false;
@@ -59,13 +81,11 @@ textShadow: active
 ? "0 0 14px rgba(168,85,247,0.9), 0 0 26px rgba(168,85,247,0.55)"
 : "none",
 transition: "all 160ms ease",
-position: "relative",
 display: "inline-flex",
 alignItems: "center",
 gap: 8,
 });
 
-// ✅ “FetLife-style” but PURPLE: square-ish badge, pops hard on rope bg
 const badgeStyle: React.CSSProperties = {
 minWidth: 18,
 height: 18,
@@ -93,6 +113,9 @@ router.push(trimmed ? `/search?q=${encodeURIComponent(trimmed)}` : "/search");
 
 const badgeText = unread > 99 ? "99+" : String(unread);
 
+// ---------- render ----------
+if (shouldHide) return null;
+
 return (
 <div
 style={{
@@ -101,7 +124,6 @@ top: 14,
 left: "50%",
 transform: "translateX(-50%)",
 zIndex: 999999,
-pointerEvents: "auto",
 }}
 >
 <div
@@ -119,26 +141,16 @@ boxShadow:
 border: "1px solid rgba(168,85,247,0.22)",
 }}
 >
-<div style={{ display: "flex", alignItems: "center", gap: 22 }}>
-<Link href="/feed" style={tabStyle(isActive("/feed"))}>
-Feed
-</Link>
-
-<Link href="/explore" style={tabStyle(isActive("/explore"))}>
-Explore
-</Link>
-
-<Link href="/profile" style={tabStyle(isActive("/profile"))}>
-Profile
-</Link>
+<Link href="/feed" style={tabStyle(isActive("/feed"))}>Feed</Link>
+<Link href="/explore" style={tabStyle(isActive("/explore"))}>Explore</Link>
+<Link href="/profile" style={tabStyle(isActive("/profile"))}>Profile</Link>
 
 <Link href="/messages" style={tabStyle(isActive("/messages"))}>
 Messages
-{unread > 0 ? <span style={badgeStyle}>{badgeText}</span> : null}
+{unread > 0 && <span style={badgeStyle}>{badgeText}</span>}
 </Link>
-</div>
 
-<form onSubmit={onSubmit} style={{ display: "flex", alignItems: "center" }}>
+<form onSubmit={onSubmit}>
 <div
 style={{
 display: "flex",
@@ -150,28 +162,16 @@ background: "rgba(168,85,247,0.12)",
 border: "1px solid rgba(168,85,247,0.22)",
 }}
 >
-<svg
-viewBox="0 0 24 24"
-width="18"
-height="18"
-aria-hidden="true"
-style={{ color: "rgba(168,85,247,0.95)" }}
-fill="none"
->
-<circle cx="11" cy="11" r="7" stroke="currentColor" strokeWidth="1.8" />
-<path
-d="M20 20l-3.5-3.5"
-stroke="currentColor"
-strokeWidth="1.8"
-strokeLinecap="round"
-/>
-</svg>
-
+{mounted ? (
 <input
 value={q}
 onChange={(e) => setQ(e.target.value)}
 placeholder="Search"
 autoComplete="off"
+autoCorrect="off"
+autoCapitalize="off"
+spellCheck={false}
+suppressHydrationWarning
 style={{
 width: 180,
 background: "transparent",
@@ -183,6 +183,9 @@ fontWeight: 700,
 fontFamily: '"Gloock", serif',
 }}
 />
+) : (
+<div style={{ width: 180, height: 22 }} />
+)}
 </div>
 </form>
 </div>

@@ -1,16 +1,22 @@
 "use client";
 
-import { useState, type FormEvent, type CSSProperties } from "react";
+import { useEffect, useState, type FormEvent, type CSSProperties } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/app/supabaseClient";
 
 export default function LoginPage() {
 const router = useRouter();
 
+const [mounted, setMounted] = useState(false);
+
 const [email, setEmail] = useState("");
 const [password, setPassword] = useState("");
 const [loading, setLoading] = useState(false);
 const [error, setError] = useState<string | null>(null);
+
+useEffect(() => {
+setMounted(true);
+}, []);
 
 async function handleLogin(e: FormEvent) {
 e.preventDefault();
@@ -37,12 +43,19 @@ return (
 <form onSubmit={handleLogin} style={card}>
 <h1 style={title}>Welcome Back</h1>
 
+{mounted ? (
+<>
 <input
 type="email"
 placeholder="Email"
 value={email}
 onChange={(e) => setEmail(e.target.value)}
 required
+autoComplete="email"
+autoCorrect="off"
+autoCapitalize="off"
+spellCheck={false}
+suppressHydrationWarning
 style={input}
 />
 
@@ -52,12 +65,25 @@ placeholder="Password"
 value={password}
 onChange={(e) => setPassword(e.target.value)}
 required
+autoComplete="current-password"
+autoCorrect="off"
+autoCapitalize="off"
+spellCheck={false}
+suppressHydrationWarning
 style={input}
 />
+</>
+) : (
+// SSR-safe placeholders (same spacing so layout doesn't jump)
+<>
+<div style={inputPlaceholder} />
+<div style={inputPlaceholder} />
+</>
+)}
 
 {error ? <div style={errorText}>{error}</div> : null}
 
-<button type="submit" disabled={loading} style={button(loading)}>
+<button type="submit" disabled={loading || !mounted} style={button(loading || !mounted)}>
 {loading ? "Logging in…" : "Log in"}
 </button>
 
@@ -109,13 +135,23 @@ background: "rgba(0,0,0,0.45)",
 border: "1px solid rgba(255,255,255,0.18)",
 };
 
+const inputPlaceholder: CSSProperties = {
+width: "100%",
+marginTop: 10,
+padding: "12px 14px",
+borderRadius: 12,
+background: "rgba(0,0,0,0.18)",
+border: "1px solid rgba(255,255,255,0.10)",
+height: 44,
+};
+
 const errorText: CSSProperties = {
 color: "#ff6b6b",
 marginTop: 10,
 fontSize: 14,
 };
 
-const button = (loading: boolean): CSSProperties => ({
+const button = (disabled: boolean): CSSProperties => ({
 marginTop: 16,
 width: "100%",
 border: "none",
@@ -124,11 +160,11 @@ padding: "14px 16px",
 fontSize: 18,
 fontWeight: 700,
 color: "white",
-cursor: loading ? "not-allowed" : "pointer",
+cursor: disabled ? "not-allowed" : "pointer",
 background:
 "linear-gradient(180deg, rgba(160,120,255,1) 0%, rgba(120,80,255,1) 100%)",
 boxShadow: "0 0 22px rgba(140, 82, 255, 0.35)",
-opacity: loading ? 0.7 : 1,
+opacity: disabled ? 0.7 : 1,
 });
 
 const footer: CSSProperties = {
