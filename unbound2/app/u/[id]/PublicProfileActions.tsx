@@ -122,7 +122,9 @@ transition:
 
 const primaryBtn: React.CSSProperties = {
 ...btnBase,
-border: "1px solid rgba(168,85,247,0.55)",
+borderWidth: 1,
+borderStyle: "solid",
+borderColor: "rgba(168,85,247,0.55)",
 background:
 "linear-gradient(180deg, rgba(168,85,247,0.85), rgba(120,60,255,0.85))",
 color: "white",

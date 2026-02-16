@@ -1,377 +1,287 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { createClient } from "@supabase/supabase-js";
 
 type MsgRow = {
 id: number;
 conversation_id: number;
-sender_id: string | null;
-body: string | null;
+sender_id: string;
+body: string;
 created_at: string;
 };
 
-// ✅ singleton client (prevents re-init churn)
-const supabase = (() => {
+function getSupabase() {
 const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 if (!url || !key) throw new Error("Missing NEXT_PUBLIC_SUPABASE env vars");
 return createClient(url, key);
-})();
+}
 
-function shortId(id: string | null) {
-if (!id) return "null";
-return `${id.slice(0, 6)}…${id.slice(-4)}`;
+function isUuid(s: string) {
+return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+s
+);
 }
 
 export default function ThreadView() {
+const supabase = useMemo(() => getSupabase(), []);
 const params = useParams();
+const router = useRouter();
+
+// /messages/[id]
 const rawId = typeof params?.id === "string" ? params.id : "";
-const conversationId = useMemo(() => Number.parseInt(rawId, 10), [rawId]);
+
+const [mounted, setMounted] = useState(false);
+const [me, setMe] = useState<string | null>(null);
+
+const [conversationId, setConversationId] = useState<number | null>(null);
+const [loading, setLoading] = useState(true);
 
 const [msgs, setMsgs] = useState<MsgRow[]>([]);
 const [text, setText] = useState("");
-const [status, setStatus] = useState<string>("");
-const [loading, setLoading] = useState(true);
-
-const [myUserId, setMyUserId] = useState<string | null>(null);
+const [sending, setSending] = useState(false);
+const [err, setErr] = useState<string | null>(null);
 
 const bottomRef = useRef<HTMLDivElement | null>(null);
 
-// prevents spamming "mark read" writes
-const lastMarkedReadRef = useRef<number>(0);
-const markReadInFlightRef = useRef(false);
+useEffect(() => setMounted(true), []);
 
-// prevents duplicate appends from realtime + send
-const seenIdsRef = useRef<Set<number>>(new Set());
-
-function scrollToBottom() {
-requestAnimationFrame(() =>
-bottomRef.current?.scrollIntoView({ behavior: "smooth" })
-);
-}
-
-async function getUid(): Promise<string | null> {
-const { data, error } = await supabase.auth.getSession();
-if (error) {
-setMyUserId(null);
-return null;
-}
+// 1) Get session user
+useEffect(() => {
+(async () => {
+const { data } = await supabase.auth.getSession();
 const uid = data.session?.user?.id ?? null;
-setMyUserId(uid);
-return uid;
-}
+setMe(uid);
+})();
+}, [supabase]);
 
-async function signOut() {
-setStatus("");
-const { error } = await supabase.auth.signOut();
-if (error) {
-setStatus(`Sign out error: ${error.message}`);
-return;
-}
-setMyUserId(null);
-setStatus("Signed out. Now sign in as the other user in this window.");
-}
+// 2) Resolve rawId -> conversationId (supports int8 OR other user uuid)
+useEffect(() => {
+if (!mounted) return;
+if (!me) return;
+if (!rawId) return;
 
-async function markThreadRead(uid: string, latestMessageId: number) {
-if (!Number.isFinite(conversationId)) return;
-if (!uid) return;
-if (!latestMessageId || latestMessageId <= 0) return;
+let cancelled = false;
 
-// Don't write repeatedly
-if (latestMessageId <= lastMarkedReadRef.current) return;
-if (markReadInFlightRef.current) return;
+(async () => {
+setErr(null);
+setLoading(true);
 
-// Only mark read when tab is visible (prevents background reads)
-if (document.visibilityState !== "visible") return;
-
-markReadInFlightRef.current = true;
-
-const { error } = await supabase.from("conversation_reads").upsert(
-{
-conversation_id: conversationId,
-user_id: uid,
-last_read_message_id: latestMessageId,
-updated_at: new Date().toISOString(),
-},
-{ onConflict: "conversation_id,user_id" }
-);
-
-markReadInFlightRef.current = false;
-
-if (!error) {
-lastMarkedReadRef.current = latestMessageId;
-}
-}
-
-async function loadMessages(opts?: { silent?: boolean }) {
-const silent = opts?.silent ?? false;
-if (!Number.isFinite(conversationId)) {
-setStatus("Bad conversation id in URL.");
-setLoading(false);
+try {
+// Case A: numeric conversation id
+const asNum = Number.parseInt(rawId, 10);
+if (Number.isFinite(asNum) && String(asNum) === rawId) {
+if (!cancelled) setConversationId(asNum);
 return;
 }
 
-if (!silent) setLoading(true);
+// Case B: rawId is other user's uuid
+if (!isUuid(rawId)) {
+if (!cancelled) {
+setErr("Bad conversation/user id in URL.");
+setConversationId(null);
+}
+return;
+}
 
-const uid = await getUid(); // ✅ always resolve uid first
+const otherUserId = rawId;
 
+// Find existing conversation between me + otherUserId
+// We assume you have: conversation_members(conversation_id int8, user_id uuid)
+// Query by "my memberships", then check if the other user is in same conv.
+const { data: myMemberships, error: memErr } = await supabase
+.from("conversation_members")
+.select("conversation_id")
+.eq("user_id", me);
+
+if (memErr) throw memErr;
+
+const convIds = (myMemberships ?? []).map((r) => r.conversation_id);
+let foundConvId: number | null = null;
+
+if (convIds.length > 0) {
+const { data: otherMemberships, error: otherErr } = await supabase
+.from("conversation_members")
+.select("conversation_id")
+.eq("user_id", otherUserId)
+.in("conversation_id", convIds);
+
+if (otherErr) throw otherErr;
+
+foundConvId = otherMemberships?.[0]?.conversation_id ?? null;
+}
+
+// If not found, create it
+if (!foundConvId) {
+const { data: newConv, error: convErr } = await supabase
+.from("conversations")
+.insert({})
+.select("id")
+.single();
+
+if (convErr) throw convErr;
+foundConvId = newConv.id;
+
+const { error: cmErr } = await supabase.from("conversation_members").insert([
+{ conversation_id: foundConvId, user_id: me },
+{ conversation_id: foundConvId, user_id: otherUserId },
+]);
+
+if (cmErr) throw cmErr;
+
+// Optional: switch URL to numeric conv id so everything is consistent
+router.replace(`/messages/${foundConvId}`);
+}
+
+if (!cancelled) setConversationId(foundConvId);
+} catch (e: any) {
+if (!cancelled) {
+setErr(e?.message ?? "Failed to open conversation.");
+setConversationId(null);
+}
+} finally {
+if (!cancelled) setLoading(false);
+}
+})();
+
+return () => {
+cancelled = true;
+};
+}, [mounted, me, rawId, supabase, router]);
+
+// 3) Load messages for conversationId
+useEffect(() => {
+if (!conversationId) return;
+
+let cancelled = false;
+
+(async () => {
+try {
 const { data, error } = await supabase
 .from("messages")
 .select("id, conversation_id, sender_id, body, created_at")
 .eq("conversation_id", conversationId)
-.order("created_at", { ascending: true });
+.order("id", { ascending: true });
 
-if (!silent) setLoading(false);
-
-if (error) {
-setStatus(`Load error: ${error.message}`);
-return;
-}
-
-setStatus("");
-
-const rows = (data ?? []) as MsgRow[];
-
-// rebuild seen set
-const s = new Set<number>();
-for (const r of rows) s.add(r.id);
-seenIdsRef.current = s;
-
-setMsgs(rows);
-
-const lastId = rows.length ? rows[rows.length - 1].id : 0;
-if (uid && lastId > 0) void markThreadRead(uid, lastId);
-
-scrollToBottom();
-}
-
-function appendMessage(m: MsgRow) {
-if (!m?.id) return;
-
-// ✅ dedupe
-if (seenIdsRef.current.has(m.id)) return;
-seenIdsRef.current.add(m.id);
-
-setMsgs((prev) => {
-const next = [...prev, m];
-next.sort(
-(a, b) =>
-new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
-);
-return next;
-});
-
-// Mark read only if tab is visible AND we know uid
-if (document.visibilityState === "visible") {
-const uid = myUserId; // ok here because it’s just a best-effort mark read
-if (uid) void markThreadRead(uid, m.id);
-}
-
-scrollToBottom();
-}
-
-async function sendMessage() {
-const trimmed = text.trim();
-if (!trimmed) return;
-
-if (!Number.isFinite(conversationId)) {
-setStatus("Bad conversation id in URL.");
-return;
-}
-
-const uid = await getUid();
-if (!uid) {
-setStatus("Not signed in in this window. Sign in before sending.");
-return;
-}
-
-setStatus("");
-
-// ✅ return inserted row so we can append immediately
-const { data, error } = await supabase
-.from("messages")
-.insert({
-conversation_id: conversationId,
-sender_id: uid,
-body: trimmed,
-})
-.select("id, conversation_id, sender_id, body, created_at")
-.single();
-
-if (error) {
-setStatus(`Send error: ${error.message}`);
-return;
-}
-
-setText("");
-
-if (data) {
-appendMessage(data as MsgRow);
-// sender should not see their own as unread
-void markThreadRead(uid, (data as MsgRow).id);
+if (error) throw error;
+if (!cancelled) setMsgs((data ?? []) as MsgRow[]);
+} catch (e: any) {
+if (!cancelled) setErr(e?.message ?? "Failed to load messages.");
+} finally {
+if (!cancelled) {
+setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: "smooth" }), 50);
 }
 }
+})();
 
-// Keep auth state synced
+return () => {
+cancelled = true;
+};
+}, [conversationId, supabase]);
+
+// 4) Realtime: new messages -> append
 useEffect(() => {
-void getUid();
-const { data: sub } = supabase.auth.onAuthStateChange(() => {
-void getUid();
-});
-return () => sub.subscription.unsubscribe();
-}, []);
+if (!conversationId) return;
 
-// Initial load + REALTIME subscription (no polling)
-useEffect(() => {
-if (!Number.isFinite(conversationId)) return;
-
-void loadMessages({ silent: false });
-
-const channel = supabase
-.channel(`messages:${conversationId}`)
+const ch = supabase
+.channel(`thread-${conversationId}`)
 .on(
 "postgres_changes",
-{
-event: "INSERT",
-schema: "public",
-table: "messages",
-filter: `conversation_id=eq.${conversationId}`,
-},
+{ event: "INSERT", schema: "public", table: "messages", filter: `conversation_id=eq.${conversationId}` },
 (payload) => {
-const m = payload.new as MsgRow;
-appendMessage(m);
+const row = payload.new as any;
+setMsgs((prev) => {
+if (prev.some((m) => m.id === row.id)) return prev;
+return [...prev, row as MsgRow];
+});
+setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: "smooth" }), 50);
 }
 )
 .subscribe();
 
-const onFocus = () => void loadMessages({ silent: true });
-const onVis = () => {
-if (document.visibilityState === "visible") void loadMessages({ silent: true });
-};
-
-window.addEventListener("focus", onFocus);
-document.addEventListener("visibilitychange", onVis);
-
 return () => {
-window.removeEventListener("focus", onFocus);
-document.removeEventListener("visibilitychange", onVis);
-void supabase.removeChannel(channel);
+supabase.removeChannel(ch);
 };
-// eslint-disable-next-line react-hooks/exhaustive-deps
-}, [conversationId]);
+}, [conversationId, supabase]);
 
+async function send() {
+if (!conversationId) return;
+if (!me) return;
+const body = text.trim();
+if (!body) return;
+if (sending) return;
+
+setSending(true);
+setErr(null);
+
+try {
+const { error } = await supabase.from("messages").insert({
+conversation_id: conversationId,
+sender_id: me,
+body,
+});
+
+if (error) throw error;
+
+setText("");
+} catch (e: any) {
+setErr(e?.message ?? "Send failed.");
+} finally {
+setSending(false);
+}
+}
+
+// --- render ---
 return (
-<div style={{ padding: "18px 14px", maxWidth: 720, margin: "0 auto" }}>
-{/* AUTH BAR */}
-<div
-style={{
-display: "flex",
-justifyContent: "space-between",
-alignItems: "center",
-gap: 10,
-marginBottom: 12,
-padding: "10px 12px",
-borderRadius: 12,
-border: "1px solid rgba(185,110,255,0.35)",
-background: "rgba(155,60,255,0.10)",
-}}
->
-<div style={{ fontSize: 12, color: "rgba(255,255,255,0.88)" }}>
-ME: <b style={{ color: "#ffd1ff" }}>{shortId(myUserId)}</b>
+<div style={{ padding: 18 }}>
+<div style={{ opacity: 0.85, marginBottom: 10, fontFamily: '"Gloock", serif' }}>
+{mounted && me ? `ME: ${me.slice(0, 4)}…${me.slice(-4)}` : "ME: …"}
 </div>
 
-<div style={{ display: "flex", gap: 8 }}>
-<button
-onClick={() => void getUid()}
-style={{
-padding: "9px 12px",
-borderRadius: 12,
-border: "1px solid rgba(185, 110, 255, 0.55)",
-background: "rgba(155, 60, 255, 0.14)",
-color: "white",
-cursor: "pointer",
-fontWeight: 700,
-}}
->
-Refresh
-</button>
-
-<button
-onClick={signOut}
-style={{
-padding: "9px 12px",
-borderRadius: 12,
-border: "1px solid rgba(255, 120, 120, 0.45)",
-background: "rgba(255, 80, 80, 0.12)",
-color: "white",
-cursor: "pointer",
-fontWeight: 700,
-}}
->
-Sign out
-</button>
-</div>
+<div style={{ fontFamily: '"Gloock", serif', fontSize: 22, marginBottom: 12 }}>
+{loading ? "Conversation…" : conversationId ? `Conversation #${conversationId}` : "Conversation"}
 </div>
 
-<div style={{ opacity: 0.8, marginBottom: 10 }}>
-Conversation <b>#{Number.isFinite(conversationId) ? conversationId : "?"}</b>
-</div>
+{err ? (
+<div style={{ color: "salmon", marginBottom: 10, fontWeight: 700 }}>{err}</div>
+) : null}
 
 <div
 style={{
-border: "1px solid rgba(255,255,255,0.12)",
-borderRadius: 14,
-padding: 12,
-minHeight: 420,
+border: "1px solid rgba(168,85,247,0.22)",
 background: "rgba(0,0,0,0.35)",
-overflow: "auto",
+borderRadius: 18,
+padding: 14,
+minHeight: 340,
+maxHeight: 460,
+overflowY: "auto",
 }}
 >
 {loading ? (
-<div style={{ opacity: 0.7 }}>Loading…</div>
+<div style={{ opacity: 0.8 }}>Loading…</div>
 ) : msgs.length === 0 ? (
-<div style={{ opacity: 0.7 }}>No messages yet.</div>
+<div style={{ opacity: 0.8 }}>No messages yet.</div>
 ) : (
-msgs.map((m) => {
-const mine = !!myUserId && !!m.sender_id && m.sender_id === myUserId;
-
-return (
+msgs.map((m) => (
 <div
 key={m.id}
 style={{
-display: "flex",
-justifyContent: mine ? "flex-end" : "flex-start",
 marginBottom: 10,
+padding: "10px 12px",
+borderRadius: 14,
+border: "1px solid rgba(168,85,247,0.18)",
+background: m.sender_id === me ? "rgba(168,85,247,0.16)" : "rgba(255,255,255,0.06)",
 }}
 >
-<div
-style={{
-maxWidth: "78%",
-padding: "10px 14px",
-borderRadius: 18,
-border: "1px solid rgba(185, 110, 255, 0.55)",
-background: mine
-? "rgba(185, 110, 255, 0.30)"
-: "rgba(90, 25, 170, 0.22)",
-boxShadow: mine
-? "0 0 24px rgba(185,110,255,0.28)"
-: "0 0 18px rgba(185,110,255,0.18)",
-color: "rgba(255,255,255,0.95)",
-lineHeight: 1.35,
-}}
->
-<div style={{ fontSize: 15 }}>{m.body ?? ""}</div>
-<div style={{ marginTop: 6, fontSize: 11, opacity: 0.6 }}>
-{new Date(m.created_at).toLocaleString()}
+<div style={{ fontSize: 12, opacity: 0.75, marginBottom: 6 }}>
+{m.sender_id === me ? "You" : "Them"}
 </div>
+<div style={{ whiteSpace: "pre-wrap" }}>{m.body}</div>
 </div>
-</div>
-);
-})
+))
 )}
-
 <div ref={bottomRef} />
 </div>
 
@@ -379,38 +289,37 @@ lineHeight: 1.35,
 <input
 value={text}
 onChange={(e) => setText(e.target.value)}
-placeholder="Write a message…"
+placeholder={conversationId ? "Write a message…" : "Open a conversation…"}
+disabled={!conversationId || sending}
 style={{
 flex: 1,
-padding: "12px 12px",
-borderRadius: 12,
-border: "1px solid rgba(255,255,255,0.14)",
+padding: "10px 12px",
+borderRadius: 999,
+border: "1px solid rgba(168,85,247,0.25)",
 background: "rgba(0,0,0,0.35)",
 color: "white",
 outline: "none",
 }}
 onKeyDown={(e) => {
-if (e.key === "Enter") void sendMessage();
+if (e.key === "Enter") send();
 }}
 />
-
 <button
-onClick={() => void sendMessage()}
+onClick={send}
+disabled={!conversationId || sending || !text.trim()}
 style={{
-padding: "12px 16px",
-borderRadius: 12,
-border: "1px solid rgba(185, 110, 255, 0.65)",
-background: "rgba(155, 60, 255, 0.20)",
+padding: "10px 14px",
+borderRadius: 999,
+border: "1px solid rgba(168,85,247,0.35)",
+background: "rgba(168,85,247,0.20)",
 color: "white",
+fontWeight: 900,
 cursor: "pointer",
-fontWeight: 700,
 }}
 >
 Send
 </button>
 </div>
-
-{status ? <div style={{ marginTop: 10, color: "#ffb3b3" }}>{status}</div> : null}
 </div>
 );
 }

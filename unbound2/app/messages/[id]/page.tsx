@@ -1,6 +1,10 @@
-import ThreadView from "../ThreadView";
+"use client";
 
-export const dynamic = "force-dynamic";
+import dynamic from "next/dynamic";
+
+const ThreadView = dynamic(() => import("../ThreadView"), {
+ssr: false,
+});
 
 export default function Page() {
 return <ThreadView />;
