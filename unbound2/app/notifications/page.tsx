@@ -1,7 +1,21 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { createClient } from "@supabase/supabase-js";
+import { useRouter } from "next/navigation";
+
+function getSupabase() {
+const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
+return createClient(url, key);
+}
+
+type ProfileMini = {
+id: string;
+username: string | null;
+display_name: string | null;
+avatar_url: string | null;
+};
 
 type NotifRow = {
 id: number;
@@ -10,164 +24,393 @@ actor_id: string | null;
 type: string;
 entity_id: string | null;
 title: string | null;
-body: string | null;
+message: string | null;
 href: string | null;
-created_at: string;
 read_at: string | null;
+created_at: string;
+
+// hydrated client-side
+actor?: ProfileMini | null;
 };
 
-function getSupabase() {
-const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-if (!url || !key) throw new Error("Missing NEXT_PUBLIC_SUPABASE env vars");
-return createClient(url, key);
-}
-
 function timeAgo(ts: string) {
-const d = new Date(ts).getTime();
-const diff = Date.now() - d;
-const s = Math.floor(diff / 1000);
+const t = new Date(ts).getTime();
+const s = Math.floor((Date.now() - t) / 1000);
 if (s < 10) return "just now";
 if (s < 60) return `${s}s ago`;
 const m = Math.floor(s / 60);
 if (m < 60) return `${m}m ago`;
 const h = Math.floor(m / 60);
 if (h < 24) return `${h}h ago`;
-const days = Math.floor(h / 24);
-return `${days}d ago`;
+const d = Math.floor(h / 24);
+return `${d}d ago`;
 }
 
 export default function NotificationsPage() {
+const router = useRouter();
 const supabase = useMemo(() => getSupabase(), []);
-const [loading, setLoading] = useState(true);
-const [rows, setRows] = useState<NotifRow[]>([]);
-const [err, setErr] = useState<string | null>(null);
 
-async function load() {
-setErr(null);
+const [me, setMe] = useState<string | null>(null);
+const [rows, setRows] = useState<NotifRow[]>([]);
+const [loading, setLoading] = useState(true);
+
+const loadingRef = useRef(false);
+
+async function refreshMe() {
+const { data } = await supabase.auth.getSession();
+const uid = data.session?.user?.id ?? null;
+setMe(uid);
+return uid;
+}
+
+async function hydrateActors(notifs: NotifRow[]) {
+const ids = Array.from(
+new Set(
+notifs
+.map((n) => n.actor_id)
+.filter((x): x is string => !!x && x.length > 0)
+)
+);
+
+if (ids.length === 0) return notifs;
+
+const { data: profs, error } = await supabase
+.from("profiles")
+.select("id, username, display_name, avatar_url")
+.in("id", ids);
+
+if (error || !profs) return notifs;
+
+const map = new Map<string, ProfileMini>();
+for (const p of profs as any[]) {
+map.set(p.id, {
+id: p.id,
+username: p.username ?? null,
+display_name: p.display_name ?? null,
+avatar_url: p.avatar_url ?? null,
+});
+}
+
+return notifs.map((n) => ({
+...n,
+actor: n.actor_id ? map.get(n.actor_id) ?? null : null,
+}));
+}
+
+async function loadNotifications() {
+if (loadingRef.current) return;
+loadingRef.current = true;
+
+try {
 setLoading(true);
 
-const { data: ses } = await supabase.auth.getSession();
-const uid = ses.session?.user?.id;
+const uid = me ?? (await refreshMe());
 if (!uid) {
 setRows([]);
-setLoading(false);
 return;
 }
 
 const { data, error } = await supabase
 .from("notifications")
-.select("*")
+.select(
+"id,user_id,actor_id,type,entity_id,title,message,href,read_at,created_at"
+)
 .eq("user_id", uid)
 .order("created_at", { ascending: false })
-.limit(50);
+.limit(60);
 
-if (error) setErr(error.message);
-setRows((data ?? []) as NotifRow[]);
+if (error) {
+console.error(error);
+setRows([]);
+return;
+}
+
+const base = (data ?? []) as NotifRow[];
+const withActors = await hydrateActors(base);
+setRows(withActors);
+} finally {
 setLoading(false);
+loadingRef.current = false;
+}
 }
 
 async function markAllRead() {
-const { data: ses } = await supabase.auth.getSession();
-const uid = ses.session?.user?.id;
+const uid = me ?? (await refreshMe());
 if (!uid) return;
 
+// set read_at for all unread notifications
 await supabase
 .from("notifications")
 .update({ read_at: new Date().toISOString() })
 .eq("user_id", uid)
 .is("read_at", null);
 
-await load();
+// refresh list so styles update instantly
+await loadNotifications();
 }
 
+async function markOneRead(id: number) {
+await supabase
+.from("notifications")
+.update({ read_at: new Date().toISOString() })
+.eq("id", id);
 
+// optimistic UI
+setRows((prev) =>
+prev.map((n) => (n.id === id ? { ...n, read_at: new Date().toISOString() } : n))
+);
+}
+
+function computeHref(n: NotifRow) {
+if (n.href) return n.href;
+
+if (n.type === "friend_request") return "/notifications";
+
+if (n.type === "spank" || n.type === "comment") {
+if (n.actor_id) return `/u/${n.actor_id}`;
+return "/feed";
+}
+
+if (n.type === "message") return "/messages";
+
+return null;
+}
+
+async function onClickNotif(n: NotifRow) {
+await markOneRead(n.id);
+
+const href = computeHref(n);
+if (href) router.push(href);
+}
+
+// init
 useEffect(() => {
-load();
-markAllRead(); // auto-clear unread badge on open
+(async () => {
+await refreshMe();
+})();
 // eslint-disable-next-line react-hooks/exhaustive-deps
 }, []);
 
-return (
-<main style={{ padding: "22px 16px", maxWidth: 900, margin: "0 auto" }}>
-<div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-<h1 style={{ fontSize: 22, marginBottom: 10 }}>Notifications</h1>
+// load whenever we know "me"
+useEffect(() => {
+if (!me) return;
+loadNotifications();
+// eslint-disable-next-line react-hooks/exhaustive-deps
+}, [me]);
 
-<button
-onClick={markAllRead}
-style={{
+// realtime: refresh list when notifications insert for *anyone* (we’ll filter client-side by user_id in query)
+// This works because your Supabase “publications” already include notifications.
+useEffect(() => {
+const ch = supabase
+.channel("notifications-page")
+.on(
+"postgres_changes",
+{ event: "INSERT", schema: "public", table: "notifications" },
+() => {
+// quick refresh
+loadNotifications();
+}
+)
+.subscribe();
+
+return () => {
+supabase.removeChannel(ch);
+};
+// eslint-disable-next-line react-hooks/exhaustive-deps
+}, [supabase, me]);
+
+const wrap: React.CSSProperties = {
+minHeight: "100vh",
+paddingTop: 84,
+paddingBottom: 40,
+color: "white",
+};
+
+const title: React.CSSProperties = {
+fontFamily: '"Gloock", serif',
+fontSize: 34,
+fontWeight: 700,
+letterSpacing: 0.2,
+margin: "18px 0 14px",
+textShadow: "0 0 14px rgba(168,85,247,0.20)",
+};
+
+const card: React.CSSProperties = {
+maxWidth: 880,
+margin: "0 auto",
+padding: "0 16px",
+};
+
+const list: React.CSSProperties = {
+display: "flex",
+flexDirection: "column",
+gap: 12,
+marginTop: 12,
+};
+
+const rowStyle = (unread: boolean): React.CSSProperties => ({
+display: "flex",
+alignItems: "center",
+gap: 12,
+padding: "14px 14px",
+borderRadius: 16,
+cursor: "pointer",
+background: unread ? "rgba(168,85,247,0.10)" : "rgba(0,0,0,0.28)",
+border: unread
+? "1px solid rgba(168,85,247,0.35)"
+: "1px solid rgba(168,85,247,0.16)",
+boxShadow: unread
+? "0 0 22px rgba(168,85,247,0.22)"
+: "0 0 18px rgba(0,0,0,0.25)",
+backdropFilter: "blur(10px)",
+WebkitBackdropFilter: "blur(10px)",
+});
+
+const avatarWrap: React.CSSProperties = {
+width: 42,
+height: 42,
+borderRadius: 999,
+overflow: "hidden",
+border: "1px solid rgba(168,85,247,0.35)",
+boxShadow: "0 0 14px rgba(168,85,247,0.20)",
+flex: "0 0 auto",
+background: "rgba(0,0,0,0.35)",
+display: "grid",
+placeItems: "center",
+};
+
+const avatarImg: React.CSSProperties = {
+width: "100%",
+height: "100%",
+objectFit: "cover",
+display: "block",
+};
+
+const fallbackInitial: React.CSSProperties = {
+fontFamily: '"Gloock", serif',
+fontWeight: 800,
+color: "rgba(168,85,247,1)",
+textShadow: "0 0 16px rgba(168,85,247,0.55)",
+};
+
+const mainText: React.CSSProperties = {
+display: "flex",
+flexDirection: "column",
+gap: 2,
+minWidth: 0,
+};
+
+const topLine: React.CSSProperties = {
+fontFamily: '"Gloock", serif',
+fontSize: 16,
+fontWeight: 800,
+whiteSpace: "nowrap",
+overflow: "hidden",
+textOverflow: "ellipsis",
+};
+
+const subLine: React.CSSProperties = {
+opacity: 0.8,
+fontSize: 13,
+whiteSpace: "nowrap",
+overflow: "hidden",
+textOverflow: "ellipsis",
+};
+
+const right: React.CSSProperties = {
+marginLeft: "auto",
+opacity: 0.7,
+fontSize: 12,
+flex: "0 0 auto",
+};
+
+const markAllBtn: React.CSSProperties = {
 marginLeft: "auto",
 padding: "8px 12px",
 borderRadius: 999,
 border: "1px solid rgba(168,85,247,0.35)",
 background: "rgba(168,85,247,0.12)",
-color: "rgba(168,85,247,1)",
-fontFamily: '"Gloock", serif',
+color: "rgba(255,255,255,0.95)",
 fontWeight: 800,
 cursor: "pointer",
-}}
->
-Mark all read
+boxShadow: "0 0 18px rgba(168,85,247,0.20)",
+};
+
+function buildText(n: NotifRow) {
+const actorName =
+n.actor?.display_name ||
+(n.actor?.username ? `@${n.actor.username}` : null) ||
+"Someone";
+
+if (n.type === "spank") return `${actorName} spanked your post`;
+if (n.type === "comment") return `${actorName} commented on your post`;
+if (n.type === "friend_request") return `${actorName} sent you a friend request`;
+if (n.type === "message") return `${actorName} messaged you`;
+return n.title || n.message || "Notification";
+}
+
+function buildSub(n: NotifRow) {
+// keep it short & clean
+if (n.type === "spank" || n.type === "comment") return "Tap to view profile";
+if (n.type === "friend_request") return "Tap to view notifications";
+if (n.type === "message") return "Tap to open messages";
+return n.message || "";
+}
+
+const unreadCount = rows.filter((r) => !r.read_at).length;
+
+return (
+<div style={wrap}>
+<div style={card}>
+<div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+<div style={title}>Notifications</div>
+<button onClick={markAllRead} style={markAllBtn}>
+Mark all read {unreadCount > 0 ? `(${unreadCount})` : ""}
 </button>
 </div>
 
-<div
-style={{
-border: "1px solid rgba(255,255,255,0.12)",
-borderRadius: 14,
-padding: 14,
-background: "rgba(0,0,0,0.35)",
-}}
->
 {loading ? (
-<div style={{ opacity: 0.8 }}>Loading…</div>
-) : err ? (
-<div style={{ opacity: 0.9 }}>Error: {err}</div>
+<div style={{ opacity: 0.75, marginTop: 16 }}>Loading…</div>
 ) : rows.length === 0 ? (
-<div style={{ opacity: 0.8 }}>
-No notifications yet. (We’ll start generating these next.)
-</div>
+<div style={{ opacity: 0.75, marginTop: 16 }}>No notifications yet.</div>
 ) : (
-rows.map((n) => (
+<div style={list}>
+{rows.map((n) => {
+const unread = !n.read_at;
+const who =
+n.actor?.display_name ||
+(n.actor?.username ? `@${n.actor.username}` : null) ||
+"U";
+const initial = who.trim().charAt(0).toUpperCase();
+
+return (
 <div
 key={n.id}
-style={{
-padding: "12px 12px",
-borderRadius: 12,
-border: "1px solid rgba(255,255,255,0.10)",
-background:
-n.read_at == null ? "rgba(168,85,247,0.10)" : "rgba(0,0,0,0.25)",
-marginTop: 10,
-cursor: n.href ? "pointer" : "default",
-}}
-onClick={() => {
-if (n.href) window.location.href = n.href;
-}}
+style={rowStyle(unread)}
+onClick={() => onClickNotif(n)}
+role="button"
 >
-<div style={{ display: "flex", alignItems: "baseline", gap: 10 }}>
-<div style={{ fontWeight: 800 }}>
-{n.title ?? prettyTitle(n.type)}
-</div>
-<div style={{ marginLeft: "auto", opacity: 0.75, fontSize: 12 }}>
-{timeAgo(n.created_at)}
-</div>
-</div>
-{n.body ? (
-<div style={{ opacity: 0.9, fontSize: 14, marginTop: 4 }}>
-{n.body}
-</div>
-) : null}
-</div>
-))
+<div style={avatarWrap}>
+{n.actor?.avatar_url ? (
+// eslint-disable-next-line @next/next/no-img-element
+<img src={n.actor.avatar_url} alt="" style={avatarImg} />
+) : (
+<div style={fallbackInitial}>{initial}</div>
 )}
 </div>
-</main>
-);
-}
 
-function prettyTitle(type: string) {
-if (type === "friend_request") return "Friend request";
-if (type === "spank") return "Spank";
-if (type === "comment") return "Comment";
-return type.replaceAll("_", " ");
+<div style={mainText}>
+<div style={topLine}>{buildText(n)}</div>
+<div style={subLine}>{buildSub(n)}</div>
+</div>
+
+<div style={right}>{timeAgo(n.created_at)}</div>
+</div>
+);
+})}
+</div>
+)}
+</div>
+</div>
+);
 }

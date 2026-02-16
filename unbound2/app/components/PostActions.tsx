@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { createClient } from "@supabase/supabase-js";
 
 function getSupabase() {
@@ -14,30 +14,6 @@ const supabase = useMemo(() => getSupabase(), []);
 const [liked, setLiked] = useState(false);
 const [busy, setBusy] = useState(false);
 
-// Optional: load whether I already liked this post
-useEffect(() => {
-let cancelled = false;
-
-(async () => {
-const { data: ses } = await supabase.auth.getSession();
-const me = ses.session?.user?.id;
-if (!me) return;
-
-const { data, error } = await supabase
-.from("post_likes")
-.select("id")
-.eq("post_id", postId)
-.eq("user_id", me)
-.maybeSingle();
-
-if (!cancelled) setLiked(!error && !!data);
-})();
-
-return () => {
-cancelled = true;
-};
-}, [supabase, postId]);
-
 async function handleSpank() {
 if (busy) return;
 setBusy(true);
@@ -47,31 +23,47 @@ const { data: ses } = await supabase.auth.getSession();
 const me = ses.session?.user?.id;
 if (!me) return;
 
-if (!liked) {
-// INSERT like
-const { error } = await supabase.from("post_likes").insert({
-post_id: postId,
-user_id: me,
+// find post owner
+const { data: post } = await supabase
+.from("posts")
+.select("user_id")
+.eq("id", postId)
+.maybeSingle();
+
+if (!post?.user_id) return;
+
+// insert like/spank (if you don't have a spanks table, use post_likes instead)
+// IMPORTANT: pick ONE that exists in your DB:
+// await supabase.from("post_likes").insert({ post_id: postId, user_id: me });
+await supabase.from("spanks").insert({ post_id: postId, user_id: me });
+
+// look up actor profile for display name + avatar
+const { data: actorProfile } = await supabase
+.from("profiles")
+.select("display_name, username, avatar_url")
+.eq("id", me)
+.maybeSingle();
+
+const actorName =
+actorProfile?.display_name ||
+(actorProfile?.username ? `@${actorProfile.username}` : "Someone");
+
+// insert notification (don’t notify yourself)
+if (post.user_id !== me) {
+await supabase.from("notifications").insert({
+user_id: post.user_id,
+actor_id: me,
+type: "spank",
+entity_id: String(postId),
+title: `${actorName} spanked your post`,
+body: null,
+read_at: null,
+actor_display_name: actorName,
+actor_avatar_url: actorProfile?.avatar_url ?? null,
 });
-
-if (error) throw error;
-
-// ✅ Notification should be created by DB trigger on post_likes
-setLiked(true);
-} else {
-// UNLIKE (optional toggle)
-const { error } = await supabase
-.from("post_likes")
-.delete()
-.eq("post_id", postId)
-.eq("user_id", me);
-
-if (error) throw error;
-
-setLiked(false);
 }
-} catch (e: any) {
-alert(e?.message ?? String(e));
+
+setLiked(true);
 } finally {
 setBusy(false);
 }
@@ -86,11 +78,12 @@ style={{
 padding: "6px 12px",
 borderRadius: 999,
 border: "1px solid rgba(168,85,247,0.4)",
-background: liked ? "rgba(168,85,247,0.35)" : "rgba(168,85,247,0.12)",
+background: liked
+? "rgba(168,85,247,0.35)"
+: "rgba(168,85,247,0.12)",
 color: "white",
 fontWeight: 700,
 cursor: "pointer",
-opacity: busy ? 0.75 : 1,
 }}
 >
 {liked ? "Spanked 💜" : "Spank"}
@@ -104,10 +97,6 @@ border: "1px solid rgba(168,85,247,0.4)",
 background: "rgba(168,85,247,0.12)",
 color: "white",
 fontWeight: 700,
-cursor: "pointer",
-}}
-onClick={() => {
-alert("Comment modal next 🙂");
 }}
 >
 Comment
