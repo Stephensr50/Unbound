@@ -264,24 +264,40 @@ overflowY: "auto",
 ) : msgs.length === 0 ? (
 <div style={{ opacity: 0.8 }}>No messages yet.</div>
 ) : (
-msgs.map((m) => (
+msgs.map((m) => {
+const mine = !!me && m.sender_id === me;
+
+return (
 <div
 key={m.id}
 style={{
+width: "100%",
+display: "flex",
+justifyContent: mine ? "flex-end" : "flex-start",
 marginBottom: 10,
+}}
+>
+<div
+style={{
+// bubble
+maxWidth: "72%",
+width: "fit-content",
 padding: "10px 12px",
 borderRadius: 14,
 border: "1px solid rgba(168,85,247,0.18)",
-background: m.sender_id === me ? "rgba(168,85,247,0.16)" : "rgba(255,255,255,0.06)",
+background: mine
+? "rgba(169, 85, 247, 0.28)"
+: "rgba(215, 118, 228, 0.14)",
 }}
 >
 <div style={{ fontSize: 12, opacity: 0.75, marginBottom: 6 }}>
-{m.sender_id === me ? "You" : "Them"}
+
 </div>
 <div style={{ whiteSpace: "pre-wrap" }}>{m.body}</div>
 </div>
-))
-)}
+</div>
+);
+}))}
 <div ref={bottomRef} />
 </div>
 
@@ -296,7 +312,7 @@ flex: 1,
 padding: "10px 12px",
 borderRadius: 999,
 border: "1px solid rgba(168,85,247,0.25)",
-background: "rgba(0,0,0,0.35)",
+background: "rgba(44, 35, 35, 0.15)",
 color: "white",
 outline: "none",
 }}

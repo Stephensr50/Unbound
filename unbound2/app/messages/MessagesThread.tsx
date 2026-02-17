@@ -254,14 +254,17 @@ width: "100%",
 };
 
 const rowMine: React.CSSProperties = {
-...rowBase,
+display: "flex",
+width: "100%",
 justifyContent: "flex-end",
-paddingRight: 80,
+marginBottom: 10,
 };
 
 const rowTheirs: React.CSSProperties = {
-...rowBase,
+display: "flex",
+width: "100%",
 justifyContent: "flex-start",
+marginBottom: 10,
 };
 
 const bubbleBase: React.CSSProperties = {
@@ -277,19 +280,19 @@ wordBreak: "break-word",
 };
 
 const bubbleMine: React.CSSProperties = {
-...bubbleBase,
-background: "rgba(168,85,247,0.33)",
-border: "1px solid rgba(210,170,255,0.45)",
-color: "rgba(255,255,255,0.95)",
-textShadow: "0 4px 18px rgba(0,0,0,0.45)",
+maxWidth: "70%",
+padding: "10px 14px",
+borderRadius: 14,
+background: "rgba(168, 85, 247, 0.22)",
+border: "1px solid rgba(168, 85, 247, 0.35)",
 };
 
 const bubbleTheirs: React.CSSProperties = {
-...bubbleBase,
-background: "rgba(255,255,255,0.10)",
-border: "1px solid rgba(255,255,255,0.16)",
-color: "rgba(255,255,255,0.92)",
-textShadow: "0 4px 18px rgba(0,0,0,0.45)",
+maxWidth: "70%",
+padding: "10px 14px",
+borderRadius: 14,
+background: "rgba(255,255,255,0.06)",
+border: "1px solid rgba(255,255,255,0.10)",
 };
 
 // Long skinny bar centered, send button at the end
