@@ -44,6 +44,12 @@ const [text, setText] = useState("");
 const [sending, setSending] = useState(false);
 const [err, setErr] = useState<string | null>(null);
 
+// ✅ typing indicator
+const [otherTyping, setOtherTyping] = useState(false);
+const otherTypingTimerRef = useRef<number | null>(null);
+const lastTypingSentAtRef = useRef(0);
+const stopTypingTimerRef = useRef<number | null>(null);
+
 const bottomRef = useRef<HTMLDivElement | null>(null);
 
 // prevents spamming mark-read calls
@@ -84,10 +90,7 @@ if (latestErr) throw latestErr;
 targetId = (latest?.id ?? null) as number | null;
 }
 
-// nothing to mark
 if (targetId == null) return;
-
-// avoid re-writing same id repeatedly
 if (lastMarkedIdRef.current === targetId) return;
 
 const { error: upsertErr } = await supabase
@@ -106,15 +109,46 @@ if (upsertErr) throw upsertErr;
 
 lastMarkedIdRef.current = targetId;
 
-// ✅ NEW: tell TopNav/unread hook to refresh immediately
+// tell TopNav/unread hook to refresh immediately
 if (typeof window !== "undefined") {
 window.dispatchEvent(new Event("unbound:refresh-unread"));
 }
 } catch (e: any) {
-// Don't hard-fail the thread UI if this misses—just log it.
 console.warn("markConversationRead failed:", e?.message ?? e);
 } finally {
 markInFlightRef.current = false;
+}
+}
+
+// ✅ typing helpers
+function clearOtherTypingSoon(ms = 1200) {
+if (otherTypingTimerRef.current) window.clearTimeout(otherTypingTimerRef.current);
+otherTypingTimerRef.current = window.setTimeout(() => setOtherTyping(false), ms);
+}
+
+async function sendTyping(ch: any, typing: boolean) {
+if (!conversationId || !me) return;
+
+// throttle "typing:true" so we don't spam
+if (typing) {
+const now = Date.now();
+if (now - lastTypingSentAtRef.current < 400) return;
+lastTypingSentAtRef.current = now;
+}
+
+try {
+await ch.send({
+type: "broadcast",
+event: "typing",
+payload: {
+conversation_id: conversationId,
+user_id: me,
+typing,
+at: Date.now(),
+},
+});
+} catch {
+// ignore
 }
 }
 
@@ -149,7 +183,6 @@ return;
 
 const otherUserId = rawId;
 
-// Find existing conversation between me + otherUserId
 const { data: myMemberships, error: memErr } = await supabase
 .from("conversation_members")
 .select("conversation_id")
@@ -172,7 +205,6 @@ if (otherErr) throw otherErr;
 foundConvId = otherMemberships?.[0]?.conversation_id ?? null;
 }
 
-// If not found, create it
 if (!foundConvId) {
 const { data: newConv, error: convErr } = await supabase
 .from("conversations")
@@ -190,7 +222,6 @@ const { error: cmErr } = await supabase.from("conversation_members").insert([
 
 if (cmErr) throw cmErr;
 
-// Optional: switch URL to numeric conv id so everything is consistent
 router.replace(`/messages/${foundConvId}`);
 }
 
@@ -229,7 +260,6 @@ if (error) throw error;
 const rows = (data ?? []) as MsgRow[];
 if (!cancelled) setMsgs(rows);
 
-// ✅ Mark read up to latest loaded message
 const latestId = rows.length ? rows[rows.length - 1].id : null;
 if (latestId != null) {
 await markConversationRead(conversationId, latestId);
@@ -249,12 +279,15 @@ cancelled = true;
 // eslint-disable-next-line react-hooks/exhaustive-deps
 }, [conversationId, supabase]);
 
-// 4) Realtime: new messages -> append
+// 4) Realtime: messages + typing indicator (broadcast)
 useEffect(() => {
 if (!conversationId) return;
 
+setOtherTyping(false);
+
 const ch = supabase
 .channel(`thread-${conversationId}`)
+// messages
 .on(
 "postgres_changes",
 {
@@ -273,16 +306,45 @@ return [...prev, row as MsgRow];
 
 setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: "smooth" }), 50);
 
-// ✅ If we're viewing the thread, treat new message as read immediately
+// mark read while we're here
 if (me && row?.id != null) {
 await markConversationRead(conversationId, Number(row.id));
 }
 }
 )
+// ✅ typing broadcasts
+.on("broadcast", { event: "typing" }, (payload: any) => {
+const p = payload?.payload ?? payload;
+const from = p?.user_id as string | undefined;
+const typing = !!p?.typing;
+
+if (!from || !me) return;
+if (from === me) return; // ignore our own
+
+if (typing) {
+setOtherTyping(true);
+clearOtherTypingSoon(1600);
+} else {
+setOtherTyping(false);
+}
+})
 .subscribe();
 
+// make sure if we leave the page we stop typing
+const stopNow = () => {
+if (stopTypingTimerRef.current) window.clearTimeout(stopTypingTimerRef.current);
+sendTyping(ch, false);
+};
+
+window.addEventListener("beforeunload", stopNow);
+
 return () => {
+window.removeEventListener("beforeunload", stopNow);
+// best-effort "stop typing" on unmount
+sendTyping(ch, false);
 supabase.removeChannel(ch);
+if (otherTypingTimerRef.current) window.clearTimeout(otherTypingTimerRef.current);
+if (stopTypingTimerRef.current) window.clearTimeout(stopTypingTimerRef.current);
 };
 // eslint-disable-next-line react-hooks/exhaustive-deps
 }, [conversationId, supabase, me]);
@@ -298,6 +360,11 @@ setSending(true);
 setErr(null);
 
 try {
+// stop typing immediately when we send
+const ch = supabase.channel(`thread-${conversationId}`);
+await sendTyping(ch, false);
+setOtherTyping(false);
+
 const { error } = await supabase.from("messages").insert({
 conversation_id: conversationId,
 sender_id: me,
@@ -314,6 +381,34 @@ setSending(false);
 }
 }
 
+// ✅ typing: send broadcasts based on local input
+useEffect(() => {
+if (!conversationId || !me) return;
+
+// we need the live channel that is subscribed; easiest is to reuse the same name
+// supabase will reuse the existing channel instance internally for sends.
+const ch = supabase.channel(`thread-${conversationId}`);
+
+const hasText = text.trim().length > 0;
+
+// if user is typing, send typing:true and schedule a stop after inactivity
+if (hasText) {
+sendTyping(ch, true);
+
+if (stopTypingTimerRef.current) window.clearTimeout(stopTypingTimerRef.current);
+stopTypingTimerRef.current = window.setTimeout(() => {
+sendTyping(ch, false);
+}, 1200);
+} else {
+// if input cleared, stop typing
+if (stopTypingTimerRef.current) window.clearTimeout(stopTypingTimerRef.current);
+sendTyping(ch, false);
+}
+
+return () => {};
+// eslint-disable-next-line react-hooks/exhaustive-deps
+}, [text, conversationId, me]);
+
 // --- render ---
 return (
 <div style={{ padding: 18 }}>
@@ -321,8 +416,15 @@ return (
 {mounted && me ? `ME: ${me.slice(0, 4)}…${me.slice(-4)}` : "ME: …"}
 </div>
 
-<div style={{ fontFamily: '"Gloock", serif', fontSize: 22, marginBottom: 12 }}>
+<div style={{ fontFamily: '"Gloock", serif', fontSize: 22, marginBottom: 8 }}>
 {loading ? "Conversation…" : conversationId ? `Conversation #${conversationId}` : "Conversation"}
+</div>
+
+{/* ✅ typing indicator UI */}
+<div style={{ minHeight: 18, marginBottom: 10, opacity: 0.85 }}>
+{otherTyping ? (
+<span style={{ color: "rgba(215, 118, 228, 0.95)", fontWeight: 800 }}>Typing…</span>
+) : null}
 </div>
 
 {err ? <div style={{ color: "salmon", marginBottom: 10, fontWeight: 700 }}>{err}</div> : null}
@@ -358,7 +460,6 @@ marginBottom: 10,
 >
 <div
 style={{
-// bubble
 maxWidth: "72%",
 width: "fit-content",
 padding: "10px 12px",
@@ -394,6 +495,13 @@ outline: "none",
 }}
 onKeyDown={(e) => {
 if (e.key === "Enter") send();
+}}
+onBlur={() => {
+// stop typing when input loses focus
+if (conversationId) {
+const ch = supabase.channel(`thread-${conversationId}`);
+sendTyping(ch, false);
+}
 }}
 />
 <button
