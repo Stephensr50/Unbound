@@ -46,6 +46,10 @@ const [err, setErr] = useState<string | null>(null);
 
 const bottomRef = useRef<HTMLDivElement | null>(null);
 
+// prevents spamming mark-read calls
+const markInFlightRef = useRef(false);
+const lastMarkedIdRef = useRef<number | null>(null);
+
 useEffect(() => setMounted(true), []);
 
 // 1) Get session user
@@ -56,6 +60,63 @@ const uid = data.session?.user?.id ?? null;
 setMe(uid);
 })();
 }, [supabase]);
+
+async function markConversationRead(convId: number, upToMessageId?: number | null) {
+if (!me) return;
+if (markInFlightRef.current) return;
+
+try {
+markInFlightRef.current = true;
+
+let targetId: number | null = upToMessageId ?? null;
+
+// If no explicit target, find latest message id in this conversation
+if (targetId == null) {
+const { data: latest, error: latestErr } = await supabase
+.from("messages")
+.select("id")
+.eq("conversation_id", convId)
+.order("id", { ascending: false })
+.limit(1)
+.maybeSingle();
+
+if (latestErr) throw latestErr;
+targetId = (latest?.id ?? null) as number | null;
+}
+
+// nothing to mark
+if (targetId == null) return;
+
+// avoid re-writing same id repeatedly
+if (lastMarkedIdRef.current === targetId) return;
+
+const { error: upsertErr } = await supabase
+.from("conversation_reads")
+.upsert(
+{
+conversation_id: convId,
+user_id: me,
+last_read_message_id: targetId,
+updated_at: new Date().toISOString(),
+},
+{ onConflict: "conversation_id,user_id" }
+);
+
+if (upsertErr) throw upsertErr;
+
+lastMarkedIdRef.current = targetId;
+
+// ✅ NEW: tell TopNav/unread hook to refresh immediately
+if (typeof window !== "undefined") {
+window.dispatchEvent(new Event("unbound:refresh-unread"));
+}
+} catch (e: any) {
+// Don't hard-fail the thread UI if this misses—just log it.
+console.warn("markConversationRead failed:", e?.message ?? e);
+} finally {
+markInFlightRef.current = false;
+}
+}
 
 // 2) Resolve rawId -> conversationId (supports int8 OR other user uuid)
 useEffect(() => {
@@ -89,8 +150,6 @@ return;
 const otherUserId = rawId;
 
 // Find existing conversation between me + otherUserId
-// We assume you have: conversation_members(conversation_id int8, user_id uuid)
-// Query by "my memberships", then check if the other user is in same conv.
 const { data: myMemberships, error: memErr } = await supabase
 .from("conversation_members")
 .select("conversation_id")
@@ -166,7 +225,15 @@ const { data, error } = await supabase
 .order("id", { ascending: true });
 
 if (error) throw error;
-if (!cancelled) setMsgs((data ?? []) as MsgRow[]);
+
+const rows = (data ?? []) as MsgRow[];
+if (!cancelled) setMsgs(rows);
+
+// ✅ Mark read up to latest loaded message
+const latestId = rows.length ? rows[rows.length - 1].id : null;
+if (latestId != null) {
+await markConversationRead(conversationId, latestId);
+}
 } catch (e: any) {
 if (!cancelled) setErr(e?.message ?? "Failed to load messages.");
 } finally {
@@ -179,6 +246,7 @@ setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: "smooth" }), 50);
 return () => {
 cancelled = true;
 };
+// eslint-disable-next-line react-hooks/exhaustive-deps
 }, [conversationId, supabase]);
 
 // 4) Realtime: new messages -> append
@@ -189,14 +257,26 @@ const ch = supabase
 .channel(`thread-${conversationId}`)
 .on(
 "postgres_changes",
-{ event: "INSERT", schema: "public", table: "messages", filter: `conversation_id=eq.${conversationId}` },
-(payload) => {
+{
+event: "INSERT",
+schema: "public",
+table: "messages",
+filter: `conversation_id=eq.${conversationId}`,
+},
+async (payload) => {
 const row = payload.new as any;
+
 setMsgs((prev) => {
 if (prev.some((m) => m.id === row.id)) return prev;
 return [...prev, row as MsgRow];
 });
+
 setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: "smooth" }), 50);
+
+// ✅ If we're viewing the thread, treat new message as read immediately
+if (me && row?.id != null) {
+await markConversationRead(conversationId, Number(row.id));
+}
 }
 )
 .subscribe();
@@ -204,7 +284,8 @@ setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: "smooth" }), 50);
 return () => {
 supabase.removeChannel(ch);
 };
-}, [conversationId, supabase]);
+// eslint-disable-next-line react-hooks/exhaustive-deps
+}, [conversationId, supabase, me]);
 
 async function send() {
 if (!conversationId) return;
@@ -244,9 +325,7 @@ return (
 {loading ? "Conversation…" : conversationId ? `Conversation #${conversationId}` : "Conversation"}
 </div>
 
-{err ? (
-<div style={{ color: "salmon", marginBottom: 10, fontWeight: 700 }}>{err}</div>
-) : null}
+{err ? <div style={{ color: "salmon", marginBottom: 10, fontWeight: 700 }}>{err}</div> : null}
 
 <div
 style={{
@@ -285,19 +364,16 @@ width: "fit-content",
 padding: "10px 12px",
 borderRadius: 14,
 border: "1px solid rgba(168,85,247,0.18)",
-background: mine
-? "rgba(169, 85, 247, 0.28)"
-: "rgba(215, 118, 228, 0.14)",
+background: mine ? "rgba(169, 85, 247, 0.28)" : "rgba(215, 118, 228, 0.14)",
 }}
 >
-<div style={{ fontSize: 12, opacity: 0.75, marginBottom: 6 }}>
-
-</div>
+<div style={{ fontSize: 12, opacity: 0.75, marginBottom: 6 }}></div>
 <div style={{ whiteSpace: "pre-wrap" }}>{m.body}</div>
 </div>
 </div>
 );
-}))}
+})
+)}
 <div ref={bottomRef} />
 </div>
 

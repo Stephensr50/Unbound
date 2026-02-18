@@ -100,7 +100,7 @@ borderStyle: "solid",
 borderColor: "rgba(169, 85, 247, 0.71)",
 
 // less black, more frosted
-background: "rgba(255, 255, 255, 0.21)",
+background: "rgba(169, 85, 247, 0.22)",
 
 backdropFilter: "blur(12px)",
 WebkitBackdropFilter: "blur(12px)",
