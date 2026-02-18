@@ -420,12 +420,7 @@ return (
 {loading ? "Conversation…" : conversationId ? `Conversation #${conversationId}` : "Conversation"}
 </div>
 
-{/* ✅ typing indicator UI */}
-<div style={{ minHeight: 18, marginBottom: 10, opacity: 0.85 }}>
-{otherTyping ? (
-<span style={{ color: "rgba(215, 118, 228, 0.95)", fontWeight: 800 }}>Typing…</span>
-) : null}
-</div>
+
 
 {err ? <div style={{ color: "salmon", marginBottom: 10, fontWeight: 700 }}>{err}</div> : null}
 
@@ -434,10 +429,11 @@ style={{
 border: "1px solid rgba(168,85,247,0.22)",
 background: "rgba(0,0,0,0.35)",
 borderRadius: 18,
-padding: 14,
+padding: "14px 14px 70px 14px",
 minHeight: 340,
 maxHeight: 460,
 overflowY: "auto",
+scrollPaddingBottom: 70,
 }}
 >
 {loading ? (
@@ -475,6 +471,42 @@ background: mine ? "rgba(169, 85, 247, 0.28)" : "rgba(215, 118, 228, 0.14)",
 );
 })
 )}
+{/* typing indicator bubble */}
+{otherTyping ? (
+<div
+style={{
+width: "100%",
+display: "flex",
+justifyContent: "flex-start",
+marginTop: 10,
+marginBottom: 14,
+}}
+>
+<div
+style={{
+maxWidth: "60%",
+padding: "8px 12px",
+borderRadius: 14,
+border: "1px solid rgba(168,85,247,0.18)",
+background: "rgba(215, 118, 228, 0.10)",
+fontSize: 13,
+fontWeight: 800,
+opacity: 0.95,
+display: "inline-flex",
+alignItems: "center",
+}}
+>
+Typing
+<span className="unbound-typing-dots">
+<span />
+<span />
+<span />
+</span>
+</div>
+</div>
+) : null}
+
+<div ref={bottomRef} />
 <div ref={bottomRef} />
 </div>
 
