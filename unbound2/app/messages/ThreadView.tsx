@@ -49,6 +49,20 @@ const [otherTyping, setOtherTyping] = useState(false);
 const otherTypingTimerRef = useRef<number | null>(null);
 const lastTypingSentAtRef = useRef(0);
 const stopTypingTimerRef = useRef<number | null>(null);
+const [otherLastReadId, setOtherLastReadId] = useState<number>(0);
+const lastMineId = useMemo(() => {
+if (!me) return 0;
+let last = 0;
+for (const m of msgs) {
+if (m.sender_id === me) {
+const idNum = Number((m as any).id);
+if (!Number.isNaN(idNum)) last = Math.max(last, idNum);
+}
+}
+return last;
+}, [msgs, me]);
+
+const showSeen = lastMineId > 0 && otherLastReadId >= lastMineId;
 
 const bottomRef = useRef<HTMLDivElement | null>(null);
 
@@ -119,7 +133,38 @@ console.warn("markConversationRead failed:", e?.message ?? e);
 markInFlightRef.current = false;
 }
 }
+async function loadOtherReadPointer(convId: number) {
+if (!me) return;
 
+// get members of this conversation
+const { data: members, error: memErr } = await supabase
+.from("conversation_members")
+.select("user_id")
+.eq("conversation_id", convId);
+
+if (memErr || !members) return;
+
+// find the other user (not me)
+const otherId =
+members.map((m: any) => m.user_id as string).find((id) => id && id !== me) ??
+null;
+
+if (!otherId) return;
+
+// read their read-pointer row
+console.log("READ DEBUG", { convId, me, otherId });
+const { data: readRow, error: readErr } = await supabase
+.from("conversation_reads")
+.select("last_read_message_id")
+.eq("conversation_id", convId)
+.eq("user_id", otherId)
+.maybeSingle();
+
+
+
+setOtherLastReadId(Number(readRow?.last_read_message_id ?? 0));
+
+}
 // ✅ typing helpers
 function clearOtherTypingSoon(ms = 1200) {
 if (otherTypingTimerRef.current) window.clearTimeout(otherTypingTimerRef.current);
@@ -259,10 +304,10 @@ if (error) throw error;
 
 const rows = (data ?? []) as MsgRow[];
 if (!cancelled) setMsgs(rows);
-
 const latestId = rows.length ? rows[rows.length - 1].id : null;
 if (latestId != null) {
 await markConversationRead(conversationId, latestId);
+await loadOtherReadPointer(conversationId);
 }
 } catch (e: any) {
 if (!cancelled) setErr(e?.message ?? "Failed to load messages.");
@@ -312,6 +357,7 @@ await markConversationRead(conversationId, Number(row.id));
 }
 }
 )
+
 // ✅ typing broadcasts
 .on("broadcast", { event: "typing" }, (payload: any) => {
 const p = payload?.payload ?? payload;
@@ -441,8 +487,25 @@ scrollPaddingBottom: 70,
 ) : msgs.length === 0 ? (
 <div style={{ opacity: 0.8 }}>No messages yet.</div>
 ) : (
-msgs.map((m) => {
+msgs.map((m, idx) => {
 const mine = !!me && m.sender_id === me;
+const mid = Number(m.id);
+
+// find your last message id
+const lastMineId = (() => {
+for (let i = msgs.length - 1; i >= 0; i--) {
+if (msgs[i].sender_id === me) {
+return Number(msgs[i].id);
+}
+}
+return null;
+})();
+
+const seen =
+mine &&
+lastMineId !== null &&
+mid === lastMineId &&
+otherLastReadId >= lastMineId;
 
 return (
 <div
@@ -466,6 +529,11 @@ background: mine ? "rgba(169, 85, 247, 0.28)" : "rgba(215, 118, 228, 0.14)",
 >
 <div style={{ fontSize: 12, opacity: 0.75, marginBottom: 6 }}></div>
 <div style={{ whiteSpace: "pre-wrap" }}>{m.body}</div>
+{mine && idx === msgs.length - 1 && showSeen ? (
+<div style={{ fontSize: 12, opacity: 0.7, marginTop: 6 }}>
+Seen
+</div>
+) : null}
 </div>
 </div>
 );
@@ -552,6 +620,10 @@ cursor: "pointer",
 Send
 </button>
 </div>
+<div style={{ fontSize: 12, opacity: 0.6, marginTop: 8 }}>
+
 </div>
+</div>
+
 );
 }
