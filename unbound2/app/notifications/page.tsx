@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { createClient } from "@supabase/supabase-js";
 import { useRouter } from "next/navigation";
 
+
 function getSupabase() {
 const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
@@ -170,7 +171,9 @@ if (n.type === "spank" || n.type === "comment") {
 if (n.actor_id) return `/u/${n.actor_id}`;
 return "/feed";
 }
-
+if (n.type === "spank" || n.type === "comment") {
+return `/post/${n.entity_id}`;
+}
 if (n.type === "message") return "/messages";
 
 return null;
@@ -351,9 +354,9 @@ return n.title || n.message || "Notification";
 
 function buildSub(n: NotifRow) {
 // keep it short & clean
-if (n.type === "spank" || n.type === "comment") return "Tap to view profile";
-if (n.type === "friend_request") return "Tap to view notifications";
-if (n.type === "message") return "Tap to open messages";
+if (n.type === "spank" || n.type === "comment") return "Tap to view post";
+if (n.type === "friend_request") return "Tap to view request";
+if (n.type === "message") return "Tap to open thread";
 return n.message || "";
 }
 

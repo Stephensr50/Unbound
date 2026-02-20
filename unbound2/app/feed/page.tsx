@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { createClient } from "@supabase/supabase-js";
+import { useSearchParams } from "next/navigation";
 import StoriesBar from "./StoriesBar";
 
 function getSupabase() {
@@ -90,6 +91,7 @@ strokeLinejoin="round"
 
 export default function FeedPage() {
 const supabase = useMemo(() => getSupabase(), []);
+const searchParams = useSearchParams();
 
 const [myUserId, setMyUserId] = useState<string | null>(null);
 const [posts, setPosts] = useState<PostRow[]>([]);
@@ -120,11 +122,31 @@ const [banner, setBanner] = useState<string | null>(null);
 // sparkle animation trigger per post
 const [spark, setSpark] = useState<Record<number, boolean>>({});
 
-// lightbox viewer (optional – not used yet, but harmless)
+// lightbox viewer
 const [viewer, setViewer] = useState<{
 url: string;
 type: "image" | "video";
 } | null>(null);
+
+// ✅ focus/highlight support for notifications → /feed?focusPost=123
+const [focusPostId, setFocusPostId] = useState<number | null>(null);
+const [flashPostId, setFlashPostId] = useState<number | null>(null);
+const flashTimerRef = useRef<number | null>(null);
+const didAutoScrollRef = useRef(false);
+
+useEffect(() => {
+const raw =
+searchParams?.get("focusPost") || searchParams?.get("postId") || null;
+const n = raw ? Number(raw) : NaN;
+
+if (Number.isFinite(n) && n > 0) {
+setFocusPostId(n);
+didAutoScrollRef.current = false;
+} else {
+setFocusPostId(null);
+}
+// eslint-disable-next-line react-hooks/exhaustive-deps
+}, [searchParams?.toString()]);
 
 async function refreshAuth() {
 const { data } = await supabase.auth.getSession();
@@ -179,12 +201,46 @@ setLikedByMe(lbm);
 setCommentCounts(cc);
 }
 
+async function ensureFocusPostLoaded(focusId: number) {
+if (posts.some((p) => p.id === focusId)) return;
+
+const { data, error } = await supabase
+.from("posts")
+.select("id,user_id,body,kind,created_at,media_url,media_type")
+.eq("id", focusId)
+.maybeSingle();
+
+if (error) return;
+if (!data) return;
+
+const p = data as PostRow;
+
+setPosts((prev) => {
+if (prev.some((x) => x.id === p.id)) return prev;
+return [p, ...prev];
+});
+
+if (p.user_id && !profilesById[p.user_id]) {
+const { data: prof } = await supabase
+.from("profiles")
+.select("id,username,display_name,avatar_url")
+.eq("id", p.user_id)
+.maybeSingle();
+
+if (prof) {
+setProfilesById((m) => ({ ...m, [prof.id]: prof as ProfileRow }));
+}
+}
+
+await loadCounts([focusId]);
+}
+
 async function loadPosts() {
 const { data, error } = await supabase
 .from("posts")
 .select("id,user_id,body,kind,created_at,media_url,media_type")
 .order("created_at", { ascending: false })
-.limit(50);
+.limit(200);
 
 if (error) {
 setBanner(error.message);
@@ -194,7 +250,6 @@ return;
 const rows = (data ?? []) as PostRow[];
 setPosts(rows);
 
-// fetch author profiles
 const uids = Array.from(new Set(rows.map((r) => r.user_id).filter(Boolean)));
 if (uids.length) {
 const { data: profs } = await supabase
@@ -219,6 +274,31 @@ await loadPosts();
 })();
 // eslint-disable-next-line react-hooks/exhaustive-deps
 }, []);
+
+useEffect(() => {
+(async () => {
+if (!focusPostId) return;
+
+await ensureFocusPostLoaded(focusPostId);
+
+window.setTimeout(() => {
+if (didAutoScrollRef.current) return;
+
+const el = document.getElementById(`post-${focusPostId}`);
+if (el) {
+didAutoScrollRef.current = true;
+el.scrollIntoView({ behavior: "smooth", block: "center" });
+
+setFlashPostId(focusPostId);
+if (flashTimerRef.current) window.clearTimeout(flashTimerRef.current);
+flashTimerRef.current = window.setTimeout(() => {
+setFlashPostId(null);
+}, 1600);
+}
+}, 60);
+})();
+// eslint-disable-next-line react-hooks/exhaustive-deps
+}, [focusPostId, posts.length]);
 
 function triggerSpark(postId: number) {
 setSpark((m) => ({ ...m, [postId]: true }));
@@ -369,7 +449,6 @@ const p = profilesById[uid];
 return p?.username ? `@${p.username}` : "";
 };
 
-// Upload helper
 async function uploadToStorage(uid: string, f: File) {
 const isImage = f.type.startsWith("image/");
 const isVideo = f.type.startsWith("video/");
@@ -459,11 +538,10 @@ setBanner("You can only delete your own posts.");
 return;
 }
 
-// If media exists, try to remove from storage too (best-effort)
 if (post.media_url) {
 try {
 const url = new URL(post.media_url);
-const path = url.pathname.split("/media/")[1]; // bucket = media
+const path = url.pathname.split("/media/")[1];
 if (path) await supabase.storage.from("media").remove([path]);
 } catch {
 // ignore
@@ -484,7 +562,6 @@ setBanner(e.message || "Delete failed");
 }
 }
 
-// Render media based on media_url/media_type (more reliable than kind)
 const renderMedia = (p: PostRow) => {
 if (!p.media_url) return null;
 
@@ -546,9 +623,13 @@ return (
 25% { opacity: 1; }
 100% { transform: scale(1.35); opacity: 0; }
 }
+@keyframes focusGlow {
+0% { box-shadow: 0 0 0 rgba(192,38,211,0.0); }
+35% { box-shadow: 0 0 34px rgba(192,38,211,0.45); }
+100% { box-shadow: 0 0 0 rgba(192,38,211,0.0); }
+}
 `}</style>
 
-{/* Stories bar */}
 <StoriesBar />
 
 {banner ? (
@@ -640,11 +721,7 @@ maxWidth: 260,
 
 <div style={{ flex: 1 }} />
 
-<button
-onClick={submitPost}
-disabled={posting || uploading}
-style={postBtn}
->
+<button onClick={submitPost} disabled={posting || uploading} style={postBtn}>
 {uploading ? "Uploading…" : posting ? "Posting…" : "Post"}
 </button>
 </div>
@@ -660,9 +737,21 @@ const isBusy = busyPostId === p.id;
 const isOpen = !!openComments[p.id];
 
 const isMine = myUserId && p.user_id === myUserId;
+const isFocused = flashPostId === p.id;
 
 return (
-<div key={p.id} style={cardStyle}>
+<div
+key={p.id}
+id={`post-${p.id}`}
+style={{
+...cardStyle,
+border: isFocused
+? "1px solid rgba(192,38,211,0.65)"
+: cardStyle.border,
+boxShadow: isFocused ? "0 0 34px rgba(192,38,211,0.35)" : undefined,
+animation: isFocused ? "focusGlow 1.25s ease" : undefined,
+}}
+>
 {/* Author + time */}
 <div
 style={{
@@ -798,11 +887,7 @@ placeholder="Write a comment…"
 style={{ ...inputStyle, flex: 1 }}
 />
 
-<button
-onClick={() => addComment(p.id)}
-disabled={isBusy}
-style={postBtn}
->
+<button onClick={() => addComment(p.id)} disabled={isBusy} style={postBtn}>
 {isBusy ? "…" : "Send"}
 </button>
 </div>
@@ -818,6 +903,7 @@ gap: 10,
 {(commentsByPost[p.id] ?? []).map((c) => (
 <div
 key={c.id}
+id={`comment-${c.id}`}
 style={{
 background: "rgba(0,0,0,0.35)",
 border: "1px solid #222",
@@ -851,7 +937,7 @@ No comments yet.
 })}
 </div>
 
-{/* Optional lightbox (only opens for images right now) */}
+{/* Optional lightbox */}
 {viewer ? (
 <div
 onClick={() => setViewer(null)}
@@ -878,17 +964,9 @@ padding: 12,
 >
 {viewer.type === "image" ? (
 // eslint-disable-next-line @next/next/no-img-element
-<img
-src={viewer.url}
-alt=""
-style={{ width: "100%", borderRadius: 12 }}
-/>
+<img src={viewer.url} alt="" style={{ width: "100%", borderRadius: 12 }} />
 ) : (
-<video
-src={viewer.url}
-controls
-style={{ width: "100%", borderRadius: 12 }}
-/>
+<video src={viewer.url} controls style={{ width: "100%", borderRadius: 12 }} />
 )}
 
 <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 10 }}>

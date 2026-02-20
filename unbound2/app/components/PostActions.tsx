@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { createClient } from "@supabase/supabase-js";
 
+
 function getSupabase() {
 const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
@@ -55,6 +56,7 @@ user_id: post.user_id,
 actor_id: me,
 type: "spank",
 entity_id: String(postId),
+href: `/feed?focusPost=${postId}`,
 title: `${actorName} spanked your post`,
 body: null,
 read_at: null,
