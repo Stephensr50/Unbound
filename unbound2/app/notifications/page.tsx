@@ -4,7 +4,6 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { createClient } from "@supabase/supabase-js";
 import { useRouter } from "next/navigation";
 
-
 function getSupabase() {
 const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
@@ -165,23 +164,24 @@ prev.map((n) => (n.id === id ? { ...n, read_at: new Date().toISOString() } : n))
 function computeHref(n: NotifRow) {
 if (n.href) return n.href;
 
+// 🔥 OPEN POST IN ITS OWN PAGE
+if (n.type === "spank" || n.type === "comment") {
+const postId = Number(n.entity_id);
+if (Number.isFinite(postId) && postId > 0) {
+return `/post/${postId}?flash=4000`;
+}
+}
+
 if (n.type === "friend_request") return "/notifications";
 if (n.type === "message") return "/messages";
 
-if (n.type === "spank" || n.type === "comment") {
-const postId = n.entity_id ? Number(n.entity_id) : null;
-if (postId) return `/feed?focusPost=${postId}`;
-return "/feed";
-}
-
 return null;
 }
-
 async function onClickNotif(n: NotifRow) {
 await markOneRead(n.id);
 
 const href = computeHref(n);
-if (href) router.push(href);
+if (href) router.push(href, { scroll: false });
 }
 
 // init
@@ -352,9 +352,9 @@ return n.title || n.message || "Notification";
 
 function buildSub(n: NotifRow) {
 // keep it short & clean
-if (n.type === "spank" || n.type === "comment") return "Tap to view post";
-if (n.type === "friend_request") return "Tap to view request";
-if (n.type === "message") return "Tap to open thread";
+if (n.type === "spank" || n.type === "comment") return "Tap to view notification";
+if (n.type === "friend_request") return "Tap to view notifications";
+if (n.type === "message") return "Tap to open messages";
 return n.message || "";
 }
 

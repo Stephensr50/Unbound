@@ -140,8 +140,10 @@ searchParams?.get("focusPost") || searchParams?.get("postId") || null;
 const n = raw ? Number(raw) : NaN;
 
 if (Number.isFinite(n) && n > 0) {
-setFocusPostId(n);
+// 🔥 KEY: allow auto-scroll to run again on every new focusPost
 didAutoScrollRef.current = false;
+
+setFocusPostId(n);
 } else {
 setFocusPostId(null);
 }
@@ -248,7 +250,18 @@ return;
 }
 
 const rows = (data ?? []) as PostRow[];
-setPosts(rows);
+setPosts((prev) => {
+const byId = new Map<number, PostRow>();
+
+for (const p of prev ?? []) byId.set(p.id, p);
+for (const p of rows) byId.set(p.id, p);
+
+return Array.from(byId.values()).sort(
+(a, b) =>
+new Date(b.created_at).getTime() -
+new Date(a.created_at).getTime()
+);
+});
 
 const uids = Array.from(new Set(rows.map((r) => r.user_id).filter(Boolean)));
 if (uids.length) {
@@ -293,7 +306,7 @@ setFlashPostId(focusPostId);
 if (flashTimerRef.current) window.clearTimeout(flashTimerRef.current);
 flashTimerRef.current = window.setTimeout(() => {
 setFlashPostId(null);
-}, 1600);
+}, 8000);
 }
 }, 60);
 })();
