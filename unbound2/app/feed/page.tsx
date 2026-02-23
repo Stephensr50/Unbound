@@ -335,19 +335,52 @@ setBusyPostId(null);
 return;
 }
 
-const { error } = await supabase.from("post_likes").insert({
+// Try to like (insert)
+const { error: insErr } = await supabase.from("post_likes").insert({
 post_id: postId,
 user_id: uid,
 });
 
-if (!error) {
+if (!insErr) {
+// liked
 setLikedByMe((m) => ({ ...m, [postId]: true }));
 setLikeCounts((m) => ({ ...m, [postId]: (m[postId] ?? 0) + 1 }));
 triggerSpark(postId);
-} else {
-const msg = String(error.message || "");
-if (!msg.toLowerCase().includes("duplicate")) setBanner(msg);
+setBusyPostId(null);
+return;
 }
+
+// If it already exists, treat as "unlike"
+const isConflict =
+(insErr as any)?.status === 409 ||
+(insErr as any)?.code === "23505" ||
+String((insErr as any)?.message || "").toLowerCase().includes("duplicate") ||
+String((insErr as any)?.message || "").toLowerCase().includes("unique");
+
+if (isConflict) {
+const { error: delErr } = await supabase
+.from("post_likes")
+.delete()
+.eq("post_id", postId)
+.eq("user_id", uid);
+
+if (delErr) {
+setBanner(delErr.message);
+setBusyPostId(null);
+return;
+}
+
+// unliked
+setLikedByMe((m) => ({ ...m, [postId]: false }));
+setLikeCounts((m) => ({ ...m, [postId]: Math.max(0, (m[postId] ?? 0) - 1) }));
+setBusyPostId(null);
+return;
+}
+
+// real error
+setBanner(insErr.message);
+setBusyPostId(null);
+return;
 
 setBusyPostId(null);
 }

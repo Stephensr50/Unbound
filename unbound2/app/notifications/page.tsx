@@ -166,15 +166,13 @@ function computeHref(n: NotifRow) {
 if (n.href) return n.href;
 
 if (n.type === "friend_request") return "/notifications";
+if (n.type === "message") return "/messages";
 
 if (n.type === "spank" || n.type === "comment") {
-if (n.actor_id) return `/u/${n.actor_id}`;
+const postId = n.entity_id ? Number(n.entity_id) : null;
+if (postId) return `/feed?focusPost=${postId}`;
 return "/feed";
 }
-if (n.type === "spank" || n.type === "comment") {
-return `/post/${n.entity_id}`;
-}
-if (n.type === "message") return "/messages";
 
 return null;
 }

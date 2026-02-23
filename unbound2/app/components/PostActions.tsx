@@ -1,8 +1,7 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { createClient } from "@supabase/supabase-js";
-
 
 function getSupabase() {
 const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
@@ -15,6 +14,39 @@ const supabase = useMemo(() => getSupabase(), []);
 const [liked, setLiked] = useState(false);
 const [busy, setBusy] = useState(false);
 
+// On load, figure out if *I* already spanked this post
+useEffect(() => {
+let cancelled = false;
+
+async function loadLiked() {
+const { data: ses } = await supabase.auth.getSession();
+const me = ses.session?.user?.id;
+if (!me) return;
+
+const { data, error } = await supabase
+.from("post_likes")
+.select("id")
+.eq("post_id", postId)
+.eq("user_id", me)
+.maybeSingle();
+
+if (cancelled) return;
+
+if (error) {
+// If this fails, we just leave liked=false (button still works)
+console.error("load liked failed", error);
+return;
+}
+
+setLiked(!!data);
+}
+
+loadLiked();
+return () => {
+cancelled = true;
+};
+}, [supabase, postId]);
+
 async function handleSpank() {
 if (busy) return;
 setBusy(true);
@@ -24,48 +56,68 @@ const { data: ses } = await supabase.auth.getSession();
 const me = ses.session?.user?.id;
 if (!me) return;
 
-// find post owner
-const { data: post } = await supabase
+// Find post owner (so we can notify them when you spank)
+const { data: post, error: postErr } = await supabase
 .from("posts")
 .select("user_id")
 .eq("id", postId)
 .maybeSingle();
 
+if (postErr) {
+console.error("post lookup failed", postErr);
+return;
+}
 if (!post?.user_id) return;
 
-// insert like/spank (if you don't have a spanks table, use post_likes instead)
-// IMPORTANT: pick ONE that exists in your DB:
-// await supabase.from("post_likes").insert({ post_id: postId, user_id: me });
-await supabase.from("spanks").insert({ post_id: postId, user_id: me });
+// Try to INSERT like first (spank)
+const { error: insErr } = await supabase
+.from("post_likes")
+.insert({ post_id: postId, user_id: me });
 
-// look up actor profile for display name + avatar
-const { data: actorProfile } = await supabase
-.from("profiles")
-.select("display_name, username, avatar_url")
-.eq("id", me)
-.maybeSingle();
+if (!insErr) {
+// Spanked successfully
+setLiked(true);
 
-const actorName =
-actorProfile?.display_name ||
-(actorProfile?.username ? `@${actorProfile.username}` : "Someone");
-
-// insert notification (don’t notify yourself)
+// Notify post owner (but not yourself)
 if (post.user_id !== me) {
 await supabase.from("notifications").insert({
 user_id: post.user_id,
 actor_id: me,
 type: "spank",
+entity_table: "posts",
 entity_id: String(postId),
-href: `/feed?focusPost=${postId}`,
-title: `${actorName} spanked your post`,
-body: null,
-read_at: null,
-actor_display_name: actorName,
-actor_avatar_url: actorProfile?.avatar_url ?? null,
+message: "spanked your post",
 });
 }
+return;
+}
 
-setLiked(true);
+// If insert failed because it already exists => UNspank (delete)
+const msg = String((insErr as any)?.message || "").toLowerCase();
+const isConflict =
+(insErr as any)?.status === 409 ||
+(insErr as any)?.code === "23505" ||
+msg.includes("duplicate") ||
+msg.includes("unique");
+
+if (isConflict) {
+const { error: delErr } = await supabase
+.from("post_likes")
+.delete()
+.eq("post_id", postId)
+.eq("user_id", me);
+
+if (delErr) {
+console.error("unspank failed", delErr);
+return;
+}
+
+setLiked(false);
+return;
+}
+
+// Some other real error
+console.error("spank failed", insErr);
 } finally {
 setBusy(false);
 }
@@ -85,7 +137,8 @@ background: liked
 : "rgba(168,85,247,0.12)",
 color: "white",
 fontWeight: 700,
-cursor: "pointer",
+cursor: busy ? "not-allowed" : "pointer",
+opacity: busy ? 0.85 : 1,
 }}
 >
 {liked ? "Spanked 💜" : "Spank"}
