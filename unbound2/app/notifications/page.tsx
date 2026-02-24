@@ -55,6 +55,7 @@ const [rows, setRows] = useState<NotifRow[]>([]);
 const [loading, setLoading] = useState(true);
 
 const loadingRef = useRef(false);
+const subscribedRef = useRef(false);
 
 async function refreshMe() {
 const { data } = await supabase.auth.getSession();
@@ -202,6 +203,9 @@ loadNotifications();
 // realtime: refresh list when notifications insert for *anyone* (we’ll filter client-side by user_id in query)
 // This works because your Supabase “publications” already include notifications.
 useEffect(() => {
+    if (subscribedRef.current) return;
+subscribedRef.current = true;
+
 const ch = supabase
 .channel("notifications-page")
 .on(
