@@ -70,6 +70,9 @@ return;
 if (!post?.user_id) return;
 
 // Try to INSERT like first (spank)
+// optimistic UI
+setLiked(true);
+
 const { error: insErr } = await supabase
 .from("post_likes")
 .insert({ post_id: postId, user_id: me });
@@ -77,22 +80,14 @@ const { error: insErr } = await supabase
 if (!insErr) {
 // Spanked successfully
 setLiked(true);
+setBusy(false);
 
-// Notify post owner (but not yourself)
-if (post.user_id !== me) {
-await supabase.from("notifications").insert({
-user_id: post.user_id,
-actor_id: me,
-type: "spank",
-entity_table: "posts",
-entity_id: String(postId),
-message: "spanked your post",
-});
-}
+
 return;
 }
 
 // If insert failed because it already exists => UNspank (delete)
+
 const msg = String((insErr as any)?.message || "").toLowerCase();
 const isConflict =
 (insErr as any)?.status === 409 ||
@@ -113,6 +108,7 @@ return;
 }
 
 setLiked(false);
+setBusy(false);
 return;
 }
 
