@@ -163,7 +163,10 @@ prev.map((n) => (n.id === id ? { ...n, read_at: new Date().toISOString() } : n))
 }
 
 function computeHref(n: NotifRow) {
+    if (n.type === "friend_request") return "/friend-requests";
 if (n.href) return n.href;
+
+
 
 // 🔥 OPEN POST IN ITS OWN PAGE
 if (n.type === "spank" || n.type === "comment") {
@@ -173,16 +176,19 @@ return `/post/${postId}?flash=4000`;
 }
 }
 
-if (n.type === "friend_request") return "/notifications";
+if (n.type === "friend_request") return "/friend-requests";
 if (n.type === "message") return "/messages";
 
 return null;
 }
 async function onClickNotif(n: NotifRow) {
-await markOneRead(n.id);
-
 const href = computeHref(n);
+console.log("CLICK NOTIF:", { type: n.type, entity_id: n.entity_id, href, rawHref: (n as any).href });
+
 if (href) router.push(href, { scroll: false });
+
+// don’t let a slow/blocked update prevent navigation
+markOneRead(n.id).catch((e) => console.error("markOneRead failed:", e));
 }
 
 // init

@@ -72,8 +72,8 @@ return !!data;
 },
 async () => {
 const { data, error } = await supabase
-.from("user_follows")
-.select("id")
+.from("follows")
+.select("follower_id")
 .eq("follower_id", uid)
 .eq("following_id", targetProfileId)
 .maybeSingle();
@@ -202,7 +202,7 @@ if (error) throw error;
 },
 async () => {
 const { error } = await supabase
-.from("user_follows")
+.from("follows")
 .delete()
 .eq("follower_id", uid)
 .eq("following_id", targetProfileId);
@@ -221,7 +221,7 @@ following_id: targetProfileId,
 if (error) throw error;
 },
 async () => {
-const { error } = await supabase.from("user_follows").insert({
+const { error } = await supabase.from("follows").insert({
 follower_id: uid,
 following_id: targetProfileId,
 });
