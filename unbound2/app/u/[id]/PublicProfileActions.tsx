@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { CSSProperties, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@supabase/supabase-js";
 
@@ -24,6 +24,8 @@ lastErr = e;
 throw lastErr ?? new Error("Operation failed");
 }
 
+type FriendState = "none" | "pending_out" | "pending_in" | "friends";
+
 export default function PublicProfileActions({
 targetProfileId,
 }: {
@@ -39,6 +41,7 @@ const [following, setFollowing] = useState<boolean>(false);
 const [followBusy, setFollowBusy] = useState(false);
 
 const [friendBusy, setFriendBusy] = useState(false);
+const [friendState, setFriendState] = useState<FriendState>("none");
 
 // Hover state for glow/lift
 const [hover, setHover] = useState<"message" | "follow" | "friend" | null>(
@@ -52,12 +55,114 @@ setMyUid(uid);
 return uid;
 }
 
+// ---- check friendship + pending requests ----
+async function refreshFriendState(uid: string) {
+// if viewing self, ignore
+if (!uid || uid === targetProfileId) {
+setFriendState("none");
+return;
+}
+
+// 1) Are we already friends? (friends table)
+try {
+const isFriends = await tryTables<boolean>([
+async () => {
+// friends(user_id, friend_id) with possibly 1 or 2 rows
+const { data, error } = await supabase
+.from("friends")
+.select("user_id, friend_id")
+.or(
+`and(user_id.eq.${uid},friend_id.eq.${targetProfileId}),and(user_id.eq.${targetProfileId},friend_id.eq.${uid})`
+)
+.limit(1);
+if (error) throw error;
+return (data ?? []).length > 0;
+},
+async () => {
+// alternate naming if your table differs (best-effort)
+const { data, error } = await supabase
+.from("friends")
+.select("user_id, friend_user_id")
+.or(
+`and(user_id.eq.${uid},friend_user_id.eq.${targetProfileId}),and(user_id.eq.${targetProfileId},friend_user_id.eq.${uid})`
+)
+.limit(1);
+if (error) throw error;
+return (data ?? []).length > 0;
+},
+]);
+
+if (isFriends) {
+setFriendState("friends");
+return;
+}
+} catch {
+// If friends table doesn't exist or columns differ, ignore
+}
+
+// 2) Any pending friend request either direction? (friend_requests table)
+try {
+const state = await tryTables<FriendState>([
+async () => {
+// friend_requests(requester_id, receiver_id)
+const { data, error } = await supabase
+.from("friend_requests")
+.select("requester_id, receiver_id, status")
+.or(
+`and(requester_id.eq.${uid},receiver_id.eq.${targetProfileId}),and(requester_id.eq.${targetProfileId},receiver_id.eq.${uid})`
+)
+.limit(10);
+
+if (error) throw error;
+
+const rows: any[] = data ?? [];
+const pending = rows.find(
+(r) =>
+String(r.status ?? "pending").toLowerCase() === "pending" ||
+String(r.status ?? "").toLowerCase() === ""
+);
+if (!pending) return "none";
+
+const out = pending.requester_id === uid;
+return out ? "pending_out" : "pending_in";
+},
+async () => {
+// friend_requests(from_user_id, to_user_id)
+const { data, error } = await supabase
+.from("friend_requests")
+.select("from_user_id, to_user_id, status")
+.or(
+`and(from_user_id.eq.${uid},to_user_id.eq.${targetProfileId}),and(from_user_id.eq.${targetProfileId},to_user_id.eq.${uid})`
+)
+.limit(10);
+
+if (error) throw error;
+
+const rows: any[] = data ?? [];
+const pending = rows.find(
+(r) =>
+String(r.status ?? "pending").toLowerCase() === "pending" ||
+String(r.status ?? "").toLowerCase() === ""
+);
+if (!pending) return "none";
+
+const out = pending.from_user_id === uid;
+return out ? "pending_out" : "pending_in";
+},
+]);
+
+setFriendState(state);
+} catch {
+setFriendState("none");
+}
+}
+
 useEffect(() => {
 (async () => {
 const uid = await refreshAuth();
 if (!uid) return;
 
-// Check follow status if possible (we try a couple common table/column conventions)
+// Check follow status
 try {
 const isFollowing = await tryTables<boolean>([
 async () => {
@@ -83,47 +188,37 @@ return !!data;
 ]);
 setFollowing(isFollowing);
 } catch {
-// If follow tables don’t exist yet, just ignore (UI still renders)
+// ignore
 }
+
+// Check friend status
+await refreshFriendState(uid);
 })();
 // eslint-disable-next-line react-hooks/exhaustive-deps
 }, [targetProfileId]);
 
 // ===== Glass button styles (12px, more square, frosted) =====
-const btnBase: React.CSSProperties = {
+const btnBase: CSSProperties = {
 padding: "10px 14px",
 borderRadius: 12,
-
-// brighter edge so it reads on rope bg
 borderWidth: 1,
 borderStyle: "solid",
 borderColor: "rgba(169, 85, 247, 0.71)",
-
-// less black, more frosted
 background: "rgba(169, 85, 247, 0.22)",
-
 backdropFilter: "blur(12px)",
 WebkitBackdropFilter: "blur(12px)",
-
-// stronger text contrast
 color: "rgba(255,255,255,0.98)",
 fontFamily: '"Gloock", serif',
-
 fontWeight: 800,
 letterSpacing: 0.2,
 cursor: "pointer",
-
-// subtle base glow even when not hovered
 boxShadow: "0 0 12px rgba(168,85,247,0.25)",
-
 transition:
 "transform 140ms ease, box-shadow 140ms ease, border-color 140ms ease, background 140ms ease, opacity 140ms ease",
 };
 
-const primaryBtn: React.CSSProperties = {
+const primaryBtn: CSSProperties = {
 ...btnBase,
-borderWidth: 1,
-borderStyle: "solid",
 borderColor: "rgba(168,85,247,0.55)",
 background:
 "linear-gradient(180deg, rgba(168,85,247,0.85), rgba(120,60,255,0.85))",
@@ -132,7 +227,7 @@ boxShadow:
 "0 0 18px rgba(168,85,247,0.55), inset 0 0 12px rgba(255,255,255,0.14)",
 };
 
-const disabledBtn: React.CSSProperties = {
+const disabledBtn: CSSProperties = {
 opacity: 0.65,
 cursor: "not-allowed",
 transform: "none",
@@ -142,17 +237,21 @@ const idleGlow = "0 0 12px rgba(168,85,247,0.25)";
 const hoverGlow = "0 0 26px rgba(168,85,247,0.75)";
 
 const applyHover = (
-base: React.CSSProperties,
+base: CSSProperties,
 key: "message" | "follow" | "friend",
 disabled?: boolean
-): React.CSSProperties => {
+): CSSProperties => {
 if (disabled) return { ...base, ...disabledBtn };
 const isOn = hover === key;
 return {
 ...base,
 boxShadow: isOn
-? (base.boxShadow ? `${base.boxShadow}, ${hoverGlow}` : hoverGlow)
-: (base.boxShadow ? `${base.boxShadow}, ${idleGlow}` : idleGlow),
+? base.boxShadow
+? `${base.boxShadow}, ${hoverGlow}`
+: hoverGlow
+: base.boxShadow
+? `${base.boxShadow}, ${idleGlow}`
+: idleGlow,
 transform: isOn ? "translateY(-1px)" : "translateY(0px)",
 borderColor: isOn ? "rgba(168,85,247,0.65)" : (base.borderColor as any),
 };
@@ -168,8 +267,6 @@ if (uid === targetProfileId) {
 setBanner("That’s you 😄");
 return;
 }
-
-// Your app already uses /messages/[id] with profile.id in several places
 router.push(`/messages/${targetProfileId}`);
 }
 
@@ -190,16 +287,7 @@ setBanner(null);
 
 try {
 if (following) {
-// Unfollow
 await tryTables([
-async () => {
-const { error } = await supabase
-.from("follows")
-.delete()
-.eq("follower_id", uid)
-.eq("following_id", targetProfileId);
-if (error) throw error;
-},
 async () => {
 const { error } = await supabase
 .from("follows")
@@ -211,15 +299,7 @@ if (error) throw error;
 ]);
 setFollowing(false);
 } else {
-// Follow
 await tryTables([
-async () => {
-const { error } = await supabase.from("follows").insert({
-follower_id: uid,
-following_id: targetProfileId,
-});
-if (error) throw error;
-},
 async () => {
 const { error } = await supabase.from("follows").insert({
 follower_id: uid,
@@ -248,13 +328,26 @@ setBanner("That’s you 😄");
 return;
 }
 
+// Re-check before sending
+await refreshFriendState(uid);
+if (friendState === "friends") {
+setBanner("You’re already friends ✓");
+return;
+}
+if (friendState === "pending_out") {
+setBanner("Friend request already pending ✓");
+return;
+}
+if (friendState === "pending_in") {
+setBanner("They already requested you — accept it in Notifications ✓");
+return;
+}
+
 if (friendBusy) return;
 setFriendBusy(true);
 setBanner(null);
 
 try {
-// We try a couple common naming schemes. If none exist yet,
-// you’ll get a clear banner instead of a crash.
 await tryTables([
 async () => {
 const { error } = await supabase.from("friend_requests").insert({
@@ -274,11 +367,12 @@ if (error) throw error;
 },
 ]);
 
+setFriendState("pending_out");
 setBanner("Friend request sent ✅");
 } catch (e: any) {
 const msg = String(e?.message || e).toLowerCase();
-
 if (msg.includes("duplicate key") || msg.includes("unique")) {
+setFriendState("pending_out");
 setBanner("Friend request already pending ✓");
 } else {
 setBanner(String(e?.message || e));
@@ -290,6 +384,20 @@ setFriendBusy(false);
 
 // Hide actions if you’re viewing your own profile
 if (myUid && myUid === targetProfileId) return null;
+
+const friendBtnDisabled =
+friendBusy || friendState === "friends" || friendState === "pending_out" || friendState === "pending_in";
+
+const friendBtnLabel =
+friendBusy
+? "…"
+: friendState === "friends"
+? "Friends ✓"
+: friendState === "pending_out"
+? "Request Sent ✓"
+: friendState === "pending_in"
+? "Requested You ✓"
+: "Add Friend";
 
 return (
 <div style={{ marginTop: 14 }}>
@@ -331,12 +439,21 @@ onMouseLeave={() => setHover(null)}
 
 <button
 onClick={sendFriendRequest}
-disabled={friendBusy}
-style={applyHover(btnBase, "friend", friendBusy)}
-onMouseEnter={() => !friendBusy && setHover("friend")}
+disabled={friendBtnDisabled}
+style={applyHover(btnBase, "friend", friendBtnDisabled)}
+onMouseEnter={() => !friendBtnDisabled && setHover("friend")}
 onMouseLeave={() => setHover(null)}
+title={
+friendState === "pending_in"
+? "They requested you — accept it in Notifications"
+: friendState === "pending_out"
+? "Friend request already sent"
+: friendState === "friends"
+? "You’re already friends"
+: "Send friend request"
+}
 >
-{friendBusy ? "…" : "Add Friend"}
+{friendBtnLabel}
 </button>
 </div>
 </div>

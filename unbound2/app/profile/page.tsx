@@ -30,8 +30,7 @@ const [myProfile, setMyProfile] = useState<ProfileRow | null>(null);
 
 const [followersCount, setFollowersCount] = useState<number>(0);
 const [followingCount, setFollowingCount] = useState<number>(0);
-
-const friendsCount = 0;
+const [friendsCount, setFriendsCount] = useState<number>(0);
 
 const [modalOpen, setModalOpen] = useState(false);
 const [modalType, setModalType] = useState<ModalType>("followers");
@@ -40,6 +39,7 @@ const [modalUsers, setModalUsers] = useState<ProfileRow[]>([]);
 
 const [status, setStatus] = useState<string>("");
 
+// 1) Session -> myUserId
 useEffect(() => {
 (async () => {
 try {
@@ -50,6 +50,8 @@ setMyUserId(uid);
 if (!uid) {
 setMyProfile(null);
 setStatus("Not signed in.");
+} else {
+setStatus("");
 }
 } catch (e) {
 console.error(e);
@@ -60,10 +62,12 @@ setStatus("Not signed in.");
 })();
 }, [supabase]);
 
+// 2) Load profile + counts
 useEffect(() => {
 if (!myUserId) return;
 
 (async () => {
+// profile
 const { data: p, error: pErr } = await supabase
 .from("profiles")
 .select("id, username, display_name, bio, avatar_url")
@@ -73,6 +77,7 @@ const { data: p, error: pErr } = await supabase
 if (pErr) console.error(pErr);
 setMyProfile((p as ProfileRow) ?? null);
 
+// followers
 const { count: followers, error: fErr } = await supabase
 .from("follows")
 .select("*", { count: "exact", head: true })
@@ -81,6 +86,16 @@ const { count: followers, error: fErr } = await supabase
 if (fErr) console.error(fErr);
 setFollowersCount(followers ?? 0);
 
+// friends
+const { count: friends, error: frErr } = await supabase
+.from("friends")
+.select("*", { count: "exact", head: true })
+.eq("user_id", myUserId);
+
+if (frErr) console.error(frErr);
+setFriendsCount(friends ?? 0);
+
+// following
 const { count: following, error: foErr } = await supabase
 .from("follows")
 .select("*", { count: "exact", head: true })
@@ -96,6 +111,7 @@ setModalType(type);
 setModalOpen(true);
 }
 
+// 3) Load users for Followers/Following modal
 useEffect(() => {
 if (!modalOpen) return;
 if (!myUserId) return;
@@ -139,7 +155,7 @@ setModalUsers([]);
 return;
 }
 
-setModalUsers(((profiles ?? []) as unknown) as ProfileRow[]);
+setModalUsers((profiles ?? []) as ProfileRow[]);
 } finally {
 setModalLoading(false);
 }
@@ -441,14 +457,19 @@ Sign Out
 <div style={S.statsWrap}>
 <div
 style={S.stat}
-onClick={() => alert("Friends coming next.")}
-title="Friends (coming soon)"
+onClick={() => {
+setModalType("friends" as any);
+setModalOpen(true);
+}}
 >
 <div style={S.statNum}>{friendsCount}</div>
 <div style={S.statLabel}>Friends</div>
 </div>
 
-<div style={{ ...S.stat, ...S.statMiddle }} onClick={() => openModal("followers")}>
+<div
+style={{ ...S.stat, ...S.statMiddle }}
+onClick={() => openModal("followers")}
+>
 <div style={S.statNum}>{followersCount}</div>
 <div style={S.statLabel}>Followers</div>
 </div>
@@ -461,14 +482,18 @@ title="Friends (coming soon)"
 </div>
 
 {/* ✅ MY POSTS ON PROFILE */}
-{myUserId ? <ProfileFeedClient/> : null}
+{myUserId ? <ProfileFeedClient /> : null}
 
 {modalOpen && (
 <div style={S.modalBackdrop} onClick={() => setModalOpen(false)}>
 <div style={S.modal} onClick={(e) => e.stopPropagation()}>
 <div style={S.modalHeader}>
 <div style={S.modalTitle}>
-{modalType === "followers" ? "Followers" : "Following"}
+{modalType === "followers"
+? "Followers"
+: modalType === "following"
+? "Following"
+: "Friends"}
 </div>
 <button style={S.closeBtn} onClick={() => setModalOpen(false)}>
 Close
@@ -476,11 +501,23 @@ Close
 </div>
 
 {modalLoading ? (
-<div style={{ padding: 18, textAlign: "center", color: "rgba(255,255,255,0.70)" }}>
+<div
+style={{
+padding: 18,
+textAlign: "center",
+color: "rgba(255,255,255,0.70)",
+}}
+>
 Loading…
 </div>
 ) : modalUsers.length === 0 ? (
-<div style={{ padding: 18, textAlign: "center", color: "rgba(255,255,255,0.70)" }}>
+<div
+style={{
+padding: 18,
+textAlign: "center",
+color: "rgba(255,255,255,0.70)",
+}}
+>
 No one yet.
 </div>
 ) : (
@@ -502,7 +539,11 @@ onClick={() => setModalOpen(false)}
 <img
 src={u.avatar_url}
 alt=""
-style={{ height: "100%", width: "100%", objectFit: "cover" }}
+style={{
+height: "100%",
+width: "100%",
+objectFit: "cover",
+}}
 />
 ) : (
 <div
@@ -524,7 +565,9 @@ fontSize: 12,
 
 <div style={{ minWidth: 0 }}>
 <div style={S.userName}>{label}</div>
-{u.username ? <div style={S.userHandle}>@{u.username}</div> : null}
+{u.username ? (
+<div style={S.userHandle}>@{u.username}</div>
+) : null}
 </div>
 </Link>
 );

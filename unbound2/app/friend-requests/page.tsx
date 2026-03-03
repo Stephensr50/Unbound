@@ -103,6 +103,14 @@ setErr(error.message);
 return;
 }
 
+// mark related notification as read
+await supabase
+.from("notifications")
+.update({ read_at: new Date().toISOString() })
+.eq("type", "friend_request")
+.eq("entity_id", String(id))
+.eq("user_id", me);
+
 // Remove from list immediately
 setRows((prev) => prev.filter((r) => r.id !== id));
 }
