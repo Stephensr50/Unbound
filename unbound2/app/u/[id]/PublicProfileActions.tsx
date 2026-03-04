@@ -217,14 +217,25 @@ transition:
 "transform 140ms ease, box-shadow 140ms ease, border-color 140ms ease, background 140ms ease, opacity 140ms ease",
 };
 
-const primaryBtn: CSSProperties = {
+const primaryBtn:React. CSSProperties = {
 ...btnBase,
-borderColor: "rgba(168,85,247,0.55)",
+
 background:
-"linear-gradient(180deg, rgba(168,85,247,0.85), rgba(120,60,255,0.85))",
-color: "white",
+"linear-gradient(180deg, rgba(168,85,247,0.98), rgba(140,80,255,0.98))",
 boxShadow:
-"0 0 18px rgba(168,85,247,0.55), inset 0 0 12px rgba(255,255,255,0.14)",
+"0 0 28px rgba(168,85,247,0.9), inset 0 0 16px rgba(255,255,255,0.28)",
+borderColor: "rgba(210,160,255,0.9)",
+color: "#ffffff",
+};
+
+const friendBtn: React.CSSProperties = {
+...primaryBtn,
+background:
+"linear-gradient(180deg, rgba(168,85,247,0.98), rgba(140,80,255,0.98))",
+boxShadow:
+"0 0 28px rgba(168,85,247,0.9), inset 0 0 16px rgba(255,255,255,0.28)",
+borderColor: "rgba(210,160,255,0.9)",
+color: "#ffffff",
 };
 
 const disabledBtn: CSSProperties = {
@@ -420,13 +431,14 @@ fontSize: 13,
 <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
 <button
 onClick={onMessage}
-style={applyHover(primaryBtn, "message", false)}
+style={applyHover(friendBtn, "message", false)}
 onMouseEnter={() => setHover("message")}
 onMouseLeave={() => setHover(null)}
 >
 Message
 </button>
 
+{friendState !== "friends" && (
 <button
 onClick={toggleFollow}
 disabled={followBusy}
@@ -436,11 +448,12 @@ onMouseLeave={() => setHover(null)}
 >
 {followBusy ? "…" : following ? "Following ✓" : "Follow"}
 </button>
+)}
 
 <button
 onClick={sendFriendRequest}
 disabled={friendBtnDisabled}
-style={applyHover(btnBase, "friend", friendBtnDisabled)}
+style={applyHover(primaryBtn, "friend", false)}
 onMouseEnter={() => !friendBtnDisabled && setHover("friend")}
 onMouseLeave={() => setHover(null)}
 title={
