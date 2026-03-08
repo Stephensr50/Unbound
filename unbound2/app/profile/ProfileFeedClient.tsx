@@ -7,10 +7,8 @@ type PostRow = {
 id: number;
 user_id: string;
 body: string | null;
-kind: string | null; // "text" | "photo" | "video"
+kind: string | null;
 created_at: string;
-// IMPORTANT: your DB might call this media_url OR image_url OR file_url.
-// We'll try media_url first, but you can rename it if needed.
 media_url?: string | null;
 image_url?: string | null;
 file_url?: string | null;
@@ -40,6 +38,12 @@ const [myUserId, setMyUserId] = useState<string | null>(null);
 const [posts, setPosts] = useState<PostRow[]>([]);
 const [banner, setBanner] = useState<string | null>(null);
 
+const [likeCounts, setLikeCounts] = useState<Record<number, number>>({});
+const [commentCounts, setCommentCounts] = useState<Record<number, number>>({});
+const [likedByMe, setLikedByMe] = useState<Record<number, boolean>>({});
+const [busyPostId, setBusyPostId] = useState<number | null>(null);
+const [spark, setSpark] = useState<Record<number, boolean>>({});
+
 async function refreshAuth() {
 const { data } = await supabase.auth.getSession();
 const uid = data.session?.user?.id ?? null;
@@ -47,11 +51,60 @@ setMyUserId(uid);
 return uid;
 }
 
+async function loadCounts(postIds: number[], uid: string | null) {
+if (!postIds.length) {
+setLikeCounts({});
+setLikedByMe({});
+setCommentCounts({});
+return;
+}
+
+const { data: likeRows, error: likeErr } = await supabase
+.from("post_likes")
+.select("post_id,user_id")
+.in("post_id", postIds);
+
+if (likeErr) {
+setBanner(likeErr.message);
+return;
+}
+
+const lc: Record<number, number> = {};
+const lbm: Record<number, boolean> = {};
+
+for (const r of likeRows ?? []) {
+const pid = (r as any).post_id as number;
+const likerId = (r as any).user_id as string;
+lc[pid] = (lc[pid] ?? 0) + 1;
+if (uid && likerId === uid) lbm[pid] = true;
+}
+
+const { data: commentRows, error: commentErr } = await supabase
+.from("post_comments")
+.select("post_id")
+.in("post_id", postIds);
+
+if (commentErr) {
+setLikeCounts(lc);
+setLikedByMe(lbm);
+setCommentCounts({});
+return;
+}
+
+const cc: Record<number, number> = {};
+for (const r of commentRows ?? []) {
+const pid = (r as any).post_id as number;
+cc[pid] = (cc[pid] ?? 0) + 1;
+}
+
+setLikeCounts(lc);
+setLikedByMe(lbm);
+setCommentCounts(cc);
+}
+
 async function loadMyPosts(uid: string) {
 setBanner(null);
 
-// ✅ Select ALL fields needed for media rendering.
-// If your column is not media_url, change this select string.
 const { data, error } = await supabase
 .from("posts")
 .select("id,user_id,body,kind,created_at,media_url,media_type")
@@ -65,7 +118,12 @@ setPosts([]);
 return;
 }
 
-setPosts((data ?? []) as PostRow[]);
+const rows = (data ?? []) as PostRow[];
+setPosts(rows);
+await loadCounts(
+rows.map((p) => p.id),
+myUserId ?? uid
+);
 }
 
 useEffect(() => {
@@ -80,6 +138,89 @@ await loadMyPosts(uid);
 })();
 // eslint-disable-next-line react-hooks/exhaustive-deps
 }, []);
+
+function triggerSpark(postId: number) {
+setSpark((m) => ({ ...m, [postId]: true }));
+window.setTimeout(() => {
+setSpark((m) => ({ ...m, [postId]: false }));
+}, 260);
+}
+
+async function toggleSpank(postId: number) {
+const uid = myUserId ?? (await refreshAuth());
+if (!uid) return;
+
+if (busyPostId) return;
+setBusyPostId(postId);
+
+const already = !!likedByMe[postId];
+
+if (already) {
+const { error } = await supabase
+.from("post_likes")
+.delete()
+.eq("post_id", postId)
+.eq("user_id", uid);
+
+if (error) {
+setBanner(error.message);
+setBusyPostId(null);
+return;
+}
+
+setLikedByMe((m) => ({ ...m, [postId]: false }));
+setLikeCounts((m) => ({
+...m,
+[postId]: Math.max(0, (m[postId] ?? 0) - 1),
+}));
+setBusyPostId(null);
+return;
+}
+
+const { error: insErr } = await supabase.from("post_likes").insert({
+post_id: postId,
+user_id: uid,
+});
+
+if (!insErr) {
+setLikedByMe((m) => ({ ...m, [postId]: true }));
+setLikeCounts((m) => ({ ...m, [postId]: (m[postId] ?? 0) + 1 }));
+triggerSpark(postId);
+setBusyPostId(null);
+return;
+}
+
+const isConflict =
+(insErr as any)?.status === 409 ||
+(insErr as any)?.code === "23505" ||
+String((insErr as any)?.message || "").toLowerCase().includes("duplicate") ||
+String((insErr as any)?.message || "").toLowerCase().includes("unique");
+
+if (isConflict) {
+const { error: delErr } = await supabase
+.from("post_likes")
+.delete()
+.eq("post_id", postId)
+.eq("user_id", uid);
+
+if (delErr) {
+setBanner(delErr.message);
+setBusyPostId(null);
+return;
+}
+
+setLikedByMe((m) => ({ ...m, [postId]: false }));
+setLikeCounts((m) => ({
+...m,
+[postId]: Math.max(0, (m[postId] ?? 0) - 1),
+}));
+setBusyPostId(null);
+return;
+}
+
+setBanner(insErr.message);
+setBusyPostId(null);
+}
 
 const card: React.CSSProperties = {
 background: "rgba(0,0,0,0.55)",
@@ -98,8 +239,26 @@ maxHeight: 560,
 objectFit: "cover",
 };
 
+const pillBtn: React.CSSProperties = {
+padding: "8px 14px",
+borderRadius: 999,
+border: "1px solid rgba(180,120,255,0.25)",
+background: "rgba(0,0,0,0.35)",
+color: "white",
+cursor: "pointer",
+fontWeight: 650,
+};
+
 return (
 <div style={{ width: "min(920px, 94vw)", margin: "16px auto 0" }}>
+<style>{`
+@keyframes unboundPop {
+0% { transform: scale(1); }
+45% { transform: scale(1.22); }
+100% { transform: scale(1); }
+}
+`}</style>
+
 {banner ? (
 <div
 style={{
@@ -118,8 +277,7 @@ fontSize: 13,
 
 <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
 {posts.map((p) => {
-const media =
-p.media_url ?? p.image_url ?? p.file_url ?? null;
+const media = p.media_url ?? p.image_url ?? p.file_url ?? null;
 
 const isVideo =
 (p.kind ?? "").toLowerCase().includes("video") ||
@@ -129,6 +287,11 @@ const isPhoto =
 (p.kind ?? "").toLowerCase().includes("photo") ||
 (p.kind ?? "").toLowerCase().includes("image") ||
 (!!media && /\.(jpg|jpeg|png|gif|webp)(\?|$)/i.test(media));
+
+const spanks = likeCounts[p.id] ?? 0;
+const comments = commentCounts[p.id] ?? 0;
+const iSpanked = !!likedByMe[p.id];
+const isBusy = busyPostId === p.id;
 
 return (
 <div key={p.id} style={card}>
@@ -143,7 +306,7 @@ marginBottom: 8,
 {timeAgo(p.created_at)}
 </div>
 <div style={{ opacity: 0.55, fontSize: 12 }}>
-@{/* you can wire username later */}robby_78
+@{/* wire username later */}robby_78
 </div>
 </div>
 
@@ -153,23 +316,63 @@ marginBottom: 8,
 </div>
 ) : null}
 
-{/* ✅ Media render */}
 {media && (isPhoto || isVideo) ? (
 isVideo ? (
-<video
-src={media}
-controls
-style={mediaStyle}
-/>
+<video src={media} controls style={mediaStyle} />
 ) : (
 // eslint-disable-next-line @next/next/no-img-element
-<img
-src={media}
-alt=""
-style={mediaStyle}
-/>
+<img src={media} alt="" style={mediaStyle} />
 )
 ) : null}
+
+<div
+style={{
+display: "flex",
+gap: 14,
+marginTop: 12,
+alignItems: "center",
+}}
+>
+<button
+onClick={() => !isBusy && toggleSpank(p.id)}
+disabled={isBusy}
+style={{
+...pillBtn,
+display: "flex",
+alignItems: "center",
+gap: 8,
+opacity: isBusy ? 0.6 : 1,
+animation: spark[p.id] ? "unboundPop .22s ease" : undefined,
+color: iSpanked ? "#e879f9" : "white",
+border: iSpanked
+? "1px solid rgba(192,38,211,0.55)"
+: "1px solid rgba(180,120,255,0.25)",
+background: iSpanked
+? "rgba(192,38,211,0.16)"
+: "rgba(0,0,0,0.35)",
+}}
+title="Spank"
+>
+<span
+style={{
+fontSize: 18,
+lineHeight: 1,
+display: "inline-flex",
+}}
+>
+{iSpanked ? "♥" : "♡"}
+</span>
+
+<span>
+{iSpanked ? "Spanked" : "Spank"}
+{spanks ? ` · ${spanks}` : ""}
+</span>
+</button>
+
+<button style={pillBtn}>
+Comments {comments ? `· ${comments}` : ""}
+</button>
+</div>
 </div>
 );
 })}

@@ -47,48 +47,6 @@ if (s < 86400) return `${Math.floor(s / 3600)}h`;
 return `${Math.floor(s / 86400)}d`;
 }
 
-function UnboundSpankIcon({ on }: { on: boolean }) {
-const stroke = "rgba(255,255,255,0.95)";
-const fillOn = "rgba(192,38,211,0.92)";
-
-return (
-<svg
-width="24"
-height="24"
-viewBox="0 0 24 24"
-style={{
-filter: on
-? "drop-shadow(0 0 12px rgba(192,38,211,.9))"
-: "drop-shadow(0 0 6px rgba(255,255,255,.12))",
-transition: "all .16s ease",
-}}
->
-<path
-d="
-M7.2 8.8
-C5.4 6.8,5.6 4.7,7.2 3.7
-C8.6 2.9,9.6 3.4,10.4 4.8
-C10.9 3.0,12.2 2.0,14.0 2.0
-C15.8 2.0,17.1 3.0,17.6 4.8
-C18.4 3.4,19.4 2.9,20.8 3.7
-C22.4 4.7,22.6 6.8,20.8 8.8
-C19.9 9.9,18.7 10.2,17.6 9.9
-C17.9 10.7,18.0 11.6,17.8 12.6
-C17.3 15.6,14.9 18.0,12.0 20.5
-C9.1 18.0,6.7 15.6,6.2 12.6
-C6.0 11.6,6.1 10.7,6.4 9.9
-C5.3 10.2,4.1 9.9,7.2 8.8
-Z
-"
-fill={on ? fillOn : "none"}
-stroke={stroke}
-strokeWidth="2.2"
-strokeLinejoin="round"
-/>
-</svg>
-);
-}
-
 export default function FeedPage() {
 const supabase = useMemo(() => getSupabase(), []);
 const searchParams = useSearchParams();
@@ -97,7 +55,6 @@ const [myUserId, setMyUserId] = useState<string | null>(null);
 const [posts, setPosts] = useState<PostRow[]>([]);
 const [text, setText] = useState("");
 
-// upload state
 const [file, setFile] = useState<File | null>(null);
 const [uploading, setUploading] = useState(false);
 
@@ -119,16 +76,13 @@ const [busyPostId, setBusyPostId] = useState<number | null>(null);
 
 const [banner, setBanner] = useState<string | null>(null);
 
-// sparkle animation trigger per post
 const [spark, setSpark] = useState<Record<number, boolean>>({});
 
-// lightbox viewer
 const [viewer, setViewer] = useState<{
 url: string;
 type: "image" | "video";
 } | null>(null);
 
-// ✅ focus/highlight support for notifications → /feed?focusPost=123
 const [focusPostId, setFocusPostId] = useState<number | null>(null);
 const [flashPostId, setFlashPostId] = useState<number | null>(null);
 const flashTimerRef = useRef<number | null>(null);
@@ -140,14 +94,11 @@ searchParams?.get("focusPost") || searchParams?.get("postId") || null;
 const n = raw ? Number(raw) : NaN;
 
 if (Number.isFinite(n) && n > 0) {
-// 🔥 KEY: allow auto-scroll to run again on every new focusPost
 didAutoScrollRef.current = false;
-
 setFocusPostId(n);
 } else {
 setFocusPostId(null);
 }
-// eslint-disable-next-line react-hooks/exhaustive-deps
 }, [searchParams?.toString()]);
 
 async function refreshAuth() {
@@ -212,8 +163,7 @@ const { data, error } = await supabase
 .eq("id", focusId)
 .maybeSingle();
 
-if (error) return;
-if (!data) return;
+if (error || !data) return;
 
 const p = data as PostRow;
 
@@ -258,8 +208,7 @@ for (const p of rows) byId.set(p.id, p);
 
 return Array.from(byId.values()).sort(
 (a, b) =>
-new Date(b.created_at).getTime() -
-new Date(a.created_at).getTime()
+new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
 );
 });
 
@@ -285,7 +234,6 @@ useEffect(() => {
 await refreshAuth();
 await loadPosts();
 })();
-// eslint-disable-next-line react-hooks/exhaustive-deps
 }, []);
 
 useEffect(() => {
@@ -310,7 +258,6 @@ setFlashPostId(null);
 }
 }, 60);
 })();
-// eslint-disable-next-line react-hooks/exhaustive-deps
 }, [focusPostId, posts.length]);
 
 function triggerSpark(postId: number) {
@@ -348,14 +295,12 @@ setBusyPostId(null);
 return;
 }
 
-// Try to like (insert)
 const { error: insErr } = await supabase.from("post_likes").insert({
 post_id: postId,
 user_id: uid,
 });
 
 if (!insErr) {
-// liked
 setLikedByMe((m) => ({ ...m, [postId]: true }));
 setLikeCounts((m) => ({ ...m, [postId]: (m[postId] ?? 0) + 1 }));
 triggerSpark(postId);
@@ -363,12 +308,15 @@ setBusyPostId(null);
 return;
 }
 
-// If it already exists, treat as "unlike"
 const isConflict =
 (insErr as any)?.status === 409 ||
 (insErr as any)?.code === "23505" ||
-String((insErr as any)?.message || "").toLowerCase().includes("duplicate") ||
-String((insErr as any)?.message || "").toLowerCase().includes("unique");
+String((insErr as any)?.message || "")
+.toLowerCase()
+.includes("duplicate") ||
+String((insErr as any)?.message || "")
+.toLowerCase()
+.includes("unique");
 
 if (isConflict) {
 const { error: delErr } = await supabase
@@ -383,18 +331,16 @@ setBusyPostId(null);
 return;
 }
 
-// unliked
 setLikedByMe((m) => ({ ...m, [postId]: false }));
-setLikeCounts((m) => ({ ...m, [postId]: Math.max(0, (m[postId] ?? 0) - 1) }));
+setLikeCounts((m) => ({
+...m,
+[postId]: Math.max(0, (m[postId] ?? 0) - 1),
+}));
 setBusyPostId(null);
 return;
 }
 
-// real error
 setBanner(insErr.message);
-setBusyPostId(null);
-return;
-
 setBusyPostId(null);
 }
 
@@ -498,7 +444,9 @@ return p?.username ? `@${p.username}` : "";
 async function uploadToStorage(uid: string, f: File) {
 const isImage = f.type.startsWith("image/");
 const isVideo = f.type.startsWith("video/");
-if (!isImage && !isVideo) throw new Error("Please choose an image or video.");
+if (!isImage && !isVideo) {
+throw new Error("Please choose an image or video.");
+}
 
 const maxMb = isVideo ? 60 : 15;
 if (f.size > maxMb * 1024 * 1024) {
@@ -634,8 +582,8 @@ background: "rgba(0,0,0,0.5)",
 }
 
 if (isImage) {
-// eslint-disable-next-line @next/next/no-img-element
 return (
+// eslint-disable-next-line @next/next/no-img-element
 <img
 src={p.media_url}
 alt=""
@@ -664,11 +612,6 @@ return (
 45% { transform: scale(1.22); }
 100% { transform: scale(1); }
 }
-@keyframes sparkBurst {
-0% { transform: scale(0.3); opacity: 0; }
-25% { opacity: 1; }
-100% { transform: scale(1.35); opacity: 0; }
-}
 @keyframes focusGlow {
 0% { box-shadow: 0 0 0 rgba(192,38,211,0.0); }
 35% { box-shadow: 0 0 34px rgba(192,38,211,0.45); }
@@ -695,7 +638,6 @@ fontSize: 13,
 </div>
 ) : null}
 
-{/* Composer */}
 <div
 style={{
 background: "rgba(0,0,0,0.55)",
@@ -717,7 +659,6 @@ resize: "none",
 }}
 />
 
-{/* upload row */}
 <div
 style={{
 display: "flex",
@@ -767,13 +708,16 @@ maxWidth: 260,
 
 <div style={{ flex: 1 }} />
 
-<button onClick={submitPost} disabled={posting || uploading} style={postBtn}>
+<button
+onClick={submitPost}
+disabled={posting || uploading}
+style={postBtn}
+>
 {uploading ? "Uploading…" : posting ? "Posting…" : "Post"}
 </button>
 </div>
 </div>
 
-{/* Feed */}
 <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
 {posts.map((p) => {
 const spanks = likeCounts[p.id] ?? 0;
@@ -794,11 +738,12 @@ style={{
 border: isFocused
 ? "1px solid rgba(192,38,211,0.65)"
 : cardStyle.border,
-boxShadow: isFocused ? "0 0 34px rgba(192,38,211,0.35)" : undefined,
+boxShadow: isFocused
+? "0 0 34px rgba(192,38,211,0.35)"
+: undefined,
 animation: isFocused ? "focusGlow 1.25s ease" : undefined,
 }}
 >
-{/* Author + time */}
 <div
 style={{
 display: "flex",
@@ -806,7 +751,9 @@ justifyContent: "space-between",
 marginBottom: 8,
 }}
 >
-<div style={{ display: "flex", gap: 10, alignItems: "baseline" }}>
+<div
+style={{ display: "flex", gap: 10, alignItems: "baseline" }}
+>
 <div style={{ fontWeight: 850, opacity: 0.95 }}>
 {authorName(p.user_id)}
 </div>
@@ -841,10 +788,8 @@ Delete
 </div>
 </div>
 
-{/* Media */}
 {renderMedia(p)}
 
-{/* Text */}
 {p.body ? (
 <div
 style={{
@@ -857,7 +802,6 @@ whiteSpace: "pre-wrap",
 </div>
 ) : null}
 
-{/* Actions */}
 <div
 style={{
 display: "flex",
@@ -866,74 +810,67 @@ marginTop: 12,
 alignItems: "center",
 }}
 >
-<div
+<button
 onClick={() => !isBusy && toggleSpank(p.id)}
+disabled={isBusy}
 style={{
+...pillBtn,
 display: "flex",
 alignItems: "center",
 gap: 8,
-cursor: isBusy ? "default" : "pointer",
-userSelect: "none",
 opacity: isBusy ? 0.6 : 1,
-padding: "6px 8px",
-borderRadius: 12,
+animation: spark[p.id] ? "unboundPop .22s ease" : undefined,
+color: iSpanked ? "#e879f9" : "white",
+border: iSpanked
+? "1px solid rgba(192,38,211,0.55)"
+: "1px solid rgba(180,120,255,0.25)",
+background: iSpanked
+? "rgba(192,38,211,0.16)"
+: "rgba(0,0,0,0.35)",
 }}
 title="Spank"
 >
-<div
-style={{
-position: "relative",
-width: 22,
-height: 22,
-animation: spark[p.id] ? "unboundPop .22s ease" : undefined,
-}}
->
-<UnboundSpankIcon on={iSpanked} />
-
-{spark[p.id] ? (
-<div
-style={{
-position: "absolute",
-inset: -6,
-borderRadius: 999,
-border: "2px solid rgba(192,38,211,0.55)",
-boxShadow: "0 0 14px rgba(192,38,211,0.45)",
-animation: "sparkBurst .26s ease-out",
-pointerEvents: "none",
-}}
-/>
-) : null}
-</div>
-
 <span
 style={{
-fontWeight: 650,
-color: iSpanked ? "#e879f9" : "rgba(255,255,255,0.85)",
+fontSize: 18,
+lineHeight: 1,
+display: "inline-flex",
 }}
 >
-Spank{spanks ? ` · ${spanks}` : ""}
+{iSpanked ? "♥" : "♡"}
 </span>
-</div>
+
+<span>
+{iSpanked ? "Spanked" : "Spank"}
+{spanks ? ` · ${spanks}` : ""}
+</span>
+</button>
 
 <button onClick={() => openCommentsFor(p.id)} style={pillBtn}>
 Comments {comments ? `· ${comments}` : ""}
 </button>
 </div>
 
-{/* Comments panel */}
 {isOpen ? (
 <div style={{ marginTop: 12 }}>
 <div style={{ display: "flex", gap: 10 }}>
 <input
 value={commentDraft[p.id] ?? ""}
 onChange={(e) =>
-setCommentDraft((m) => ({ ...m, [p.id]: e.target.value }))
+setCommentDraft((m) => ({
+...m,
+[p.id]: e.target.value,
+}))
 }
 placeholder="Write a comment…"
 style={{ ...inputStyle, flex: 1 }}
 />
 
-<button onClick={() => addComment(p.id)} disabled={isBusy} style={postBtn}>
+<button
+onClick={() => addComment(p.id)}
+disabled={isBusy}
+style={postBtn}
+>
 {isBusy ? "…" : "Send"}
 </button>
 </div>
@@ -983,7 +920,6 @@ No comments yet.
 })}
 </div>
 
-{/* Optional lightbox */}
 {viewer ? (
 <div
 onClick={() => setViewer(null)}
@@ -1010,12 +946,22 @@ padding: 12,
 >
 {viewer.type === "image" ? (
 // eslint-disable-next-line @next/next/no-img-element
-<img src={viewer.url} alt="" style={{ width: "100%", borderRadius: 12 }} />
+<img
+src={viewer.url}
+alt=""
+style={{ width: "100%", borderRadius: 12 }}
+/>
 ) : (
-<video src={viewer.url} controls style={{ width: "100%", borderRadius: 12 }} />
+<video
+src={viewer.url}
+controls
+style={{ width: "100%", borderRadius: 12 }}
+/>
 )}
 
-<div style={{ display: "flex", justifyContent: "flex-end", marginTop: 10 }}>
+<div
+style={{ display: "flex", justifyContent: "flex-end", marginTop: 10 }}
+>
 <button onClick={() => setViewer(null)} style={pillBtn}>
 Close
 </button>

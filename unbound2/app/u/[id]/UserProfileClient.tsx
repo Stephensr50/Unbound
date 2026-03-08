@@ -2,31 +2,21 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { createClient } from "@supabase/supabase-js";
-import PublicProfileActions from "./PublicProfileActions";
-import PostActions from "../../components/PostActions";
-
-type ProfileRow = {
-id: string;
-username: string | null;
-display_name: string | null;
-bio: string | null;
-avatar_url: string | null;
-};
 
 type PostRow = {
 id: number;
 user_id: string;
 body: string | null;
-kind: string;
+kind: string | null;
 created_at: string;
-media_url: string | null;
-media_type: string | null;
+media_url?: string | null;
+image_url?: string | null;
+file_url?: string | null;
 };
 
 function getSupabase() {
-const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-if (!url || !key) throw new Error("Missing NEXT_PUBLIC_SUPABASE env vars");
+const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
 return createClient(url, key);
 }
 
@@ -41,220 +31,284 @@ if (s < 86400) return `${Math.floor(s / 3600)}h`;
 return `${Math.floor(s / 86400)}d`;
 }
 
-export default function UserProfileClient({ profile }: { profile: ProfileRow }) {
+export default function ProfileFeedClient() {
 const supabase = useMemo(() => getSupabase(), []);
 
+const [myUserId, setMyUserId] = useState<string | null>(null);
 const [posts, setPosts] = useState<PostRow[]>([]);
-const [loading, setLoading] = useState(true);
-const [err, setErr] = useState<string | null>(null);
+const [banner, setBanner] = useState<string | null>(null);
 
-useEffect(() => {
-let cancelled = false;
+const [likeCounts, setLikeCounts] = useState<Record<number, number>>({});
+const [commentCounts, setCommentCounts] = useState<Record<number, number>>({});
+const [likedByMe, setLikedByMe] = useState<Record<number, boolean>>({});
+const [busyPostId, setBusyPostId] = useState<number | null>(null);
+const [spark, setSpark] = useState<Record<number, boolean>>({});
 
-(async () => {
-try {
-setLoading(true);
-setErr(null);
+async function refreshAuth() {
+const { data } = await supabase.auth.getSession();
+const uid = data.session?.user?.id ?? null;
+setMyUserId(uid);
+return uid;
+}
+
+async function loadCounts(postIds: number[], uid: string | null) {
+if (!postIds.length) {
+setLikeCounts({});
+setLikedByMe({});
+setCommentCounts({});
+return;
+}
+
+const { data: likeRows, error: likeErr } = await supabase
+.from("post_likes")
+.select("post_id,user_id")
+.in("post_id", postIds);
+
+if (likeErr) {
+setBanner(likeErr.message);
+return;
+}
+
+const lc: Record<number, number> = {};
+const lbm: Record<number, boolean> = {};
+
+for (const r of likeRows ?? []) {
+const pid = (r as any).post_id as number;
+const likerId = (r as any).user_id as string;
+lc[pid] = (lc[pid] ?? 0) + 1;
+if (uid && likerId === uid) lbm[pid] = true;
+}
+
+const { data: commentRows, error: commentErr } = await supabase
+.from("post_comments")
+.select("post_id")
+.in("post_id", postIds);
+
+if (commentErr) {
+setLikeCounts(lc);
+setLikedByMe(lbm);
+setCommentCounts({});
+return;
+}
+
+const cc: Record<number, number> = {};
+for (const r of commentRows ?? []) {
+const pid = (r as any).post_id as number;
+cc[pid] = (cc[pid] ?? 0) + 1;
+}
+
+setLikeCounts(lc);
+setLikedByMe(lbm);
+setCommentCounts(cc);
+}
+
+async function loadMyPosts(uid: string) {
+setBanner(null);
 
 const { data, error } = await supabase
 .from("posts")
 .select("id,user_id,body,kind,created_at,media_url,media_type")
-.eq("user_id", profile.id)
+.eq("user_id", uid)
 .order("created_at", { ascending: false })
 .limit(50);
 
-if (error) throw error;
-if (!cancelled) setPosts((data ?? []) as PostRow[]);
-} catch (e: any) {
-if (!cancelled) setErr(String(e?.message || e));
-} finally {
-if (!cancelled) setLoading(false);
+if (error) {
+setBanner(error.message);
+setPosts([]);
+return;
 }
+
+const rows = (data ?? []) as PostRow[];
+setPosts(rows);
+await loadCounts(
+rows.map((p) => p.id),
+myUserId ?? uid
+);
+}
+
+useEffect(() => {
+(async () => {
+const uid = await refreshAuth();
+if (!uid) {
+setBanner("Not signed in.");
+setPosts([]);
+return;
+}
+await loadMyPosts(uid);
 })();
+// eslint-disable-next-line react-hooks/exhaustive-deps
+}, []);
 
-return () => {
-cancelled = true;
-};
-}, [supabase, profile.id]);
+function triggerSpark(postId: number) {
+setSpark((m) => ({ ...m, [postId]: true }));
+window.setTimeout(() => {
+setSpark((m) => ({ ...m, [postId]: false }));
+}, 260);
+}
 
-const wrap: React.CSSProperties = {
-width: "min(920px, 94vw)",
-margin: "22px auto 40px",
-color: "white",
-};
+async function toggleSpank(postId: number) {
+const uid = myUserId ?? (await refreshAuth());
+if (!uid) return;
 
-const panel: React.CSSProperties = {
+if (busyPostId) return;
+setBusyPostId(postId);
+
+const already = !!likedByMe[postId];
+
+if (already) {
+const { error } = await supabase
+.from("post_likes")
+.delete()
+.eq("post_id", postId)
+.eq("user_id", uid);
+
+if (error) {
+setBanner(error.message);
+setBusyPostId(null);
+return;
+}
+
+setLikedByMe((m) => ({ ...m, [postId]: false }));
+setLikeCounts((m) => ({
+...m,
+[postId]: Math.max(0, (m[postId] ?? 0) - 1),
+}));
+setBusyPostId(null);
+return;
+}
+
+const { error: insErr } = await supabase.from("post_likes").insert({
+post_id: postId,
+user_id: uid,
+});
+
+if (!insErr) {
+setLikedByMe((m) => ({ ...m, [postId]: true }));
+setLikeCounts((m) => ({ ...m, [postId]: (m[postId] ?? 0) + 1 }));
+triggerSpark(postId);
+setBusyPostId(null);
+return;
+}
+
+const isConflict =
+(insErr as any)?.status === 409 ||
+(insErr as any)?.code === "23505" ||
+String((insErr as any)?.message || "").toLowerCase().includes("duplicate") ||
+String((insErr as any)?.message || "").toLowerCase().includes("unique");
+
+if (isConflict) {
+const { error: delErr } = await supabase
+.from("post_likes")
+.delete()
+.eq("post_id", postId)
+.eq("user_id", uid);
+
+if (delErr) {
+setBanner(delErr.message);
+setBusyPostId(null);
+return;
+}
+
+setLikedByMe((m) => ({ ...m, [postId]: false }));
+setLikeCounts((m) => ({
+...m,
+[postId]: Math.max(0, (m[postId] ?? 0) - 1),
+}));
+setBusyPostId(null);
+return;
+}
+
+setBanner(insErr.message);
+setBusyPostId(null);
+}
+
+const card: React.CSSProperties = {
 background: "rgba(0,0,0,0.55)",
-border: "1px solid rgba(180,120,255,0.18)",
-borderRadius: 18,
-padding: 18,
-boxShadow: "0 0 24px rgba(0,0,0,0.35)",
-};
-
-const headerRow: React.CSSProperties = {
-display: "flex",
-gap: 18,
-alignItems: "center",
-};
-
-const avatar: React.CSSProperties = {
-width: 86,
-height: 86,
-borderRadius: 12,
-objectFit: "cover",
-border: "1px solid rgba(180,120,255,0.22)",
-boxShadow: "0 0 18px rgba(192,38,211,0.18)",
-background: "rgba(0,0,0,0.4)",
-flex: "0 0 auto",
-};
-
-const nameStyle: React.CSSProperties = {
-fontSize: 40,
-fontWeight: 900,
-letterSpacing: 0.2,
-lineHeight: 1.05,
-textShadow: "0 0 22px rgba(192,38,211,0.20)",
-};
-
-const bioStyle: React.CSSProperties = {
-marginTop: 10,
-opacity: 0.9,
-fontSize: 15,
-lineHeight: 1.45,
-maxWidth: 740,
-};
-
-const divider: React.CSSProperties = {
-height: 1,
-background: "linear-gradient(90deg, rgba(180,120,255,0.0), rgba(180,120,255,0.28), rgba(180,120,255,0.0))",
-margin: "16px 0 14px",
-};
-
-const postsPanel: React.CSSProperties = {
-...panel,
-marginTop: 14,
-};
-
-const postCard: React.CSSProperties = {
-background: "rgba(0,0,0,0.35)",
-border: "1px solid rgba(180,120,255,0.14)",
+border: "1px solid rgba(180,120,255,0.16)",
 borderRadius: 16,
 padding: 14,
 };
 
-const renderMedia = (p: PostRow) => {
-if (!p.media_url) return null;
-
-const isVideo =
-(p.media_type && p.media_type.startsWith("video/")) || p.kind === "video";
-const isImage =
-(p.media_type && p.media_type.startsWith("image/")) || p.kind === "image";
-
-if (isVideo) {
-return (
-<video
-src={p.media_url}
-controls
-style={{
+const mediaStyle: React.CSSProperties = {
 width: "100%",
 borderRadius: 14,
-border: "1px solid rgba(180,120,255,0.14)",
-marginBottom: 10,
-maxHeight: 520,
-background: "rgba(0,0,0,0.5)",
-}}
-/>
-);
-}
-
-if (isImage) {
-// eslint-disable-next-line @next/next/no-img-element
-return (
-<img
-src={p.media_url}
-alt=""
-style={{
-width: "100%",
-borderRadius: 14,
-border: "1px solid rgba(180,120,255,0.14)",
-marginBottom: 10,
+marginTop: 12,
+border: "1px solid rgba(180,120,255,0.16)",
+display: "block",
+maxHeight: 560,
 objectFit: "cover",
-maxHeight: 620,
-}}
-/>
-);
-}
+};
 
-return null;
+const pillBtn: React.CSSProperties = {
+padding: "8px 14px",
+borderRadius: 999,
+border: "1px solid rgba(180,120,255,0.25)",
+background: "rgba(0,0,0,0.35)",
+color: "white",
+cursor: "pointer",
+fontWeight: 650,
 };
 
 return (
-<div style={wrap}>
-{/* Top profile panel */}
-<div style={panel}>
-<div style={headerRow}>
-{/* eslint-disable-next-line @next/next/no-img-element */}
-<img
-src={profile.avatar_url || "/default-avatar.png"}
-alt=""
-style={avatar}
-/>
+<div style={{ width: "min(920px, 94vw)", margin: "16px auto 0" }}>
+<style>{`
+@keyframes unboundPop {
+0% { transform: scale(1); }
+45% { transform: scale(1.22); }
+100% { transform: scale(1); }
+}
+`}</style>
 
-<div style={{ flex: 1, minWidth: 0 }}>
-<div style={nameStyle}>
-{profile.display_name || profile.username || "Profile"}
-</div>
-
-{profile.username ? (
-<div style={{ marginTop: 6, opacity: 0.65, fontSize: 13 }}>
-@{profile.username}
-</div>
-) : null}
-
-{profile.bio ? <div style={bioStyle}>{profile.bio}</div> : null}
-
-{/* ✅ ACTIONS BAR — ALWAYS UNDER BIO */}
-<div style={{ marginTop: 14 }}>
-<PublicProfileActions targetProfileId={profile.id} />
-</div>
-</div>
-</div>
-</div>
-
-{/* Posts */}
-<div style={postsPanel}>
-<div style={{ fontSize: 22, fontWeight: 900, marginBottom: 10 }}>
-Posts
-</div>
-
-{err ? (
+{banner ? (
 <div
 style={{
-padding: 12,
+marginBottom: 12,
+padding: 10,
 borderRadius: 14,
-background: "rgba(120,0,0,0.28)",
+background: "rgba(120,0,0,0.35)",
 border: "1px solid rgba(255,80,80,0.35)",
 color: "rgba(255,220,220,0.95)",
 fontSize: 13,
 }}
 >
-{err}
+{banner}
 </div>
 ) : null}
 
-{loading ? (
-<div style={{ opacity: 0.7, padding: 10 }}>Loading…</div>
-) : posts.length === 0 ? (
-<div style={{ opacity: 0.7, padding: 10 }}>No posts yet.</div>
-) : (
-<div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-{posts.map((p) => (
-<div key={p.id} style={postCard}>
-<div style={{ opacity: 0.65, fontSize: 12, marginBottom: 8 }}>
+<div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+{posts.map((p) => {
+const media = p.media_url ?? p.image_url ?? p.file_url ?? null;
+
+const isVideo =
+(p.kind ?? "").toLowerCase().includes("video") ||
+(!!media && /\.(mp4|webm|mov)(\?|$)/i.test(media));
+
+const isPhoto =
+(p.kind ?? "").toLowerCase().includes("photo") ||
+(p.kind ?? "").toLowerCase().includes("image") ||
+(!!media && /\.(jpg|jpeg|png|gif|webp)(\?|$)/i.test(media));
+
+const spanks = likeCounts[p.id] ?? 0;
+const comments = commentCounts[p.id] ?? 0;
+const iSpanked = !!likedByMe[p.id];
+const isBusy = busyPostId === p.id;
+
+return (
+<div key={p.id} style={card}>
+<div
+style={{
+display: "flex",
+justifyContent: "space-between",
+marginBottom: 8,
+}}
+>
+<div style={{ opacity: 0.65, fontSize: 12 }}>
 {timeAgo(p.created_at)}
 </div>
-
-{renderMedia(p)}
+<div style={{ opacity: 0.55, fontSize: 12 }}>
+@{/* wire username later */}robby_78
+</div>
+</div>
 
 {p.body ? (
 <div style={{ fontSize: 16, lineHeight: 1.4, whiteSpace: "pre-wrap" }}>
@@ -262,13 +316,72 @@ fontSize: 13,
 </div>
 ) : null}
 
-<PostActions postId={p.id} />
-</div>
-))}
-</div>
-)}
+{media && (isPhoto || isVideo) ? (
+isVideo ? (
+<video src={media} controls style={mediaStyle} />
+) : (
+// eslint-disable-next-line @next/next/no-img-element
+<img src={media} alt="" style={mediaStyle} />
+)
+) : null}
 
-<div style={divider} />
+<div
+style={{
+display: "flex",
+gap: 14,
+marginTop: 12,
+alignItems: "center",
+}}
+>
+<button
+onClick={() => !isBusy && toggleSpank(p.id)}
+disabled={isBusy}
+style={{
+...pillBtn,
+display: "flex",
+alignItems: "center",
+gap: 8,
+opacity: isBusy ? 0.6 : 1,
+animation: spark[p.id] ? "unboundPop .22s ease" : undefined,
+color: iSpanked ? "#e879f9" : "white",
+border: iSpanked
+? "1px solid rgba(192,38,211,0.55)"
+: "1px solid rgba(180,120,255,0.25)",
+background: iSpanked
+? "rgba(192,38,211,0.16)"
+: "rgba(0,0,0,0.35)",
+}}
+title="Spank"
+>
+<span
+style={{
+fontSize: 18,
+lineHeight: 1,
+display: "inline-flex",
+}}
+>
+{iSpanked ? "♥" : "♡"}
+</span>
+
+<span>
+{iSpanked ? "Spanked" : "Spank"}
+{spanks ? ` · ${spanks}` : ""}
+</span>
+</button>
+
+<button style={pillBtn}>
+Comments {comments ? `· ${comments}` : ""}
+</button>
+</div>
+</div>
+);
+})}
+
+{posts.length === 0 ? (
+<div style={{ opacity: 0.65, fontSize: 13, padding: 8 }}>
+No posts yet.
+</div>
+) : null}
 </div>
 </div>
 );
