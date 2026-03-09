@@ -2,6 +2,16 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { createClient } from "@supabase/supabase-js";
+import PublicProfileActions from "./PublicProfileActions";
+
+type ProfileRow = {
+id: string;
+username: string | null;
+display_name: string | null;
+bio: string | null;
+avatar_url: string | null;
+location?: string | null;
+};
 
 type PostRow = {
 id: number;
@@ -31,7 +41,7 @@ if (s < 86400) return `${Math.floor(s / 3600)}h`;
 return `${Math.floor(s / 86400)}d`;
 }
 
-export default function ProfileFeedClient() {
+export default function UserProfileClient({ profile }: { profile: ProfileRow }) {
 const supabase = useMemo(() => getSupabase(), []);
 
 const [myUserId, setMyUserId] = useState<string | null>(null);
@@ -102,13 +112,13 @@ setLikedByMe(lbm);
 setCommentCounts(cc);
 }
 
-async function loadMyPosts(uid: string) {
+async function loadProfilePosts(targetUserId: string, viewerId: string | null) {
 setBanner(null);
 
 const { data, error } = await supabase
 .from("posts")
 .select("id,user_id,body,kind,created_at,media_url,media_type")
-.eq("user_id", uid)
+.eq("user_id", targetUserId)
 .order("created_at", { ascending: false })
 .limit(50);
 
@@ -122,22 +132,17 @@ const rows = (data ?? []) as PostRow[];
 setPosts(rows);
 await loadCounts(
 rows.map((p) => p.id),
-myUserId ?? uid
+viewerId
 );
 }
 
 useEffect(() => {
 (async () => {
 const uid = await refreshAuth();
-if (!uid) {
-setBanner("Not signed in.");
-setPosts([]);
-return;
-}
-await loadMyPosts(uid);
+await loadProfilePosts(profile.id, uid);
 })();
 // eslint-disable-next-line react-hooks/exhaustive-deps
-}, []);
+}, [profile.id]);
 
 function triggerSpark(postId: number) {
 setSpark((m) => ({ ...m, [postId]: true }));
@@ -249,6 +254,14 @@ cursor: "pointer",
 fontWeight: 650,
 };
 
+const profileCard: React.CSSProperties = {
+background: "rgba(0,0,0,0.50)",
+border: "1px solid rgba(180,120,255,0.16)",
+borderRadius: 18,
+padding: 18,
+marginBottom: 18,
+};
+
 return (
 <div style={{ width: "min(920px, 94vw)", margin: "16px auto 0" }}>
 <style>{`
@@ -274,6 +287,73 @@ fontSize: 13,
 {banner}
 </div>
 ) : null}
+
+<div style={profileCard}>
+<div
+style={{
+display: "flex",
+gap: 16,
+alignItems: "flex-start",
+flexWrap: "wrap",
+}}
+>
+{profile.avatar_url ? (
+// eslint-disable-next-line @next/next/no-img-element
+<img
+src={profile.avatar_url}
+alt=""
+style={{
+width: 104,
+height: 104,
+borderRadius: 18,
+objectFit: "cover",
+border: "1px solid rgba(255,255,255,0.16)",
+flex: "0 0 auto",
+}}
+/>
+) : (
+<div
+style={{
+width: 104,
+height: 104,
+borderRadius: 18,
+display: "grid",
+placeItems: "center",
+border: "1px solid rgba(255,255,255,0.16)",
+background: "rgba(255,255,255,0.04)",
+opacity: 0.7,
+flex: "0 0 auto",
+}}
+>
+?
+</div>
+)}
+
+<div style={{ flex: 1, minWidth: 220 }}>
+<div style={{ fontSize: 24, fontWeight: 850 }}>
+{profile.display_name || profile.username || "Unknown"}
+</div>
+
+{profile.username ? (
+<div style={{ opacity: 0.85, marginTop: 4 }}>@{profile.username}</div>
+) : null}
+
+{profile.location ? (
+<div style={{ opacity: 0.85, marginTop: 6 }}>{profile.location}</div>
+) : null}
+
+{profile.bio ? (
+<div style={{ opacity: 0.95, marginTop: 10, whiteSpace: "pre-wrap" }}>
+{profile.bio}
+</div>
+) : null}
+
+<div style={{ marginTop: 14 }}>
+<PublicProfileActions targetProfileId={profile.id} />
+</div>
+</div>
+</div>
+</div>
 
 <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
 {posts.map((p) => {
@@ -306,7 +386,7 @@ marginBottom: 8,
 {timeAgo(p.created_at)}
 </div>
 <div style={{ opacity: 0.55, fontSize: 12 }}>
-@{/* wire username later */}robby_78
+{profile.username ? `@${profile.username}` : ""}
 </div>
 </div>
 
