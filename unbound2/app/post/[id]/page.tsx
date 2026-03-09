@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { createClient } from "@supabase/supabase-js";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 
@@ -46,52 +46,11 @@ if (s < 86400) return `${Math.floor(s / 3600)}h`;
 return `${Math.floor(s / 86400)}d`;
 }
 
-function UnboundSpankIcon({ on }: { on: boolean }) {
-const stroke = "rgba(255,255,255,0.95)";
-const fillOn = "rgba(192,38,211,0.92)";
-
-return (
-<svg
-width="24"
-height="24"
-viewBox="0 0 24 24"
-style={{
-filter: on
-? "drop-shadow(0 0 12px rgba(192,38,211,.9))"
-: "drop-shadow(0 0 6px rgba(255,255,255,.12))",
-transition: "all .16s ease",
-}}
->
-<path
-d="
-M7.2 8.8
-C5.4 6.8,5.6 4.7,7.2 3.7
-C8.6 2.9,9.6 3.4,10.4 4.8
-C10.9 3.0,12.2 2.0,14.0 2.0
-C15.8 2.0,17.1 3.0,17.6 4.8
-C18.4 3.4,19.4 2.9,20.8 3.7
-C22.4 4.7,22.6 6.8,20.8 8.8
-C19.9 9.9,18.7 10.2,17.6 9.9
-C17.9 10.7,18.0 11.6,17.8 12.6
-C17.3 15.6,14.9 18.0,12.0 20.5
-C9.1 18.0,6.7 15.6,6.2 12.6
-C6.0 11.6,6.1 10.7,6.4 9.9
-C5.3 10.2,4.1 9.9,7.2 8.8
-Z
-"
-fill={on ? fillOn : "none"}
-stroke={stroke}
-strokeWidth="2.2"
-strokeLinejoin="round"
-/>
-</svg>
-);
-}
-
 export default function PostPage() {
 const supabase = useMemo(() => getSupabase(), []);
 const params = useParams();
 const router = useRouter();
+const searchParams = useSearchParams();
 
 const postId = useMemo(() => {
 const raw = typeof params?.id === "string" ? params.id : "";
@@ -113,11 +72,10 @@ const [openComments, setOpenComments] = useState(true);
 const [comments, setComments] = useState<CommentRow[]>([]);
 const [draft, setDraft] = useState("");
 const [busy, setBusy] = useState(false);
- const searchParams = useSearchParams();
+const [spark, setSpark] = useState(false);
 
-// highlight/flash support (ex: /post/38?flash=1 or ?flash=8000)
 const [flashOn, setFlashOn] = useState(false);
-const flashTimerRef = useMemo<{ id: number | null }>(() => ({ id: null }), []);
+const flashTimerRef = useRef<number | null>(null);
 
 async function refreshAuth() {
 const { data } = await supabase.auth.getSession();
@@ -131,7 +89,6 @@ setBanner(null);
 
 const uid = await refreshAuth();
 
-// post
 const { data: p, error: pErr } = await supabase
 .from("posts")
 .select("id,user_id,body,kind,created_at,media_url,media_type")
@@ -150,7 +107,6 @@ return;
 const postRow = p as PostRow;
 setPost(postRow);
 
-// author profile
 if (postRow.user_id) {
 const { data: prof } = await supabase
 .from("profiles")
@@ -161,7 +117,6 @@ const { data: prof } = await supabase
 if (prof) setAuthor(prof as ProfileRow);
 }
 
-// likes (count + did I like)
 const { data: likeRows, error: likeErr } = await supabase
 .from("post_likes")
 .select("user_id")
@@ -176,7 +131,6 @@ const users = (likeRows ?? []).map((r: any) => String(r.user_id));
 setLikeCount(users.length);
 setLiked(!!uid && users.includes(uid));
 
-// comments (count + list)
 const { data: cRows, error: cErr } = await supabase
 .from("post_comments")
 .select("id,post_id,user_id,body,created_at")
@@ -203,6 +157,7 @@ return;
 void loadPostAndStuff(postId);
 // eslint-disable-next-line react-hooks/exhaustive-deps
 }, [postId]);
+
 useEffect(() => {
 const raw = searchParams?.get("flash");
 if (!raw) return;
@@ -211,17 +166,24 @@ const ms = raw === "1" ? 1600 : Math.max(200, Number(raw) || 1600);
 
 setFlashOn(true);
 
-if (flashTimerRef.id) window.clearTimeout(flashTimerRef.id);
-flashTimerRef.id = window.setTimeout(() => {
+if (flashTimerRef.current) window.clearTimeout(flashTimerRef.current);
+flashTimerRef.current = window.setTimeout(() => {
 setFlashOn(false);
 }, ms);
 
 return () => {
-if (flashTimerRef.id) window.clearTimeout(flashTimerRef.id);
-flashTimerRef.id = null;
+if (flashTimerRef.current) window.clearTimeout(flashTimerRef.current);
+flashTimerRef.current = null;
 };
-// eslint-disable-next-line react-hooks/exhaustive-deps
 }, [searchParams?.toString()]);
+
+function triggerSpark() {
+setSpark(true);
+window.setTimeout(() => {
+setSpark(false);
+}, 260);
+}
+
 async function toggleSpank() {
 if (!post) return;
 const uid = myUserId ?? (await refreshAuth());
@@ -253,11 +215,11 @@ user_id: uid,
 if (!insErr) {
 setLiked(true);
 setLikeCount((n) => n + 1);
+triggerSpark();
 setBusy(false);
 return;
 }
 
-// treat unique conflict as "already liked"
 const isConflict =
 (insErr as any)?.status === 409 ||
 (insErr as any)?.code === "23505" ||
@@ -359,8 +321,8 @@ background: "rgba(0,0,0,0.5)",
 }
 
 if (isImage) {
-// eslint-disable-next-line @next/next/no-img-element
 return (
+// eslint-disable-next-line @next/next/no-img-element
 <img
 src={p.media_url}
 alt=""
@@ -385,13 +347,19 @@ const authorHandle = author?.username ? `@${author.username}` : "";
 
 return (
 <div style={{ maxWidth: 720, margin: "0 auto", padding: 16 }}>
-    <style>{`
+<style>{`
 @keyframes focusGlow {
 0% { box-shadow: 0 0 0 rgba(192,38,211,0.0); }
 35% { box-shadow: 0 0 34px rgba(192,38,211,0.45); }
 100% { box-shadow: 0 0 0 rgba(192,38,211,0.0); }
 }
+@keyframes unboundPop {
+0% { transform: scale(1); }
+45% { transform: scale(1.22); }
+100% { transform: scale(1); }
+}
 `}</style>
+
 {banner ? (
 <div
 style={{
@@ -419,14 +387,15 @@ fontSize: 13,
 <div
 style={{
 background: "rgba(0,0,0,0.55)",
-border: flashOn ? "1px solid rgba(192,38,211,0.65)" : "1px solid rgba(255,255,255,0.08)",
+border: flashOn
+? "1px solid rgba(192,38,211,0.65)"
+: "1px solid rgba(255,255,255,0.08)",
 boxShadow: flashOn ? "0 0 34px rgba(192,38,211,0.35)" : undefined,
 animation: flashOn ? "focusGlow 1.25s ease" : undefined,
 borderRadius: 16,
 padding: 14,
 }}
 >
-{/* header */}
 <div
 style={{
 display: "flex",
@@ -444,17 +413,14 @@ marginBottom: 8,
 <div style={{ opacity: 0.55, fontSize: 12 }}>{authorHandle}</div>
 </div>
 
-{/* media */}
 {renderMedia(post)}
 
-{/* text */}
 {post.body ? (
 <div style={{ fontSize: 16, lineHeight: 1.4, whiteSpace: "pre-wrap" }}>
 {post.body}
 </div>
 ) : null}
 
-{/* actions */}
 <div
 style={{
 display: "flex",
@@ -463,37 +429,47 @@ marginTop: 12,
 alignItems: "center",
 }}
 >
-<div
+<button
 onClick={() => !busy && toggleSpank()}
+disabled={busy}
 style={{
+...pillBtn,
 display: "flex",
 alignItems: "center",
 gap: 8,
-cursor: busy ? "default" : "pointer",
-userSelect: "none",
 opacity: busy ? 0.6 : 1,
-padding: "6px 8px",
-borderRadius: 12,
+animation: spark ? "unboundPop .22s ease" : undefined,
+color: liked ? "#e879f9" : "white",
+border: liked
+? "1px solid rgba(192,38,211,0.55)"
+: "1px solid rgba(180,120,255,0.25)",
+background: liked
+? "rgba(192,38,211,0.16)"
+: "rgba(0,0,0,0.35)",
 }}
 title="Spank"
 >
-<UnboundSpankIcon on={liked} />
 <span
 style={{
-fontWeight: 650,
-color: liked ? "#e879f9" : "rgba(255,255,255,0.85)",
+fontSize: 18,
+lineHeight: 1,
+display: "inline-flex",
 }}
 >
-Spank{likeCount ? ` · ${likeCount}` : ""}
+{liked ? "♥" : "♡"}
 </span>
-</div>
+
+<span>
+{liked ? "Spanked" : "Spank"}
+{likeCount ? ` · ${likeCount}` : ""}
+</span>
+</button>
 
 <button onClick={() => setOpenComments((v) => !v)} style={pillBtn}>
 Comments {commentCount ? `· ${commentCount}` : ""}
 </button>
 </div>
 
-{/* comments */}
 {openComments ? (
 <div style={{ marginTop: 12 }}>
 <div style={{ display: "flex", gap: 10 }}>
