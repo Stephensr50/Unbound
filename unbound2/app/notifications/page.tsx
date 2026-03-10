@@ -25,11 +25,13 @@ type: string;
 entity_id: string | null;
 title: string | null;
 message: string | null;
+body: string | null;
 href: string | null;
+link: string | null;
+comment_id: string | null;
 read_at: string | null;
 created_at: string;
 
-// hydrated client-side
 actor?: ProfileMini | null;
 };
 
@@ -114,7 +116,7 @@ return;
 const { data, error } = await supabase
 .from("notifications")
 .select(
-"id,user_id,actor_id,type,entity_id,title,message,href,read_at,created_at"
+"id,user_id,actor_id,type,entity_id,title,message,body,href,link,comment_id,read_at,created_at"
 )
 .eq("user_id", uid)
 .order("created_at", { ascending: false })
@@ -139,14 +141,12 @@ async function markAllRead() {
 const uid = me ?? (await refreshMe());
 if (!uid) return;
 
-// set read_at for all unread notifications
 await supabase
 .from("notifications")
 .update({ read_at: new Date().toISOString() })
 .eq("user_id", uid)
 .is("read_at", null);
 
-// refresh list so styles update instantly
 await loadNotifications();
 }
 
@@ -156,19 +156,19 @@ await supabase
 .update({ read_at: new Date().toISOString() })
 .eq("id", id);
 
-// optimistic UI
 setRows((prev) =>
-prev.map((n) => (n.id === id ? { ...n, read_at: new Date().toISOString() } : n))
+prev.map((n) =>
+n.id === id ? { ...n, read_at: new Date().toISOString() } : n
+)
 );
 }
 
 function computeHref(n: NotifRow) {
-    if (n.type === "friend_request") return "/friend-requests";
 if (n.href) return n.href;
+if (n.link) return n.link;
 
+if (n.type === "friend_request") return "/friend-requests";
 
-
-// 🔥 OPEN POST IN ITS OWN PAGE
 if (n.type === "spank" || n.type === "comment") {
 const postId = Number(n.entity_id);
 if (Number.isFinite(postId) && postId > 0) {
@@ -176,22 +176,27 @@ return `/post/${postId}?flash=4000`;
 }
 }
 
-if (n.type === "friend_request") return "/friend-requests";
 if (n.type === "message") return "/messages";
 
 return null;
 }
+
 async function onClickNotif(n: NotifRow) {
 const href = computeHref(n);
-console.log("CLICK NOTIF:", { type: n.type, entity_id: n.entity_id, href, rawHref: (n as any).href });
+console.log("CLICK NOTIF:", {
+type: n.type,
+entity_id: n.entity_id,
+comment_id: n.comment_id,
+href,
+rawHref: n.href,
+rawLink: n.link,
+});
 
 if (href) router.push(href, { scroll: false });
 
-// don’t let a slow/blocked update prevent navigation
 markOneRead(n.id).catch((e) => console.error("markOneRead failed:", e));
 }
 
-// init
 useEffect(() => {
 (async () => {
 await refreshMe();
@@ -199,17 +204,14 @@ await refreshMe();
 // eslint-disable-next-line react-hooks/exhaustive-deps
 }, []);
 
-// load whenever we know "me"
 useEffect(() => {
 if (!me) return;
 loadNotifications();
 // eslint-disable-next-line react-hooks/exhaustive-deps
 }, [me]);
 
-// realtime: refresh list when notifications insert for *anyone* (we’ll filter client-side by user_id in query)
-// This works because your Supabase “publications” already include notifications.
 useEffect(() => {
-    if (subscribedRef.current) return;
+if (subscribedRef.current) return;
 subscribedRef.current = true;
 
 const ch = supabase
@@ -218,7 +220,6 @@ const ch = supabase
 "postgres_changes",
 { event: "INSERT", schema: "public", table: "notifications" },
 () => {
-// quick refresh
 loadNotifications();
 }
 )
@@ -357,15 +358,14 @@ if (n.type === "spank") return `${actorName} spanked your post`;
 if (n.type === "comment") return `${actorName} commented on your post`;
 if (n.type === "friend_request") return `${actorName} sent you a friend request`;
 if (n.type === "message") return `${actorName} messaged you`;
-return n.title || n.message || "Notification";
+return n.title || n.message || n.body || "Notification";
 }
 
 function buildSub(n: NotifRow) {
-// keep it short & clean
-if (n.type === "spank" || n.type === "comment") return "Tap to view notification";
-if (n.type === "friend_request") return "Tap to view notifications";
+if (n.type === "spank" || n.type === "comment") return "Tap to open post";
+if (n.type === "friend_request") return "Tap to open friend requests";
 if (n.type === "message") return "Tap to open messages";
-return n.message || "";
+return n.body || n.message || "";
 }
 
 const unreadCount = rows.filter((r) => !r.read_at).length;

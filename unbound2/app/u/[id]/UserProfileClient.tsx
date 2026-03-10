@@ -24,6 +24,14 @@ image_url?: string | null;
 file_url?: string | null;
 };
 
+type CommentRow = {
+id: number;
+post_id: number;
+user_id: string;
+body: string;
+created_at: string;
+};
+
 function getSupabase() {
 const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
@@ -53,6 +61,10 @@ const [commentCounts, setCommentCounts] = useState<Record<number, number>>({});
 const [likedByMe, setLikedByMe] = useState<Record<number, boolean>>({});
 const [busyPostId, setBusyPostId] = useState<number | null>(null);
 const [spark, setSpark] = useState<Record<number, boolean>>({});
+
+const [openComments, setOpenComments] = useState<Record<number, boolean>>({});
+const [commentsByPost, setCommentsByPost] = useState<Record<number, CommentRow[]>>({});
+const [commentDraft, setCommentDraft] = useState<Record<number, string>>({});
 
 async function refreshAuth() {
 const { data } = await supabase.auth.getSession();
@@ -227,6 +239,57 @@ setBanner(insErr.message);
 setBusyPostId(null);
 }
 
+async function openCommentsFor(postId: number) {
+setOpenComments((m) => ({ ...m, [postId]: !m[postId] }));
+
+if (commentsByPost[postId]) return;
+
+const { data, error } = await supabase
+.from("post_comments")
+.select("id,post_id,user_id,body,created_at")
+.eq("post_id", postId)
+.order("created_at", { ascending: true })
+.limit(50);
+
+if (error) {
+setBanner(error.message);
+return;
+}
+
+setCommentsByPost((m) => ({
+...m,
+[postId]: (data ?? []) as CommentRow[],
+}));
+}
+
+async function addComment(postId: number) {
+const uid = myUserId ?? (await refreshAuth());
+if (!uid) return;
+
+const body = (commentDraft[postId] ?? "").trim();
+if (!body) return;
+
+const { data, error } = await supabase
+.from("post_comments")
+.insert({ post_id: postId, user_id: uid, body })
+.select("id,post_id,user_id,body,created_at")
+.single();
+
+if (error) {
+setBanner(error.message);
+return;
+}
+
+setCommentsByPost((m) => ({
+...m,
+[postId]: [...(m[postId] ?? []), data as CommentRow],
+}));
+
+setCommentDraft((m) => ({ ...m, [postId]: "" }));
+setCommentCounts((m) => ({ ...m, [postId]: (m[postId] ?? 0) + 1 }));
+setOpenComments((m) => ({ ...m, [postId]: true }));
+}
+
 const card: React.CSSProperties = {
 background: "rgba(0,0,0,0.55)",
 border: "1px solid rgba(180,120,255,0.16)",
@@ -252,6 +315,15 @@ background: "rgba(0,0,0,0.35)",
 color: "white",
 cursor: "pointer",
 fontWeight: 650,
+};
+
+const inputStyle: React.CSSProperties = {
+background: "rgba(0,0,0,0.6)",
+color: "white",
+border: "1px solid rgba(180,120,255,0.22)",
+borderRadius: 12,
+padding: "10px 12px",
+outline: "none",
 };
 
 const profileCard: React.CSSProperties = {
@@ -372,6 +444,7 @@ const spanks = likeCounts[p.id] ?? 0;
 const comments = commentCounts[p.id] ?? 0;
 const iSpanked = !!likedByMe[p.id];
 const isBusy = busyPostId === p.id;
+const isOpen = !!openComments[p.id];
 
 return (
 <div key={p.id} style={card}>
@@ -449,10 +522,61 @@ display: "inline-flex",
 </span>
 </button>
 
-<button style={pillBtn}>
+<button onClick={() => openCommentsFor(p.id)} style={pillBtn}>
 Comments {comments ? `· ${comments}` : ""}
 </button>
 </div>
+
+{isOpen ? (
+<div style={{ marginTop: 12 }}>
+<div style={{ display: "flex", gap: 10 }}>
+<input
+value={commentDraft[p.id] ?? ""}
+onChange={(e) =>
+setCommentDraft((m) => ({ ...m, [p.id]: e.target.value }))
+}
+placeholder="Write a comment…"
+style={{ ...inputStyle, flex: 1 }}
+/>
+
+<button onClick={() => addComment(p.id)} disabled={isBusy} style={pillBtn}>
+{isBusy ? "…" : "Send"}
+</button>
+</div>
+
+<div
+style={{
+marginTop: 10,
+display: "flex",
+flexDirection: "column",
+gap: 10,
+}}
+>
+{(commentsByPost[p.id] ?? []).map((c) => (
+<div
+key={c.id}
+style={{
+background: "rgba(0,0,0,0.35)",
+border: "1px solid #222",
+borderRadius: 14,
+padding: 10,
+}}
+>
+<div style={{ opacity: 0.6, fontSize: 12, marginBottom: 6 }}>
+{timeAgo(c.created_at)}
+</div>
+<div style={{ whiteSpace: "pre-wrap" }}>{c.body}</div>
+</div>
+))}
+
+{(commentsByPost[p.id] ?? []).length === 0 ? (
+<div style={{ opacity: 0.6, fontSize: 13, marginTop: 6 }}>
+No comments yet.
+</div>
+) : null}
+</div>
+</div>
+) : null}
 </div>
 );
 })}
