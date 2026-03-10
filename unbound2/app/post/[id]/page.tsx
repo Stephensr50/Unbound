@@ -26,6 +26,7 @@ post_id: number;
 user_id: string;
 body: string;
 created_at: string;
+parent_comment_id: number | null;
 };
 
 type ProfileRow = {
@@ -70,9 +71,16 @@ const [liked, setLiked] = useState(false);
 
 const [openComments, setOpenComments] = useState(true);
 const [comments, setComments] = useState<CommentRow[]>([]);
+const [commentAuthors, setCommentAuthors] = useState<Record<string, ProfileRow>>({});
 const [draft, setDraft] = useState("");
 const [busy, setBusy] = useState(false);
 const [spark, setSpark] = useState(false);
+
+const [replyTo, setReplyTo] = useState<{
+id: number;
+userId: string;
+label: string;
+} | null>(null);
 
 const [flashOn, setFlashOn] = useState(false);
 const flashTimerRef = useRef<number | null>(null);
@@ -82,6 +90,27 @@ const { data } = await supabase.auth.getSession();
 const uid = data.session?.user?.id ?? null;
 setMyUserId(uid);
 return uid;
+}
+
+async function hydrateCommentAuthors(list: CommentRow[]) {
+const ids = Array.from(new Set(list.map((c) => c.user_id).filter(Boolean)));
+const missing = ids.filter((id) => !commentAuthors[id]);
+
+if (missing.length === 0) return;
+
+const { data, error } = await supabase
+.from("profiles")
+.select("id,username,display_name,avatar_url")
+.in("id", missing);
+
+if (error || !data) return;
+
+const patch: Record<string, ProfileRow> = {};
+for (const p of data as ProfileRow[]) {
+patch[p.id] = p;
+}
+
+setCommentAuthors((prev) => ({ ...prev, ...patch }));
 }
 
 async function loadPostAndStuff(pid: number) {
@@ -133,7 +162,7 @@ setLiked(!!uid && users.includes(uid));
 
 const { data: cRows, error: cErr } = await supabase
 .from("post_comments")
-.select("id,post_id,user_id,body,created_at")
+.select("id,post_id,user_id,body,created_at,parent_comment_id")
 .eq("post_id", pid)
 .order("created_at", { ascending: true })
 .limit(50);
@@ -147,6 +176,7 @@ return;
 const list = (cRows ?? []) as CommentRow[];
 setComments(list);
 setCommentCount(list.length);
+await hydrateCommentAuthors(list);
 }
 
 useEffect(() => {
@@ -249,8 +279,13 @@ setBusy(true);
 
 const { data, error } = await supabase
 .from("post_comments")
-.insert({ post_id: post.id, user_id: uid, body })
-.select("id,post_id,user_id,body,created_at")
+.insert({
+post_id: post.id,
+user_id: uid,
+body,
+parent_comment_id: replyTo?.id ?? null,
+})
+.select("id,post_id,user_id,body,created_at,parent_comment_id")
 .single();
 
 if (error) {
@@ -259,10 +294,30 @@ setBusy(false);
 return;
 }
 
-setComments((arr) => [...arr, data as CommentRow]);
+const newComment = data as CommentRow;
+
+setComments((arr) => [...arr, newComment]);
 setCommentCount((n) => n + 1);
 setDraft("");
+setReplyTo(null);
 setBusy(false);
+
+await hydrateCommentAuthors([newComment]);
+}
+
+function startReply(c: CommentRow) {
+const p = commentAuthors[c.user_id];
+const label = p?.display_name || (p?.username ? `@${p.username}` : "this comment");
+setReplyTo({
+id: c.id,
+userId: c.user_id,
+label,
+});
+setOpenComments(true);
+}
+
+function cancelReply() {
+setReplyTo(null);
 }
 
 const pillBtn: React.CSSProperties = {
@@ -472,11 +527,34 @@ Comments {commentCount ? `· ${commentCount}` : ""}
 
 {openComments ? (
 <div style={{ marginTop: 12 }}>
+{replyTo ? (
+<div
+style={{
+marginBottom: 10,
+display: "flex",
+alignItems: "center",
+justifyContent: "space-between",
+gap: 10,
+padding: "10px 12px",
+borderRadius: 12,
+border: "1px solid rgba(180,120,255,0.22)",
+background: "rgba(168,85,247,0.10)",
+}}
+>
+<div style={{ fontSize: 13, opacity: 0.9 }}>
+Replying to <strong>{replyTo.label}</strong>
+</div>
+<button onClick={cancelReply} style={pillBtn}>
+Cancel
+</button>
+</div>
+) : null}
+
 <div style={{ display: "flex", gap: 10 }}>
 <input
 value={draft}
 onChange={(e) => setDraft(e.target.value)}
-placeholder="Write a comment…"
+placeholder={replyTo ? `Reply to ${replyTo.label}…` : "Write a comment…"}
 style={{ ...inputStyle, flex: 1 }}
 />
 <button onClick={addComment} disabled={busy} style={postBtn}>
@@ -492,7 +570,23 @@ flexDirection: "column",
 gap: 10,
 }}
 >
-{comments.map((c) => (
+{comments.map((c) => {
+const cAuthor = commentAuthors[c.user_id] ?? null;
+const cName =
+cAuthor?.display_name || cAuthor?.username || "Unknown";
+const cHandle = cAuthor?.username ? `@${cAuthor.username}` : "";
+
+const parent = c.parent_comment_id
+? comments.find((x) => x.id === c.parent_comment_id) ?? null
+: null;
+
+const parentAuthor = parent ? commentAuthors[parent.user_id] ?? null : null;
+const replyLabel =
+parentAuthor?.display_name ||
+(parentAuthor?.username ? `@${parentAuthor.username}` : null) ||
+null;
+
+return (
 <div
 key={c.id}
 style={{
@@ -502,12 +596,81 @@ borderRadius: 14,
 padding: 10,
 }}
 >
-<div style={{ opacity: 0.6, fontSize: 12, marginBottom: 6 }}>
+<div style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>
+{cAuthor?.avatar_url ? (
+// eslint-disable-next-line @next/next/no-img-element
+<img
+src={cAuthor.avatar_url}
+alt=""
+style={{
+width: 38,
+height: 38,
+borderRadius: 999,
+objectFit: "cover",
+border: "1px solid rgba(255,255,255,0.16)",
+flex: "0 0 auto",
+}}
+/>
+) : (
+<div
+style={{
+width: 38,
+height: 38,
+borderRadius: 999,
+display: "grid",
+placeItems: "center",
+border: "1px solid rgba(255,255,255,0.16)",
+background: "rgba(255,255,255,0.04)",
+opacity: 0.7,
+flex: "0 0 auto",
+fontWeight: 800,
+}}
+>
+{cName.charAt(0).toUpperCase()}
+</div>
+)}
+
+<div style={{ flex: 1, minWidth: 0 }}>
+<div
+style={{
+display: "flex",
+justifyContent: "space-between",
+gap: 10,
+marginBottom: 6,
+alignItems: "baseline",
+flexWrap: "wrap",
+}}
+>
+<div style={{ display: "flex", gap: 8, alignItems: "baseline", flexWrap: "wrap" }}>
+<div style={{ fontWeight: 800 }}>{cName}</div>
+{cHandle ? (
+<div style={{ opacity: 0.6, fontSize: 12 }}>{cHandle}</div>
+) : null}
+</div>
+
+<div style={{ opacity: 0.6, fontSize: 12 }}>
 {timeAgo(c.created_at)}
 </div>
-<div style={{ whiteSpace: "pre-wrap" }}>{c.body}</div>
 </div>
-))}
+
+{replyLabel ? (
+<div style={{ opacity: 0.7, fontSize: 12, marginBottom: 6 }}>
+Replying to {replyLabel}
+</div>
+) : null}
+
+<div style={{ whiteSpace: "pre-wrap" }}>{c.body}</div>
+
+<div style={{ marginTop: 8 }}>
+<button onClick={() => startReply(c)} style={pillBtn}>
+Reply
+</button>
+</div>
+</div>
+</div>
+</div>
+);
+})}
 
 {comments.length === 0 ? (
 <div style={{ opacity: 0.6, fontSize: 13, marginTop: 6 }}>

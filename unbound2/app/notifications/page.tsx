@@ -169,7 +169,7 @@ if (n.link) return n.link;
 
 if (n.type === "friend_request") return "/friend-requests";
 
-if (n.type === "spank" || n.type === "comment") {
+if (n.type === "spank" || n.type === "comment" || n.type === "comment_reply") {
 const postId = Number(n.entity_id);
 if (Number.isFinite(postId) && postId > 0) {
 return `/post/${postId}?flash=4000`;
