@@ -44,12 +44,13 @@ const [text, setText] = useState("");
 const [sending, setSending] = useState(false);
 const [err, setErr] = useState<string | null>(null);
 
-// ✅ typing indicator
+// typing indicator
 const [otherTyping, setOtherTyping] = useState(false);
 const otherTypingTimerRef = useRef<number | null>(null);
 const lastTypingSentAtRef = useRef(0);
 const stopTypingTimerRef = useRef<number | null>(null);
 const [otherLastReadId, setOtherLastReadId] = useState<number>(0);
+
 const lastMineId = useMemo(() => {
 if (!me) return 0;
 let last = 0;
@@ -133,6 +134,7 @@ console.warn("markConversationRead failed:", e?.message ?? e);
 markInFlightRef.current = false;
 }
 }
+
 async function loadOtherReadPointer(convId: number) {
 if (!me) return;
 
@@ -153,19 +155,17 @@ if (!otherId) return;
 
 // read their read-pointer row
 console.log("READ DEBUG", { convId, me, otherId });
-const { data: readRow, error: readErr } = await supabase
+const { data: readRow } = await supabase
 .from("conversation_reads")
 .select("last_read_message_id")
 .eq("conversation_id", convId)
 .eq("user_id", otherId)
 .maybeSingle();
 
-
-
 setOtherLastReadId(Number(readRow?.last_read_message_id ?? 0));
-
 }
-// ✅ typing helpers
+
+// typing helpers
 function clearOtherTypingSoon(ms = 1200) {
 if (otherTypingTimerRef.current) window.clearTimeout(otherTypingTimerRef.current);
 otherTypingTimerRef.current = window.setTimeout(() => setOtherTyping(false), ms);
@@ -304,6 +304,7 @@ if (error) throw error;
 
 const rows = (data ?? []) as MsgRow[];
 if (!cancelled) setMsgs(rows);
+
 const latestId = rows.length ? rows[rows.length - 1].id : null;
 if (latestId != null) {
 await markConversationRead(conversationId, latestId);
@@ -358,7 +359,7 @@ await markConversationRead(conversationId, Number(row.id));
 }
 )
 
-// ✅ typing broadcasts
+// typing broadcasts
 .on("broadcast", { event: "typing" }, (payload: any) => {
 const p = payload?.payload ?? payload;
 const from = p?.user_id as string | undefined;
@@ -398,6 +399,7 @@ if (stopTypingTimerRef.current) window.clearTimeout(stopTypingTimerRef.current);
 async function send() {
 if (!conversationId) return;
 if (!me) return;
+
 const body = text.trim();
 if (!body) return;
 if (sending) return;
@@ -427,7 +429,7 @@ setSending(false);
 }
 }
 
-// ✅ typing: send broadcasts based on local input
+// typing: send broadcasts based on local input
 useEffect(() => {
 if (!conversationId || !me) return;
 
@@ -457,18 +459,36 @@ return () => {};
 
 // --- render ---
 return (
-<div style={{ padding: 18 }}>
+<div style={{ padding: 18, paddingTop: 15 }}>
+    <div style={{ height: 96}} />
 <div style={{ opacity: 0.85, marginBottom: 10, fontFamily: '"Gloock", serif' }}>
 {mounted && me ? `ME: ${me.slice(0, 4)}…${me.slice(-4)}` : "ME: …"}
 </div>
+
+<button
+onClick={() => router.push("/messages")}
+style={{
+padding: "8px 14px",
+borderRadius: 999,
+border: "1px solid rgba(168,85,247,0.35)",
+background: "rgba(169, 85, 247, 0.42)",
+boxShadow: "0 0 14px rgba(168,85,247,0.44",
+color: "white",
+cursor: "pointer",
+fontWeight: 650,
+marginBottom: 14,
+}}
+>
+← Back
+</button>
 
 <div style={{ fontFamily: '"Gloock", serif', fontSize: 22, marginBottom: 8 }}>
 {loading ? "Conversation…" : conversationId ? `Conversation #${conversationId}` : "Conversation"}
 </div>
 
-
-
-{err ? <div style={{ color: "salmon", marginBottom: 10, fontWeight: 700 }}>{err}</div> : null}
+{err ? (
+<div style={{ color: "salmon", marginBottom: 10, fontWeight: 700 }}>{err}</div>
+) : null}
 
 <div
 style={{
@@ -539,6 +559,7 @@ Seen
 );
 })
 )}
+
 {/* typing indicator bubble */}
 {otherTyping ? (
 <div
@@ -574,7 +595,6 @@ Typing
 </div>
 ) : null}
 
-<div ref={bottomRef} />
 <div ref={bottomRef} />
 </div>
 
@@ -620,10 +640,8 @@ cursor: "pointer",
 Send
 </button>
 </div>
-<div style={{ fontSize: 12, opacity: 0.6, marginTop: 8 }}>
 
+<div style={{ fontSize: 12, opacity: 0.6, marginTop: 8 }}></div>
 </div>
-</div>
-
 );
 }

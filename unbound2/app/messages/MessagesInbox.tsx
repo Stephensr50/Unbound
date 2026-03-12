@@ -13,6 +13,10 @@ body: string | null;
 created_at: string;
 sender_id: string | null;
 }>;
+conversation_members: Array<{
+user_id: string;
+hidden_at: string | null;
+}>;
 };
 
 function getSupabase() {
@@ -37,6 +41,24 @@ const { data } = await supabase.auth.getSession();
 return data.session?.user?.id ?? null;
 }
 
+async function hideConversation(conversationId: number) {
+const uid = await refreshAuth();
+if (!uid) return;
+
+const { error } = await supabase
+.from("conversation_members")
+.update({ hidden_at: new Date().toISOString() })
+.eq("conversation_id", conversationId)
+.eq("user_id", uid);
+
+if (error) {
+setErr(error.message);
+return;
+}
+
+setThreads((prev) => prev.filter((t) => t.id !== conversationId));
+}
+
 async function loadInbox(opts?: { silent?: boolean }) {
 const silent = opts?.silent ?? false;
 if (inFlightRef.current) return;
@@ -58,6 +80,10 @@ const { data, error } = await supabase
 .select(`
 id,
 last_message_at,
+conversation_members!inner (
+user_id,
+hidden_at
+),
 messages:messages_conversation_id_fkey (
 id,
 body,
@@ -65,6 +91,8 @@ created_at,
 sender_id
 )
 `)
+.eq("conversation_members.user_id", uid)
+.is("conversation_members.hidden_at", null)
 .order("last_message_at", { ascending: false })
 .limit(50);
 
@@ -98,11 +126,7 @@ loadInbox();
 }, [searchParams]);
 
 if (loading) {
-return (
-<div style={{ padding: 16, opacity: 0.9 }}>
-Loading messages…
-</div>
-);
+return <div style={{ padding: 16, opacity: 0.9 }}>Loading messages…</div>;
 }
 
 if (err) {
@@ -110,7 +134,6 @@ return (
 <div style={{ padding: 16 }}>
 <div style={{ color: "#ffb3b3", marginBottom: 12 }}>{err}</div>
 
-{/* SOLID PURPLE BUTTON — NO OUTLINE */}
 <button
 onClick={() => loadInbox()}
 style={{
@@ -141,25 +164,31 @@ return (
 const last = t.messages?.[0];
 
 return (
-<button
+<div
 key={t.id}
-onClick={() => router.push(`/messages/${t.id}`)}
 style={{
-textAlign: "left",
 padding: 16,
 borderRadius: 14,
-border: "none",
-outline: "none",
 background:
 "linear-gradient(180deg, rgba(164,122,237,0.18), rgba(73,21,158,0.18))",
 color: "#f5edff",
-cursor: "pointer",
 boxShadow: "0 0 14px rgba(170,90,255,0.25)",
 }}
 >
-<div style={{ fontWeight: 700 }}>
-Conversation #{t.id}
-</div>
+<button
+onClick={() => router.push(`/messages/${t.id}`)}
+style={{
+width: "100%",
+textAlign: "left",
+border: "none",
+outline: "none",
+background: "transparent",
+color: "#f5edff",
+cursor: "pointer",
+padding: 0,
+}}
+>
+<div style={{ fontWeight: 700 }}>Conversation #{t.id}</div>
 
 <div style={{ opacity: 0.9, marginTop: 6 }}>
 {last?.body ?? "(no text)"}
@@ -169,6 +198,24 @@ Conversation #{t.id}
 {t.last_message_at ?? ""}
 </div>
 </button>
+
+<div style={{ marginTop: 12 }}>
+<button
+onClick={() => hideConversation(t.id)}
+style={{
+padding: "8px 12px",
+borderRadius: 10,
+border: "1px solid rgba(255,120,120,0.30)",
+background: "rgba(255,80,80,0.10)",
+color: "rgba(255,220,220,0.95)",
+fontWeight: 700,
+cursor: "pointer",
+}}
+>
+Delete
+</button>
+</div>
+</div>
 );
 })}
 </div>
