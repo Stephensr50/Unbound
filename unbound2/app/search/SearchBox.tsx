@@ -82,12 +82,7 @@ function toRad(n: number) {
 return (n * Math.PI) / 180;
 }
 
-function haversineMiles(
-lat1: number,
-lon1: number,
-lat2: number,
-lon2: number
-) {
+function haversineMiles(lat1: number, lon1: number, lat2: number, lon2: number) {
 const earthRadiusMiles = 3959;
 const dLat = toRad(lat2 - lat1);
 const dLon = toRad(lon2 - lon1);
@@ -132,6 +127,8 @@ const [error, setError] = useState<string | null>(null);
 const [myCoords, setMyCoords] = useState<{ lat: number; lng: number } | null>(null);
 const [geoError, setGeoError] = useState<string | null>(null);
 
+const [showRadar, setShowRadar] = useState(false);
+
 useEffect(() => {
 setQ(initialValue);
 setSubmittedQ(initialValue);
@@ -163,8 +160,27 @@ maximumAge: 300000,
 }, []);
 
 function runSearch() {
-setSubmittedQ(q.trim());
-setSubmittedLocationText(locationText.trim());
+const nextQ = q.trim();
+const nextLocation = locationText.trim();
+const usingRadius = radius !== "any";
+
+if (usingRadius) {
+setShowRadar(true);
+
+window.setTimeout(() => {
+setShowRadar(false);
+setSubmittedQ(nextQ);
+setSubmittedLocationText(nextLocation);
+setSubmittedGender(gender);
+setSubmittedRecency(recency);
+setSubmittedRadius(radius);
+}, 2200);
+
+return;
+}
+
+setSubmittedQ(nextQ);
+setSubmittedLocationText(nextLocation);
 setSubmittedGender(gender);
 setSubmittedRecency(recency);
 setSubmittedRadius(radius);
@@ -186,6 +202,7 @@ setSubmittedRadius("any");
 setResults([]);
 setError(null);
 setLoading(false);
+setShowRadar(false);
 }
 
 useEffect(() => {
@@ -431,6 +448,18 @@ submittedRadius !== "any";
 
 return (
 <div style={shell}>
+<style>{`
+@keyframes unboundRadarSpin {
+from { transform: rotate(0deg); }
+to { transform: rotate(360deg); }
+}
+
+@keyframes unboundRadarPulse {
+0%, 100% { opacity: 0.55; transform: scale(1); }
+50% { opacity: 1; transform: scale(1.08); }
+}
+`}</style>
+
 <input
 style={inputStyle}
 value={q}
@@ -502,7 +531,7 @@ Clear filters
 ) : null}
 
 <div style={{ marginTop: 10, opacity: 0.85 }}>
-{loading
+{loading || showRadar
 ? "Searching..."
 : error
 ? `Error: ${error}`
@@ -513,7 +542,115 @@ Clear filters
 : ""}
 </div>
 
-{results.map((p) => {
+{showRadar ? (
+<div
+style={{
+position: "relative",
+width: 280,
+height: 280,
+margin: "40px auto 10px",
+borderRadius: "50%",
+}}
+>
+<div
+style={{
+position: "absolute",
+top: "50%",
+left: "50%",
+transform: "translate(-50%, -50%)",
+width: 280,
+height: 280,
+borderRadius: "50%",
+border: "1px solid rgba(180,120,255,0.18)",
+}}
+/>
+<div
+style={{
+position: "absolute",
+top: "50%",
+left: "50%",
+transform: "translate(-50%, -50%)",
+width: 210,
+height: 210,
+borderRadius: "50%",
+border: "1px solid rgba(180,120,255,0.18)",
+}}
+/>
+<div
+style={{
+position: "absolute",
+top: "50%",
+left: "50%",
+transform: "translate(-50%, -50%)",
+width: 140,
+height: 140,
+borderRadius: "50%",
+border: "1px solid rgba(180,120,255,0.18)",
+}}
+/>
+
+<div
+style={{
+position: "absolute",
+top: "50%",
+left: "50%",
+width: 140,
+height: 140,
+transformOrigin: "0% 0%",
+background:
+"conic-gradient(from 0deg, rgba(220,110,255,0.58), rgba(220,110,255,0.06) 70deg, rgba(220,110,255,0) 90deg)",
+clipPath: "polygon(0 0, 100% 0, 100% 100%)",
+animation: "unboundRadarSpin 1.4s linear infinite",
+filter: "drop-shadow(0 0 12px rgba(220,110,255,0.55))",
+}}
+/>
+
+<div
+style={{
+position: "absolute",
+top: "50%",
+left: "50%",
+width: 16,
+height: 16,
+borderRadius: "50%",
+background: "#d98cff",
+transform: "translate(-50%, -50%)",
+boxShadow: "0 0 14px rgba(217,140,255,0.95)",
+animation: "unboundRadarPulse 1.2s ease-in-out infinite",
+}}
+/>
+
+<div
+style={{
+position: "absolute",
+top: "62%",
+left: "65%",
+width: 10,
+height: 10,
+borderRadius: "50%",
+background: "#d98cff",
+boxShadow: "0 0 10px rgba(217,140,255,0.95)",
+}}
+/>
+
+<div
+style={{
+position: "absolute",
+bottom: -36,
+width: "100%",
+textAlign: "center",
+opacity: 0.85,
+fontWeight: 700,
+color: "rgba(235,220,255,0.95)",
+}}
+>
+Scanning nearby…
+</div>
+</div>
+) : null}
+
+{!showRadar &&
+results.map((p) => {
 const label = p.display_name || p.username || "Unknown";
 const handle = p.username ? `@${p.username}` : null;
 const locationLine = [p.city, p.state, p.country].filter(Boolean).join(", ");
