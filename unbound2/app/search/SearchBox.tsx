@@ -15,6 +15,12 @@ state: string | null;
 country: string | null;
 gender: string | null;
 last_active_at: string | null;
+latitude: number | null;
+longitude: number | null;
+};
+
+type ProfileWithDistance = ProfileRow & {
+distanceMiles?: number | null;
 };
 
 function getSupabase() {
@@ -45,6 +51,15 @@ const RECENCY_OPTIONS = [
 { label: "Active in 90 days", value: "90" },
 ];
 
+const RADIUS_OPTIONS = [
+{ label: "Anywhere", value: "any" },
+{ label: "Within 10 miles", value: "10" },
+{ label: "Within 25 miles", value: "25" },
+{ label: "Within 50 miles", value: "50" },
+{ label: "Within 100 miles", value: "100" },
+{ label: "Within 250 miles", value: "250" },
+];
+
 function timeAgo(ts: string | null) {
 if (!ts) return "";
 const then = new Date(ts).getTime();
@@ -63,6 +78,38 @@ const now = Date.now();
 return now - then <= 5 * 60 * 1000;
 }
 
+function toRad(n: number) {
+return (n * Math.PI) / 180;
+}
+
+function haversineMiles(
+lat1: number,
+lon1: number,
+lat2: number,
+lon2: number
+) {
+const earthRadiusMiles = 3959;
+const dLat = toRad(lat2 - lat1);
+const dLon = toRad(lon2 - lon1);
+
+const a =
+Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+Math.cos(toRad(lat1)) *
+Math.cos(toRad(lat2)) *
+Math.sin(dLon / 2) *
+Math.sin(dLon / 2);
+
+const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+return earthRadiusMiles * c;
+}
+
+function formatDistance(miles?: number | null) {
+if (miles == null || Number.isNaN(miles)) return "";
+if (miles < 1) return "less than 1 mile away";
+if (miles < 10) return `${miles.toFixed(1)} miles away`;
+return `${Math.round(miles)} miles away`;
+}
+
 export default function SearchBox({ initialValue = "" }: { initialValue?: string }) {
 const supabase = useMemo(() => getSupabase(), []);
 
@@ -70,26 +117,57 @@ const [q, setQ] = useState(initialValue);
 const [locationText, setLocationText] = useState("");
 const [gender, setGender] = useState("Any");
 const [recency, setRecency] = useState("any");
+const [radius, setRadius] = useState("any");
 
 const [submittedQ, setSubmittedQ] = useState(initialValue);
 const [submittedLocationText, setSubmittedLocationText] = useState("");
 const [submittedGender, setSubmittedGender] = useState("Any");
 const [submittedRecency, setSubmittedRecency] = useState("any");
+const [submittedRadius, setSubmittedRadius] = useState("any");
 
 const [loading, setLoading] = useState(false);
-const [results, setResults] = useState<ProfileRow[]>([]);
+const [results, setResults] = useState<ProfileWithDistance[]>([]);
 const [error, setError] = useState<string | null>(null);
+
+const [myCoords, setMyCoords] = useState<{ lat: number; lng: number } | null>(null);
+const [geoError, setGeoError] = useState<string | null>(null);
 
 useEffect(() => {
 setQ(initialValue);
 setSubmittedQ(initialValue);
 }, [initialValue]);
 
+useEffect(() => {
+if (typeof window === "undefined" || !navigator.geolocation) {
+setGeoError("Geolocation not available on this device.");
+return;
+}
+
+navigator.geolocation.getCurrentPosition(
+(pos) => {
+setMyCoords({
+lat: pos.coords.latitude,
+lng: pos.coords.longitude,
+});
+setGeoError(null);
+},
+() => {
+setGeoError("Location permission denied or unavailable.");
+},
+{
+enableHighAccuracy: true,
+timeout: 10000,
+maximumAge: 300000,
+}
+);
+}, []);
+
 function runSearch() {
 setSubmittedQ(q.trim());
 setSubmittedLocationText(locationText.trim());
 setSubmittedGender(gender);
 setSubmittedRecency(recency);
+setSubmittedRadius(radius);
 }
 
 function clearFilters() {
@@ -97,10 +175,14 @@ setQ("");
 setLocationText("");
 setGender("Any");
 setRecency("any");
+setRadius("any");
+
 setSubmittedQ("");
 setSubmittedLocationText("");
 setSubmittedGender("Any");
 setSubmittedRecency("any");
+setSubmittedRadius("any");
+
 setResults([]);
 setError(null);
 setLoading(false);
@@ -115,7 +197,20 @@ const loc = submittedLocationText.trim();
 
 setError(null);
 
-if (!term && !loc && submittedGender === "Any" && submittedRecency === "any") {
+if (
+!term &&
+!loc &&
+submittedGender === "Any" &&
+submittedRecency === "any" &&
+submittedRadius === "any"
+) {
+setResults([]);
+setLoading(false);
+return;
+}
+
+if (submittedRadius !== "any" && !myCoords) {
+setError("Turn on location access to use radius search.");
 setResults([]);
 setLoading(false);
 return;
@@ -126,9 +221,9 @@ setLoading(true);
 let query = supabase
 .from("profiles")
 .select(
-"id, username, display_name, bio, avatar_url, city, state, country, gender, last_active_at"
+"id, username, display_name, bio, avatar_url, city, state, country, gender, last_active_at, latitude, longitude"
 )
-.limit(25);
+.limit(100);
 
 if (term) {
 query = query.or(
@@ -161,10 +256,38 @@ if (cancelled) return;
 if (error) {
 setError(error.message);
 setResults([]);
-} else {
-setResults((data as ProfileRow[]) ?? []);
+setLoading(false);
+return;
 }
 
+let rows = ((data as ProfileRow[]) ?? []).map((p) => ({
+...p,
+distanceMiles: null,
+})) as ProfileWithDistance[];
+
+if (submittedRadius !== "any" && myCoords) {
+const maxMiles = Number(submittedRadius);
+
+rows = rows
+.filter((p) => p.latitude != null && p.longitude != null)
+.map((p) => {
+const distanceMiles = haversineMiles(
+myCoords.lat,
+myCoords.lng,
+Number(p.latitude),
+Number(p.longitude)
+);
+
+return {
+...p,
+distanceMiles,
+};
+})
+.filter((p) => (p.distanceMiles ?? Infinity) <= maxMiles)
+.sort((a, b) => (a.distanceMiles ?? Infinity) - (b.distanceMiles ?? Infinity));
+}
+
+setResults(rows);
 setLoading(false);
 }
 
@@ -173,7 +296,15 @@ void run();
 return () => {
 cancelled = true;
 };
-}, [submittedQ, submittedLocationText, submittedGender, submittedRecency, supabase]);
+}, [
+submittedQ,
+submittedLocationText,
+submittedGender,
+submittedRecency,
+submittedRadius,
+supabase,
+myCoords,
+]);
 
 const shell: React.CSSProperties = {
 width: "min(920px, 94vw)",
@@ -295,7 +426,8 @@ const hasActiveSearch =
 !!submittedQ ||
 !!submittedLocationText ||
 submittedGender !== "Any" ||
-submittedRecency !== "any";
+submittedRecency !== "any" ||
+submittedRadius !== "any";
 
 return (
 <div style={shell}>
@@ -344,6 +476,18 @@ style={selectStyle}
 ))}
 </select>
 
+<select
+value={radius}
+onChange={(e) => setRadius(e.target.value)}
+style={selectStyle}
+>
+{RADIUS_OPTIONS.map((option) => (
+<option key={option.value} value={option.value} style={{ color: "black" }}>
+{option.label}
+</option>
+))}
+</select>
+
 <button onClick={runSearch} style={searchBtn}>
 Search
 </button>
@@ -352,6 +496,10 @@ Search
 Clear filters
 </button>
 </div>
+
+{submittedRadius !== "any" && geoError ? (
+<div style={{ marginTop: 10, color: "#ffb3b3" }}>{geoError}</div>
+) : null}
 
 <div style={{ marginTop: 10, opacity: 0.85 }}>
 {loading
@@ -369,6 +517,7 @@ Clear filters
 const label = p.display_name || p.username || "Unknown";
 const handle = p.username ? `@${p.username}` : null;
 const locationLine = [p.city, p.state, p.country].filter(Boolean).join(", ");
+const distanceLine = formatDistance(p.distanceMiles);
 
 return (
 <div key={p.id} style={row}>
@@ -409,6 +558,7 @@ display: "inline-block",
 
 {handle ? <div style={subStyle}>{handle}</div> : null}
 {locationLine ? <div style={subStyle}>{locationLine}</div> : null}
+{distanceLine ? <div style={subStyle}>{distanceLine}</div> : null}
 {p.gender ? <div style={subStyle}>{p.gender}</div> : null}
 {p.last_active_at ? <div style={subStyle}>{timeAgo(p.last_active_at)}</div> : null}
 {p.bio ? <div style={{ opacity: 0.9, marginTop: 8 }}>{p.bio}</div> : null}
