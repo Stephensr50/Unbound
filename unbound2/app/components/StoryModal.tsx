@@ -23,7 +23,7 @@ onClose: () => void;
 stories: Story[];
 startIndex: number;
 myUserId?: string | null;
-onDeleteCurrent?: (storyId: string) => void;
+onDeleteCurrent?: (story: Story) => Promise<void>;
 }) {
 const safeStories = Array.isArray(stories) ? stories : [];
 const maxIndex = Math.max(0, safeStories.length - 1);
@@ -31,31 +31,14 @@ const maxIndex = Math.max(0, safeStories.length - 1);
 const initialIndex = useMemo(() => {
 const n = Number.isFinite(startIndex) ? startIndex : 0;
 return Math.min(Math.max(0, n), maxIndex);
-// eslint-disable-next-line react-hooks/exhaustive-deps
-}, [startIndex, safeStories.length]);
+}, [startIndex, maxIndex]);
 
 const [idx, setIdx] = useState<number>(initialIndex);
 
-// When opened / startIndex changes, sync index
 useEffect(() => {
 if (!open) return;
 setIdx(initialIndex);
 }, [open, initialIndex]);
-
-// ESC closes
-useEffect(() => {
-if (!open) return;
-const onKey = (e: KeyboardEvent) => {
-if (e.key === "Escape") onClose();
-if (e.key === "ArrowRight") goNext();
-if (e.key === "ArrowLeft") goPrev();
-};
-window.addEventListener("keydown", onKey);
-return () => window.removeEventListener("keydown", onKey);
-// eslint-disable-next-line react-hooks/exhaustive-deps
-}, [open, idx, safeStories.length]);
-
-const current = safeStories[idx] ?? null;
 
 function closeNow() {
 onClose();
@@ -63,7 +46,7 @@ onClose();
 
 function goNext() {
 if (!safeStories.length) return closeNow();
-if (idx >= maxIndex) return closeNow(); // end = close
+if (idx >= maxIndex) return closeNow();
 setIdx((v) => Math.min(v + 1, maxIndex));
 }
 
@@ -72,22 +55,31 @@ if (!safeStories.length) return;
 setIdx((v) => Math.max(v - 1, 0));
 }
 
-const isVideo = !!current?.media_url && /\.(mp4|webm|mov)(\?|$)/i.test(current.media_url);
+useEffect(() => {
+if (!open) return;
+
+const onKey = (e: KeyboardEvent) => {
+if (e.key === "Escape") onClose();
+if (e.key === "ArrowRight") goNext();
+if (e.key === "ArrowLeft") goPrev();
+};
+
+window.addEventListener("keydown", onKey);
+return () => window.removeEventListener("keydown", onKey);
+}, [open, idx, maxIndex]);
+
+const current = safeStories[idx] ?? null;
+const isVideo =
+!!current?.media_url && /\.(mp4|webm|mov)(\?|$)/i.test(current.media_url);
 const isMine = !!myUserId && !!current?.user_id && myUserId === current.user_id;
 
 if (!open) return null;
 
 return (
 <div style={overlay} role="dialog" aria-modal="true">
-{/* Backdrop click closes */}
-<div
-style={backdrop}
-onClick={closeNow}
-aria-hidden="true"
-/>
+<div style={backdrop} onClick={closeNow} aria-hidden="true" />
 
 <div style={frame} onClick={(e) => e.stopPropagation()}>
-{/* Top bar */}
 <div style={topBar}>
 <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
 {safeStories.map((s, i) => (
@@ -98,18 +90,21 @@ height: 3,
 width: 28,
 borderRadius: 999,
 background:
-i === idx ? "rgba(168,85,247,0.95)" : "rgba(255,255,255,0.22)",
-boxShadow: i === idx ? "0 0 10px rgba(168,85,247,0.85)" : "none",
+i === idx
+? "rgba(168,85,247,0.95)"
+: "rgba(255,255,255,0.22)",
+boxShadow:
+i === idx ? "0 0 10px rgba(168,85,247,0.85)" : "none",
 }}
 />
 ))}
 </div>
 
 <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
-{isMine && onDeleteCurrent && current?.id ? (
+{isMine && onDeleteCurrent && current ? (
 <button
 type="button"
-onClick={() => onDeleteCurrent(current.id)}
+onClick={() => onDeleteCurrent(current)}
 style={dangerBtn}
 >
 Delete
@@ -131,7 +126,6 @@ title="Close"
 </div>
 </div>
 
-{/* Tap zones: left = prev, right = next */}
 <div style={tapLayer}>
 <button
 type="button"
@@ -155,7 +149,6 @@ aria-label="Next story"
 />
 </div>
 
-{/* Media */}
 <div style={mediaWrap}>
 {current?.media_url ? (
 isVideo ? (
@@ -177,16 +170,11 @@ style={media}
 />
 )
 ) : (
-<div style={empty}>
-No story media.
-</div>
+<div style={empty}>No story media.</div>
 )}
 </div>
 
-{/* Caption */}
-{current?.caption ? (
-<div style={caption}>{current.caption}</div>
-) : null}
+{current?.caption ? <div style={caption}>{current.caption}</div> : null}
 </div>
 </div>
 );
@@ -264,8 +252,8 @@ position: "absolute",
 inset: 0,
 display: "grid",
 placeItems: "center",
-paddingTop: 70, // room for top bar
-paddingBottom: 44, // room for caption
+paddingTop: 70,
+paddingBottom: 44,
 };
 
 const media: React.CSSProperties = {

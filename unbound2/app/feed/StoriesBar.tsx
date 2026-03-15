@@ -33,25 +33,41 @@ return createClient(url, key);
 export default function StoriesBar() {
 const supabase = useMemo(() => getSupabase(), []);
 
-const [stories, setStories] = useState<
-(StoryRow & { profile?: ProfileRow | null })[]
->([]);
+const [stories, setStories] = useState<StoryRow[]>([]);
+const [profilesById, setProfilesById] = useState<Record<string, ProfileRow>>(
+{}
+);
 
 const [openCreate, setOpenCreate] = useState(false);
-
-// Viewer modal state
 const [openView, setOpenView] = useState(false);
 const [selectedStory, setSelectedStory] = useState<StoryRow | null>(null);
 
-// Create story state
 const fileInputRef = useRef<HTMLInputElement | null>(null);
 const [pickedFile, setPickedFile] = useState<File | null>(null);
 const [caption, setCaption] = useState("");
 const [busy, setBusy] = useState(false);
 const [msg, setMsg] = useState("");
 
-// Logged-in user id (for Delete button)
 const [myUserId, setMyUserId] = useState<string | null>(null);
+
+async function loadProfilesForStories(rows: StoryRow[]) {
+const uids = Array.from(new Set(rows.map((s) => s.user_id).filter(Boolean)));
+if (!uids.length) {
+setProfilesById({});
+return;
+}
+
+const { data: profs } = await supabase
+.from("profiles")
+.select("id,username,avatar_url")
+.in("id", uids);
+
+const map: Record<string, ProfileRow> = {};
+for (const p of (profs ?? []) as ProfileRow[]) {
+map[p.id] = p;
+}
+setProfilesById(map);
+}
 
 async function refreshStories() {
 try {
@@ -62,13 +78,15 @@ const { data, error } = await supabase
 .limit(30);
 
 if (error) throw error;
-setStories((data ?? []) as any);
+
+const rows = (data ?? []) as StoryRow[];
+setStories(rows);
+await loadProfilesForStories(rows);
 } catch {
-// swallow to keep UI stable
+// keep UI stable
 }
 }
 
-// Load stories
 useEffect(() => {
 let alive = true;
 
@@ -83,9 +101,31 @@ const { data, error } = await supabase
 if (error) throw error;
 if (!alive) return;
 
-setStories((data ?? []) as any);
+const rows = (data ?? []) as StoryRow[];
+setStories(rows);
+
+const uids = Array.from(
+new Set(rows.map((s) => s.user_id).filter(Boolean))
+);
+
+if (uids.length) {
+const { data: profs } = await supabase
+.from("profiles")
+.select("id,username,avatar_url")
+.in("id", uids);
+
+if (!alive) return;
+
+const map: Record<string, ProfileRow> = {};
+for (const p of (profs ?? []) as ProfileRow[]) {
+map[p.id] = p;
+}
+setProfilesById(map);
+} else {
+setProfilesById({});
+}
 } catch {
-// swallow
+// ignore
 }
 })();
 
@@ -94,7 +134,6 @@ alive = false;
 };
 }, [supabase]);
 
-// Load current user id
 useEffect(() => {
 let alive = true;
 
@@ -114,7 +153,6 @@ alive = false;
 };
 }, [supabase]);
 
-// ONE bubble per user (latest story)
 const dedupedStories = useMemo(() => {
 const map = new Map<string, StoryRow>();
 
@@ -145,39 +183,6 @@ setOpenView(false);
 setSelectedStory(null);
 }
 
-async function deleteSelectedStory() {
-if (!selectedStory) return;
-
-try {
-setMsg("");
-
-const { data: authData, error: authErr } = await supabase.auth.getUser();
-if (authErr) throw authErr;
-
-const user = authData?.user;
-if (!user) {
-setMsg("You are not logged in.");
-return;
-}
-
-// Delete only if it's yours
-const { error } = await supabase
-.from("stories")
-.delete()
-.eq("id", selectedStory.id)
-.eq("user_id", user.id);
-
-if (error) {
-setMsg(error.message);
-return;
-}
-
-await refreshStories();
-} catch (e: any) {
-setMsg(e?.message || "Delete failed.");
-}
-}
-
 async function postStory() {
 try {
 setMsg("");
@@ -196,7 +201,6 @@ setMsg("You are not logged in.");
 return;
 }
 
-// Upload to Storage bucket: stories
 const ext = pickedFile.name.split(".").pop() || "jpg";
 const path = `${user.id}/${crypto.randomUUID()}.${ext}`;
 
@@ -233,10 +237,9 @@ setBusy(false);
 
 return (
 <>
-{/* ✅ NEW: wrapper so glow can spill outside the scroller */}
 <div className={styles.storiesWrap}>
 <div className={styles.storiesRow}>
-{/* Add story bubble */}
+<div className={styles.storyItem}>
 <button
 type="button"
 className={styles.addStory}
@@ -251,24 +254,38 @@ setOpenCreate(true);
 >
 <span>+</span>
 </button>
+<div className={styles.storyUsername}>Your story</div>
+</div>
 
-{/* Existing story bubbles */}
-{dedupedStories.map((s) => (
+{dedupedStories.map((s) => {
+const profile = profilesById[s.user_id];
+const username = profile?.username || "user";
+
+return (
+<div key={s.id} className={styles.storyItem}>
 <button
-key={s.id}
 type="button"
 className={styles.storyBubble}
-title="Story"
-aria-label="Open story"
+title={username}
+aria-label={`Open ${username}'s story`}
 onClick={() => openStoryViewer(s)}
 >
-<img className={styles.storyAvatar} src={s.media_url} alt="story" />
+<img
+className={styles.storyAvatar}
+src={profile?.avatar_url || s.media_url}
+alt={username}
+/>
 </button>
-))}
+
+<div className={styles.storyUsername}>
+{username.length > 12 ? `${username.slice(0, 12)}…` : username}
+</div>
+</div>
+);
+})}
 </div>
 </div>
 
-{/* Hidden file input */}
 <input
 ref={fileInputRef}
 type="file"
@@ -277,7 +294,6 @@ style={{ display: "none" }}
 onChange={(e) => setPickedFile(e.target.files?.[0] ?? null)}
 />
 
-{/* Create Story Modal */}
 {openCreate ? (
 <div
 className={styles.modalBackdrop}
@@ -355,7 +371,6 @@ Upload goes to Storage bucket <b>stories</b> and inserts into{" "}
 </div>
 ) : null}
 
-{/* Story Viewer Modal */}
 <StoryModal
 open={openView}
 onClose={closeStoryViewer}
@@ -365,8 +380,7 @@ startIndex={Math.max(
 dedupedStories.findIndex((s) => s.id === selectedStory?.id)
 )}
 myUserId={myUserId}
-onDeleteCurrent={async (story) => {
-// reuse your existing delete logic, but delete by the passed story
+onDeleteCurrent={async (story: StoryRow) => {
 const { data: authData, error: authErr } = await supabase.auth.getUser();
 if (authErr) throw authErr;
 const user = authData?.user;
