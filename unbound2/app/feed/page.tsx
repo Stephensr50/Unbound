@@ -48,7 +48,7 @@ return `${Math.floor(s / 86400)}d`;
 }
 
 export default function FeedPage() {
-    useEffect(() => {
+useEffect(() => {
 async function updateLastActive() {
 const supabase = createClient(
 process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -67,8 +67,9 @@ await supabase
 .eq("id", user.id);
 }
 
-updateLastActive();
+void updateLastActive();
 }, []);
+
 const supabase = useMemo(() => getSupabase(), []);
 const searchParams = useSearchParams();
 
@@ -251,14 +252,14 @@ await loadCounts(rows.map((r) => r.id));
 }
 
 useEffect(() => {
-(async () => {
+void (async () => {
 await refreshAuth();
 await loadPosts();
 })();
 }, []);
 
 useEffect(() => {
-(async () => {
+void (async () => {
 if (!focusPostId) return;
 
 await ensureFocusPostLoaded(focusPostId);
@@ -452,6 +453,16 @@ padding: "10px 12px",
 outline: "none",
 };
 
+const avatarStyle: React.CSSProperties = {
+width: 46,
+height: 46,
+borderRadius: 999,
+objectFit: "cover",
+border: "1px solid rgba(180,120,255,0.24)",
+flex: "0 0 auto",
+background: "rgba(0,0,0,0.45)",
+};
+
 const authorName = (uid: string) => {
 const p = profilesById[uid];
 return p?.display_name || p?.username || "Unknown";
@@ -460,6 +471,17 @@ return p?.display_name || p?.username || "Unknown";
 const authorHandle = (uid: string) => {
 const p = profilesById[uid];
 return p?.username ? `@${p.username}` : "";
+};
+
+const authorAvatar = (uid: string) => {
+const p = profilesById[uid];
+return p?.avatar_url || "";
+};
+
+const authorInitial = (uid: string) => {
+const p = profilesById[uid];
+const label = p?.display_name || p?.username || "U";
+return label.trim().charAt(0).toUpperCase();
 };
 
 async function uploadToStorage(uid: string, f: File) {
@@ -768,26 +790,64 @@ animation: isFocused ? "focusGlow 1.25s ease" : undefined,
 <div
 style={{
 display: "flex",
-justifyContent: "space-between",
-marginBottom: 8,
+gap: 12,
+alignItems: "flex-start",
+marginBottom: 10,
 }}
 >
+{authorAvatar(p.user_id) ? (
+// eslint-disable-next-line @next/next/no-img-element
+<img
+src={authorAvatar(p.user_id)}
+alt=""
+style={avatarStyle}
+/>
+) : (
 <div
-style={{ display: "flex", gap: 10, alignItems: "baseline" }}
+style={{
+...avatarStyle,
+display: "grid",
+placeItems: "center",
+fontWeight: 800,
+fontSize: 18,
+color: "rgba(255,255,255,0.92)",
+}}
 >
+{authorInitial(p.user_id)}
+</div>
+)}
+
+<div style={{ flex: 1, minWidth: 0 }}>
+<div
+style={{
+display: "flex",
+justifyContent: "space-between",
+gap: 10,
+alignItems: "flex-start",
+}}
+>
+<div style={{ minWidth: 0 }}>
 <div style={{ fontWeight: 850, opacity: 0.95 }}>
 {authorName(p.user_id)}
 </div>
-<div style={{ opacity: 0.65, fontSize: 12 }}>
-{timeAgo(p.created_at)}
+<div
+style={{
+opacity: 0.65,
+fontSize: 12,
+marginTop: 2,
+display: "flex",
+gap: 8,
+flexWrap: "wrap",
+}}
+>
+{authorHandle(p.user_id) ? (
+<span>{authorHandle(p.user_id)}</span>
+) : null}
+<span>{timeAgo(p.created_at)}</span>
 </div>
 </div>
 
 <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
-<div style={{ opacity: 0.55, fontSize: 12 }}>
-{authorHandle(p.user_id)}
-</div>
-
 {isMine ? (
 <button
 onClick={() => deletePost(p)}
@@ -809,6 +869,7 @@ Delete
 </div>
 </div>
 
+<div style={{ marginTop: 10 }}>
 {renderMedia(p)}
 
 {p.body ? (
@@ -822,6 +883,9 @@ whiteSpace: "pre-wrap",
 {p.body}
 </div>
 ) : null}
+</div>
+</div>
+</div>
 
 <div
 style={{
