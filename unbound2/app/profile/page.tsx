@@ -12,6 +12,9 @@ username: string | null;
 display_name: string | null;
 bio: string | null;
 avatar_url: string | null;
+city: string | null;
+state: string | null;
+country: string | null;
 };
 
 type ModalType = "followers" | "following";
@@ -70,7 +73,7 @@ if (!myUserId) return;
 // profile
 const { data: p, error: pErr } = await supabase
 .from("profiles")
-.select("id, username, display_name, bio, avatar_url")
+.select("id, username, display_name, bio, avatar_url, city, state, country")
 .eq("id", myUserId)
 .maybeSingle();
 
@@ -146,7 +149,7 @@ return;
 
 const { data: profiles, error: profErr } = await supabase
 .from("profiles")
-.select("id, username, display_name, bio, avatar_url")
+.select("id, username, display_name, bio, avatar_url, city, state, country")
 .in("id", ids);
 
 if (profErr) {
@@ -164,7 +167,9 @@ setModalLoading(false);
 
 const title = myProfile?.display_name || myProfile?.username || "My Profile";
 const subtitle = myProfile?.username ? `@${myProfile.username}` : "";
-const locationLine = "Tacoma, Washington, United States";
+const locationLine = [myProfile?.city, myProfile?.state, myProfile?.country]
+.filter(Boolean)
+.join(", ");
 
 const S = {
 page: {
@@ -429,7 +434,7 @@ fontSize: 18,
 <div style={{ minWidth: 0 }}>
 <h1 style={S.name}>{title}</h1>
 {subtitle ? <div style={S.sub}>{subtitle}</div> : null}
-<div style={S.sub}>{locationLine}</div>
+{locationLine ? <div style={S.sub}>{locationLine}</div> : null}
 <div style={S.bio}>{myProfile?.bio ? myProfile.bio : "No bio yet."}</div>
 </div>
 </div>

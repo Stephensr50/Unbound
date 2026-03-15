@@ -19,6 +19,10 @@ const [displayName, setDisplayName] = useState("");
 const [bio, setBio] = useState("");
 const [avatarUrl, setAvatarUrl] = useState<string>("");
 
+const [city, setCity] = useState("");
+const [stateName, setStateName] = useState("");
+const [country, setCountry] = useState("");
+
 const [status, setStatus] = useState<string>("");
 
 useEffect(() => {
@@ -37,22 +41,23 @@ const userId = authData.user.id;
 
 const { data: profile } = await supabase
 .from("profiles")
-.select("display_name, bio, avatar_url")
+.select("display_name, bio, avatar_url, city, state, country")
 .eq("id", userId)
 .single();
 
 if (profile) {
 setDisplayName(profile.display_name ?? "");
 setBio(profile.bio ?? "");
-setAvatarUrl(
-profile.avatar_url ? `${profile.avatar_url}?t=${Date.now()}` : ""
-);
+setCity(profile.city ?? "");
+setStateName(profile.state ?? "");
+setCountry(profile.country ?? "");
+setAvatarUrl(profile.avatar_url ? `${profile.avatar_url}?t=${Date.now()}` : "");
 }
 
 setLoading(false);
 };
 
-loadProfile();
+void loadProfile();
 }, []);
 
 const pickAvatar = () => {
@@ -87,9 +92,7 @@ const ext = (file.name.split(".").pop() || "jpg").toLowerCase();
 const safeExt = ["jpg", "jpeg", "png", "webp"].includes(ext) ? ext : "jpg";
 const path = `public/${userId}/avatar.${safeExt}`;
 
-const { error: uploadErr } = await supabase.storage
-.from("avatars")
-.upload(path, file, {
+const { error: uploadErr } = await supabase.storage.from("avatars").upload(path, file, {
 upsert: true,
 contentType: file.type,
 cacheControl: "3600",
@@ -112,10 +115,7 @@ return;
 
 setAvatarUrl(`${publicUrl}?t=${Date.now()}`);
 
-await supabase
-.from("profiles")
-.update({ avatar_url: publicUrl })
-.eq("id", userId);
+await supabase.from("profiles").update({ avatar_url: publicUrl }).eq("id", userId);
 
 setStatus("Avatar updated ✅");
 setUploading(false);
@@ -136,13 +136,64 @@ setSaving(false);
 return;
 }
 
-await supabase
+const cleanCity = city.trim();
+const cleanState = stateName.trim();
+const cleanCountry = country.trim();
+
+let latitude: number | null = null;
+let longitude: number | null = null;
+
+if (cleanCity || cleanState || cleanCountry) {
+try {
+const params = new URLSearchParams({
+city: cleanCity,
+state: cleanState,
+country: cleanCountry,
+});
+
+const geoRes = await fetch(`/api/geocode?${params.toString()}`, {
+cache: "no-store",
+});
+
+if (geoRes.ok) {
+const geo = (await geoRes.json()) as {
+latitude: number;
+longitude: number;
+};
+
+latitude = geo.latitude;
+longitude = geo.longitude;
+} else {
+const geoErr = await geoRes.json().catch(() => null);
+setStatus(geoErr?.error || "Could not geocode location.");
+setSaving(false);
+return;
+}
+} catch {
+setStatus("Could not geocode location.");
+setSaving(false);
+return;
+}
+}
+
+const { error } = await supabase
 .from("profiles")
 .update({
 display_name: displayName.trim(),
 bio,
+city: cleanCity || null,
+state: cleanState || null,
+country: cleanCountry || null,
+latitude,
+longitude,
 })
 .eq("id", authData.user.id);
+
+if (error) {
+setStatus(`Save failed: ${error.message}`);
+setSaving(false);
+return;
+}
 
 setStatus("Saved ✅");
 setSaving(false);
@@ -158,9 +209,7 @@ const initials = (displayName || "U")
 
 return (
 <div style={{ maxWidth: 720, margin: "0 auto", padding: 16, paddingTop: 96 }}>
-<h1 style={{ fontSize: 28, fontWeight: 800, marginBottom: 12 }}>
-Edit Profile
-</h1>
+<h1 style={{ fontSize: 28, fontWeight: 800, marginBottom: 12 }}>Edit Profile</h1>
 
 <div
 style={{
@@ -171,7 +220,6 @@ padding: 16,
 backdropFilter: "blur(10px)",
 }}
 >
-{/* Avatar */}
 <div style={{ display: "flex", gap: 14, marginBottom: 16 }}>
 <div
 onClick={pickAvatar}
@@ -201,16 +249,12 @@ objectFit: "cover",
 }}
 />
 ) : (
-<div style={{ fontSize: 32, fontWeight: 800 }}>
-{initials}
-</div>
+<div style={{ fontSize: 32, fontWeight: 800 }}>{initials}</div>
 )}
 </div>
 
 <div>
-<div style={{ fontSize: 12, opacity: 0.75, marginBottom: 6 }}>
-Profile picture
-</div>
+<div style={{ fontSize: 12, opacity: 0.75, marginBottom: 6 }}>Profile picture</div>
 <button
 onClick={pickAvatar}
 disabled={uploading}
@@ -236,11 +280,8 @@ style={{ display: "none" }}
 />
 </div>
 
-{/* Display Name */}
 <label>
-<div style={{ fontSize: 12, opacity: 0.8, marginBottom: 6 }}>
-Display name
-</div>
+<div style={{ fontSize: 12, opacity: 0.8, marginBottom: 6 }}>Display name</div>
 <input
 value={displayName}
 onChange={(e) => setDisplayName(e.target.value)}
@@ -257,7 +298,60 @@ marginBottom: 12,
 />
 </label>
 
-{/* Bio */}
+<label>
+<div style={{ fontSize: 12, opacity: 0.8, marginBottom: 6 }}>City</div>
+<input
+value={city}
+onChange={(e) => setCity(e.target.value)}
+disabled={loading}
+style={{
+width: "100%",
+padding: "10px 12px",
+borderRadius: 10,
+border: "1px solid rgba(255,255,255,0.15)",
+background: "rgba(0,0,0,0.35)",
+color: "white",
+marginBottom: 12,
+}}
+/>
+</label>
+
+<label>
+<div style={{ fontSize: 12, opacity: 0.8, marginBottom: 6 }}>State</div>
+<input
+value={stateName}
+onChange={(e) => setStateName(e.target.value)}
+disabled={loading}
+style={{
+width: "100%",
+padding: "10px 12px",
+borderRadius: 10,
+border: "1px solid rgba(255,255,255,0.15)",
+background: "rgba(0,0,0,0.35)",
+color: "white",
+marginBottom: 12,
+}}
+/>
+</label>
+
+<label>
+<div style={{ fontSize: 12, opacity: 0.8, marginBottom: 6 }}>Country</div>
+<input
+value={country}
+onChange={(e) => setCountry(e.target.value)}
+disabled={loading}
+style={{
+width: "100%",
+padding: "10px 12px",
+borderRadius: 10,
+border: "1px solid rgba(255,255,255,0.15)",
+background: "rgba(0,0,0,0.35)",
+color: "white",
+marginBottom: 12,
+}}
+/>
+</label>
+
 <label>
 <div style={{ fontSize: 12, opacity: 0.8, marginBottom: 6 }}>Bio</div>
 <textarea
