@@ -14,6 +14,7 @@ city: string | null;
 state: string | null;
 country: string | null;
 gender: string | null;
+last_active_at: string | null;
 };
 
 function getSupabase() {
@@ -37,16 +38,36 @@ const GENDER_OPTIONS = [
 "Prefer not to say",
 ];
 
+const RECENCY_OPTIONS = [
+{ label: "Any time", value: "any" },
+{ label: "Active in 7 days", value: "7" },
+{ label: "Active in 30 days", value: "30" },
+{ label: "Active in 90 days", value: "90" },
+];
+
+function timeAgo(ts: string | null) {
+if (!ts) return "";
+const then = new Date(ts).getTime();
+const now = Date.now();
+const s = Math.max(0, Math.floor((now - then) / 1000));
+if (s < 60) return "active just now";
+if (s < 3600) return `active ${Math.floor(s / 60)}m ago`;
+if (s < 86400) return `active ${Math.floor(s / 3600)}h ago`;
+return `active ${Math.floor(s / 86400)}d ago`;
+}
+
 export default function SearchBox({ initialValue = "" }: { initialValue?: string }) {
 const supabase = useMemo(() => getSupabase(), []);
 
 const [q, setQ] = useState(initialValue);
 const [locationText, setLocationText] = useState("");
 const [gender, setGender] = useState("Any");
+const [recency, setRecency] = useState("any");
 
 const [submittedQ, setSubmittedQ] = useState(initialValue);
 const [submittedLocationText, setSubmittedLocationText] = useState("");
 const [submittedGender, setSubmittedGender] = useState("Any");
+const [submittedRecency, setSubmittedRecency] = useState("any");
 
 const [loading, setLoading] = useState(false);
 const [results, setResults] = useState<ProfileRow[]>([]);
@@ -61,15 +82,18 @@ function runSearch() {
 setSubmittedQ(q.trim());
 setSubmittedLocationText(locationText.trim());
 setSubmittedGender(gender);
+setSubmittedRecency(recency);
 }
 
 function clearFilters() {
 setQ("");
 setLocationText("");
 setGender("Any");
+setRecency("any");
 setSubmittedQ("");
 setSubmittedLocationText("");
 setSubmittedGender("Any");
+setSubmittedRecency("any");
 setResults([]);
 setError(null);
 setLoading(false);
@@ -84,7 +108,7 @@ const loc = submittedLocationText.trim();
 
 setError(null);
 
-if (!term && !loc && submittedGender === "Any") {
+if (!term && !loc && submittedGender === "Any" && submittedRecency === "any") {
 setResults([]);
 setLoading(false);
 return;
@@ -94,17 +118,17 @@ setLoading(true);
 
 let query = supabase
 .from("profiles")
-.select("id, username, display_name, bio, avatar_url, city, state, country, gender")
+.select(
+"id, username, display_name, bio, avatar_url, city, state, country, gender, last_active_at"
+)
 .limit(25);
 
-// Main search box: username, display name, city, state, country
 if (term) {
 query = query.or(
 `username.ilike.%${term}%,display_name.ilike.%${term}%,city.ilike.%${term}%,state.ilike.%${term}%,country.ilike.%${term}%`
 );
 }
 
-// Secondary location filter box: city, state, country
 if (loc) {
 query = query.or(
 `city.ilike.%${loc}%,state.ilike.%${loc}%,country.ilike.%${loc}%`
@@ -114,6 +138,14 @@ query = query.or(
 if (submittedGender !== "Any") {
 query = query.eq("gender", submittedGender);
 }
+
+if (submittedRecency !== "any") {
+const days = Number(submittedRecency);
+const cutoff = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
+query = query.gte("last_active_at", cutoff);
+}
+
+query = query.order("last_active_at", { ascending: false, nullsFirst: false });
 
 const { data, error } = await query;
 
@@ -134,7 +166,7 @@ void run();
 return () => {
 cancelled = true;
 };
-}, [submittedQ, submittedLocationText, submittedGender, supabase]);
+}, [submittedQ, submittedLocationText, submittedGender, submittedRecency, supabase]);
 
 const shell: React.CSSProperties = {
 width: "min(920px, 94vw)",
@@ -253,7 +285,10 @@ whiteSpace: "nowrap",
 };
 
 const hasActiveSearch =
-!!submittedQ || !!submittedLocationText || submittedGender !== "Any";
+!!submittedQ ||
+!!submittedLocationText ||
+submittedGender !== "Any" ||
+submittedRecency !== "any";
 
 return (
 <div style={shell}>
@@ -286,6 +321,18 @@ style={selectStyle}
 {GENDER_OPTIONS.map((option) => (
 <option key={option} value={option} style={{ color: "black" }}>
 {option}
+</option>
+))}
+</select>
+
+<select
+value={recency}
+onChange={(e) => setRecency(e.target.value)}
+style={selectStyle}
+>
+{RECENCY_OPTIONS.map((option) => (
+<option key={option.value} value={option.value} style={{ color: "black" }}>
+{option.label}
 </option>
 ))}
 </select>
@@ -332,6 +379,7 @@ return (
 {handle ? <div style={subStyle}>{handle}</div> : null}
 {locationLine ? <div style={subStyle}>{locationLine}</div> : null}
 {p.gender ? <div style={subStyle}>{p.gender}</div> : null}
+{p.last_active_at ? <div style={subStyle}>{timeAgo(p.last_active_at)}</div> : null}
 {p.bio ? <div style={{ opacity: 0.9, marginTop: 8 }}>{p.bio}</div> : null}
 </div>
 

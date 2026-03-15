@@ -48,6 +48,27 @@ return `${Math.floor(s / 86400)}d`;
 }
 
 export default function FeedPage() {
+    useEffect(() => {
+async function updateLastActive() {
+const supabase = createClient(
+process.env.NEXT_PUBLIC_SUPABASE_URL!,
+process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+);
+
+const {
+data: { user },
+} = await supabase.auth.getUser();
+
+if (!user) return;
+
+await supabase
+.from("profiles")
+.update({ last_active_at: new Date().toISOString() })
+.eq("id", user.id);
+}
+
+updateLastActive();
+}, []);
 const supabase = useMemo(() => getSupabase(), []);
 const searchParams = useSearchParams();
 
