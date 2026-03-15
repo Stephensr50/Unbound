@@ -10,7 +10,10 @@ username: string | null;
 display_name: string | null;
 bio: string | null;
 avatar_url: string | null;
-location?: string | null;
+city: string | null;
+state: string | null;
+country: string | null;
+gender: string | null;
 };
 
 function getSupabase() {
@@ -24,38 +27,95 @@ throw new Error("Missing NEXT_PUBLIC_SUPABASE_URL or NEXT_PUBLIC_SUPABASE_ANON_K
 return createClient(url, key);
 }
 
+const GENDER_OPTIONS = [
+"Any",
+"Male",
+"Female",
+"Non-binary",
+"Transgender",
+"Other",
+"Prefer not to say",
+];
+
 export default function SearchBox({ initialValue = "" }: { initialValue?: string }) {
 const supabase = useMemo(() => getSupabase(), []);
+
 const [q, setQ] = useState(initialValue);
+const [locationText, setLocationText] = useState("");
+const [gender, setGender] = useState("Any");
+
+const [submittedQ, setSubmittedQ] = useState(initialValue);
+const [submittedLocationText, setSubmittedLocationText] = useState("");
+const [submittedGender, setSubmittedGender] = useState("Any");
+
 const [loading, setLoading] = useState(false);
 const [results, setResults] = useState<ProfileRow[]>([]);
 const [error, setError] = useState<string | null>(null);
 
-// keep input in sync if /search?q=... changes server-side
 useEffect(() => {
 setQ(initialValue);
+setSubmittedQ(initialValue);
 }, [initialValue]);
+
+function runSearch() {
+setSubmittedQ(q.trim());
+setSubmittedLocationText(locationText.trim());
+setSubmittedGender(gender);
+}
+
+function clearFilters() {
+setQ("");
+setLocationText("");
+setGender("Any");
+setSubmittedQ("");
+setSubmittedLocationText("");
+setSubmittedGender("Any");
+setResults([]);
+setError(null);
+setLoading(false);
+}
 
 useEffect(() => {
 let cancelled = false;
 
 async function run() {
-const term = (q || "").trim();
+const term = submittedQ.trim();
+const loc = submittedLocationText.trim();
+
 setError(null);
 
-if (!term) {
+if (!term && !loc && submittedGender === "Any") {
 setResults([]);
+setLoading(false);
 return;
 }
 
 setLoading(true);
 
-// ✅ IMPORTANT: search BOTH username and display_name
-const { data, error } = await supabase
+let query = supabase
 .from("profiles")
-.select("id, username, display_name, bio, avatar_url")
-.or(`username.ilike.%${term}%,display_name.ilike.%${term}%`)
+.select("id, username, display_name, bio, avatar_url, city, state, country, gender")
 .limit(25);
+
+// Main search box: username, display name, city, state, country
+if (term) {
+query = query.or(
+`username.ilike.%${term}%,display_name.ilike.%${term}%,city.ilike.%${term}%,state.ilike.%${term}%,country.ilike.%${term}%`
+);
+}
+
+// Secondary location filter box: city, state, country
+if (loc) {
+query = query.or(
+`city.ilike.%${loc}%,state.ilike.%${loc}%,country.ilike.%${loc}%`
+);
+}
+
+if (submittedGender !== "Any") {
+query = query.eq("gender", submittedGender);
+}
+
+const { data, error } = await query;
 
 if (cancelled) return;
 
@@ -69,12 +129,12 @@ setResults((data as ProfileRow[]) ?? []);
 setLoading(false);
 }
 
-const t = setTimeout(run, 250); // small debounce so it doesn’t spam queries
+void run();
+
 return () => {
 cancelled = true;
-clearTimeout(t);
 };
-}, [q, supabase]);
+}, [submittedQ, submittedLocationText, submittedGender, supabase]);
 
 const shell: React.CSSProperties = {
 width: "min(920px, 94vw)",
@@ -97,6 +157,59 @@ color: "white",
 fontSize: 16,
 };
 
+const filterRow: React.CSSProperties = {
+display: "flex",
+flexWrap: "wrap",
+gap: 12,
+marginTop: 12,
+alignItems: "center",
+};
+
+const smallInput: React.CSSProperties = {
+minWidth: 220,
+flex: "1 1 220px",
+padding: "10px 12px",
+borderRadius: 12,
+outline: "none",
+border: "1px solid rgba(255,255,255,0.18)",
+background: "rgba(0,0,0,0.30)",
+color: "white",
+fontSize: 15,
+};
+
+const selectStyle: React.CSSProperties = {
+minWidth: 220,
+padding: "10px 12px",
+borderRadius: 12,
+outline: "none",
+border: "1px solid rgba(255,255,255,0.18)",
+background: "rgba(0,0,0,0.30)",
+color: "white",
+fontSize: 15,
+appearance: "none",
+};
+
+const searchBtn: React.CSSProperties = {
+padding: "10px 14px",
+borderRadius: 12,
+border: "1px solid rgba(170, 90, 255, 0.45)",
+background: "rgba(120, 60, 220, 0.18)",
+color: "rgba(235,220,255,0.95)",
+cursor: "pointer",
+fontWeight: 800,
+boxShadow: "0 0 18px rgba(170, 90, 255, 0.18)",
+};
+
+const clearBtn: React.CSSProperties = {
+padding: "10px 12px",
+borderRadius: 12,
+border: "1px solid rgba(170, 90, 255, 0.35)",
+background: "rgba(120, 60, 220, 0.12)",
+color: "rgba(235,220,255,0.95)",
+cursor: "pointer",
+fontWeight: 700,
+};
+
 const row: React.CSSProperties = {
 display: "flex",
 alignItems: "center",
@@ -117,8 +230,15 @@ border: "1px solid rgba(255,255,255,0.18)",
 flex: "0 0 auto",
 };
 
-const nameStyle: React.CSSProperties = { fontSize: 18, fontWeight: 800 };
-const subStyle: React.CSSProperties = { opacity: 0.85, marginTop: 4 };
+const nameStyle: React.CSSProperties = {
+fontSize: 18,
+fontWeight: 800,
+};
+
+const subStyle: React.CSSProperties = {
+opacity: 0.85,
+marginTop: 4,
+};
 
 const viewLink: React.CSSProperties = {
 marginLeft: "auto",
@@ -132,41 +252,89 @@ boxShadow: "0 0 18px rgba(170, 90, 255, 0.18)",
 whiteSpace: "nowrap",
 };
 
+const hasActiveSearch =
+!!submittedQ || !!submittedLocationText || submittedGender !== "Any";
+
 return (
 <div style={shell}>
 <input
 style={inputStyle}
 value={q}
 onChange={(e) => setQ(e.target.value)}
-placeholder="Type a username or display name. Results update automatically."
+onKeyDown={(e) => {
+if (e.key === "Enter") runSearch();
+}}
+placeholder="Search users..."
 />
 
+<div style={filterRow}>
+<input
+style={smallInput}
+value={locationText}
+onChange={(e) => setLocationText(e.target.value)}
+onKeyDown={(e) => {
+if (e.key === "Enter") runSearch();
+}}
+placeholder="City / state / country"
+/>
+
+<select
+value={gender}
+onChange={(e) => setGender(e.target.value)}
+style={selectStyle}
+>
+{GENDER_OPTIONS.map((option) => (
+<option key={option} value={option} style={{ color: "black" }}>
+{option}
+</option>
+))}
+</select>
+
+<button onClick={runSearch} style={searchBtn}>
+Search
+</button>
+
+<button onClick={clearFilters} style={clearBtn}>
+Clear filters
+</button>
+</div>
+
 <div style={{ marginTop: 10, opacity: 0.85 }}>
-{loading ? "Searching..." : error ? `Error: ${error}` : results.length ? "" : q.trim() ? "No matches." : ""}
+{loading
+? "Searching..."
+: error
+? `Error: ${error}`
+: results.length
+? ""
+: hasActiveSearch
+? "No matches."
+: ""}
 </div>
 
 {results.map((p) => {
 const label = p.display_name || p.username || "Unknown";
 const handle = p.username ? `@${p.username}` : null;
+const locationLine = [p.city, p.state, p.country].filter(Boolean).join(", ");
 
 return (
 <div key={p.id} style={row}>
 {p.avatar_url ? (
-// If your avatar_url is already a full URL, this is fine.
-// If it’s a Supabase storage path, we can adjust later.
+// eslint-disable-next-line @next/next/no-img-element
 <img src={p.avatar_url} alt="" style={avatar} />
 ) : (
-<div style={{ ...avatar, display: "grid", placeItems: "center", opacity: 0.7 }}>?</div>
+<div style={{ ...avatar, display: "grid", placeItems: "center", opacity: 0.7 }}>
+?
+</div>
 )}
 
 <div style={{ minWidth: 0 }}>
 <div style={nameStyle}>{label}</div>
 {handle ? <div style={subStyle}>{handle}</div> : null}
+{locationLine ? <div style={subStyle}>{locationLine}</div> : null}
+{p.gender ? <div style={subStyle}>{p.gender}</div> : null}
 {p.bio ? <div style={{ opacity: 0.9, marginTop: 8 }}>{p.bio}</div> : null}
 </div>
 
-{/* ✅ THIS is the part that was broken before.
-Link must wrap its content properly. */}
 <Link href={`/u/${p.id}`} style={viewLink}>
 View →
 </Link>
