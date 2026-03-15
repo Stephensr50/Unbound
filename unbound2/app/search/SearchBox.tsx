@@ -56,6 +56,13 @@ if (s < 86400) return `active ${Math.floor(s / 3600)}h ago`;
 return `active ${Math.floor(s / 86400)}d ago`;
 }
 
+function isActiveNow(ts: string | null) {
+if (!ts) return false;
+const then = new Date(ts).getTime();
+const now = Date.now();
+return now - then <= 5 * 60 * 1000;
+}
+
 export default function SearchBox({ initialValue = "" }: { initialValue?: string }) {
 const supabase = useMemo(() => getSupabase(), []);
 
@@ -375,7 +382,31 @@ return (
 )}
 
 <div style={{ minWidth: 0 }}>
-<div style={nameStyle}>{label}</div>
+<div
+style={{
+...nameStyle,
+display: "flex",
+alignItems: "center",
+gap: 8,
+}}
+>
+<span>{label}</span>
+
+{isActiveNow(p.last_active_at) ? (
+<span
+title="Active now"
+style={{
+width: 10,
+height: 10,
+borderRadius: 999,
+background: "#22c55e",
+boxShadow: "0 0 10px rgba(34,197,94,0.75)",
+display: "inline-block",
+}}
+/>
+) : null}
+</div>
+
 {handle ? <div style={subStyle}>{handle}</div> : null}
 {locationLine ? <div style={subStyle}>{locationLine}</div> : null}
 {p.gender ? <div style={subStyle}>{p.gender}</div> : null}
