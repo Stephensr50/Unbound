@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { createClient } from "@supabase/supabase-js";
 import { useRouter } from "next/navigation";
@@ -29,7 +28,9 @@ const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
 if (!url || !key) {
-throw new Error("Missing NEXT_PUBLIC_SUPABASE_URL or NEXT_PUBLIC_SUPABASE_ANON_KEY");
+throw new Error(
+"Missing NEXT_PUBLIC_SUPABASE_URL or NEXT_PUBLIC_SUPABASE_ANON_KEY"
+);
 }
 
 return createClient(url, key);
@@ -106,7 +107,11 @@ if (miles < 10) return `${miles.toFixed(1)} miles away`;
 return `${Math.round(miles)} miles away`;
 }
 
-export default function SearchBox({ initialValue = "" }: { initialValue?: string }) {
+export default function SearchBox({
+initialValue = "",
+}: {
+initialValue?: string;
+}) {
 const router = useRouter();
 const supabase = useMemo(() => getSupabase(), []);
 
@@ -121,12 +126,15 @@ const [submittedLocationText, setSubmittedLocationText] = useState("");
 const [submittedGender, setSubmittedGender] = useState("Any");
 const [submittedRecency, setSubmittedRecency] = useState("any");
 const [submittedRadius, setSubmittedRadius] = useState("any");
+const [ripples, setRipples] = useState<Record<string, boolean>>({});
 
 const [loading, setLoading] = useState(false);
 const [results, setResults] = useState<ProfileWithDistance[]>([]);
 const [error, setError] = useState<string | null>(null);
 
-const [myCoords, setMyCoords] = useState<{ lat: number; lng: number } | null>(null);
+const [myCoords, setMyCoords] = useState<{ lat: number; lng: number } | null>(
+null
+);
 const [geoError, setGeoError] = useState<string | null>(null);
 
 const [showRadar, setShowRadar] = useState(false);
@@ -262,11 +270,16 @@ query = query.eq("gender", submittedGender);
 
 if (submittedRecency !== "any") {
 const days = Number(submittedRecency);
-const cutoff = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
+const cutoff = new Date(
+Date.now() - days * 24 * 60 * 60 * 1000
+).toISOString();
 query = query.gte("last_active_at", cutoff);
 }
 
-query = query.order("last_active_at", { ascending: false, nullsFirst: false });
+query = query.order("last_active_at", {
+ascending: false,
+nullsFirst: false,
+});
 
 const { data, error } = await query;
 
@@ -303,8 +316,27 @@ distanceMiles,
 };
 })
 .filter((p) => (p.distanceMiles ?? Infinity) <= maxMiles)
-.sort((a, b) => (a.distanceMiles ?? Infinity) - (b.distanceMiles ?? Infinity));
+.sort(
+(a, b) => (a.distanceMiles ?? Infinity) - (b.distanceMiles ?? Infinity)
+);
 }
+
+rows.sort((a, b) => {
+const aActive = isActiveNow(a.last_active_at) ? 1 : 0;
+const bActive = isActiveNow(b.last_active_at) ? 1 : 0;
+
+if (aActive !== bActive) return bActive - aActive;
+
+const aDist = a.distanceMiles ?? Infinity;
+const bDist = b.distanceMiles ?? Infinity;
+
+if (aDist !== bDist) return aDist - bDist;
+
+const aTime = new Date(a.last_active_at || 0).getTime();
+const bTime = new Date(b.last_active_at || 0).getTime();
+
+return bTime - aTime;
+});
 
 setResults(rows);
 setLoading(false);
@@ -399,7 +431,7 @@ cursor: "pointer",
 fontWeight: 700,
 };
 
-const row = {
+const row: React.CSSProperties = {
 display: "flex",
 gap: 12,
 padding: 14,
@@ -407,6 +439,7 @@ borderRadius: 16,
 border: "1px solid rgba(180,120,255,0.18)",
 background: "rgba(20,20,30,0.6)",
 transition: "all 0.2s ease",
+marginTop: 12,
 };
 
 const avatar: React.CSSProperties = {
@@ -428,18 +461,6 @@ opacity: 0.85,
 marginTop: 4,
 };
 
-const viewLink: React.CSSProperties = {
-marginLeft: "auto",
-padding: "10px 12px",
-borderRadius: 12,
-border: "1px solid rgba(170, 90, 255, 0.45)",
-color: "rgba(220, 190, 255, 0.95)",
-textDecoration: "none",
-background: "rgba(120, 60, 220, 0.18)",
-boxShadow: "0 0 18px rgba(170, 90, 255, 0.18)",
-whiteSpace: "nowrap",
-};
-
 const hasActiveSearch =
 !!submittedQ ||
 !!submittedLocationText ||
@@ -453,6 +474,23 @@ return (
 @keyframes unboundRadarSpin {
 from { transform: rotate(0deg); }
 to { transform: rotate(360deg); }
+}
+
+@keyframes unboundSearchRipple {
+0% {
+transform: scale(0.2);
+opacity: 0.45;
+}
+100% {
+transform: scale(2.8);
+opacity: 0;
+}
+}
+
+@keyframes unboundActivePulse {
+0% { transform: scale(1); box-shadow: 0 0 8px rgba(34,197,94,0.55); }
+50% { transform: scale(1.18); box-shadow: 0 0 16px rgba(34,197,94,0.95); }
+100% { transform: scale(1); box-shadow: 0 0 8px rgba(34,197,94,0.55); }
 }
 
 @keyframes unboundRadarPulse {
@@ -469,6 +507,10 @@ onKeyDown={(e) => {
 if (e.key === "Enter") runSearch();
 }}
 placeholder="Search users..."
+autoComplete="off"
+spellCheck={false}
+autoCorrect="off"
+autoCapitalize="none"
 />
 
 <div style={filterRow}>
@@ -480,6 +522,10 @@ onKeyDown={(e) => {
 if (e.key === "Enter") runSearch();
 }}
 placeholder="City / state / country"
+autoComplete="off"
+spellCheck={false}
+autoCorrect="off"
+autoCapitalize="none"
 />
 
 <select
@@ -500,7 +546,11 @@ onChange={(e) => setRecency(e.target.value)}
 style={selectStyle}
 >
 {RECENCY_OPTIONS.map((option) => (
-<option key={option.value} value={option.value} style={{ color: "black" }}>
+<option
+key={option.value}
+value={option.value}
+style={{ color: "black" }}
+>
 {option.label}
 </option>
 ))}
@@ -512,7 +562,11 @@ onChange={(e) => setRadius(e.target.value)}
 style={selectStyle}
 >
 {RADIUS_OPTIONS.map((option) => (
-<option key={option.value} value={option.value} style={{ color: "black" }}>
+<option
+key={option.value}
+value={option.value}
+style={{ color: "black" }}
+>
 {option.label}
 </option>
 ))}
@@ -654,21 +708,34 @@ Scanning nearby…
 results.map((p) => {
 const label = p.display_name || p.username || "Unknown";
 const handle = p.username ? `@${p.username}` : null;
-const locationLine = [p.city, p.state, p.country].filter(Boolean).join(", ");
+const locationLine = [p.city, p.state, p.country]
+.filter(Boolean)
+.join(", ");
 const distanceLine = formatDistance(p.distanceMiles);
 
 return (
 <div
 key={p.id}
-style={{ ...row, cursor: "pointer" }}
+style={{
+...row,
+cursor: "pointer",
+position: "relative",
+overflow: "hidden",
+}}
 onMouseEnter={(e) => {
 e.currentTarget.style.transform = "translateY(-2px)";
-e.currentTarget.style.boxShadow = "0 0 18px rgba(168,85,247,0.35)";
+e.currentTarget.style.background = "rgba(30,20,50,0.75)";
+e.currentTarget.style.boxShadow = `
+0 0 12px rgba(168,85,247,0.25),
+0 0 24px rgba(147,51,234,0.25),
+inset 0 0 12px rgba(168,85,247,0.15)
+`;
 e.currentTarget.style.border = "1px solid rgba(168,85,247,0.6)";
 }}
 onMouseLeave={(e) => {
 e.currentTarget.style.transform = "translateY(0px)";
 e.currentTarget.style.boxShadow = "none";
+e.currentTarget.style.background = "rgba(20,20,30,0.6)";
 e.currentTarget.style.border = "1px solid rgba(180,120,255,0.18)";
 }}
 onMouseDown={(e) => {
@@ -677,13 +744,46 @@ e.currentTarget.style.transform = "scale(0.98)";
 onMouseUp={(e) => {
 e.currentTarget.style.transform = "translateY(-2px)";
 }}
-onClick={() => router.push(`/u/${p.id}`)}
+onClick={() => {
+setRipples((m) => ({ ...m, [p.id]: true }));
+window.setTimeout(() => {
+setRipples((m) => ({ ...m, [p.id]: false }));
+router.push(`/u/${p.id}`);
+}, 180);
+}}
 >
+{ripples[p.id] ? (
+<span
+style={{
+position: "absolute",
+left: "50%",
+top: "50%",
+width: 180,
+height: 180,
+marginLeft: -90,
+marginTop: -90,
+borderRadius: 999,
+background: "rgba(168,85,247,0.22)",
+pointerEvents: "none",
+animation: "unboundSearchRipple 0.45s ease-out forwards",
+zIndex: 0,
+}}
+/>
+) : null}
+
+<div style={{ position: "relative", zIndex: 1, display: "flex", gap: 12 }}>
 {p.avatar_url ? (
 // eslint-disable-next-line @next/next/no-img-element
 <img src={p.avatar_url} alt="" style={avatar} />
 ) : (
-<div style={{ ...avatar, display: "grid", placeItems: "center", opacity: 0.7 }}>
+<div
+style={{
+...avatar,
+display: "grid",
+placeItems: "center",
+opacity: 0.7,
+}}
+>
 ?
 </div>
 )}
@@ -709,6 +809,8 @@ borderRadius: 999,
 background: "#22c55e",
 boxShadow: "0 0 10px rgba(34,197,94,0.75)",
 display: "inline-block",
+animation:
+"unboundActivePulse 1.6s ease-in-out infinite",
 }}
 />
 ) : null}
@@ -718,11 +820,14 @@ display: "inline-block",
 {locationLine ? <div style={subStyle}>{locationLine}</div> : null}
 {distanceLine ? <div style={subStyle}>{distanceLine}</div> : null}
 {p.gender ? <div style={subStyle}>{p.gender}</div> : null}
-{p.last_active_at ? <div style={subStyle}>{timeAgo(p.last_active_at)}</div> : null}
-{p.bio ? <div style={{ opacity: 0.9, marginTop: 8 }}>{p.bio}</div> : null}
+{p.last_active_at ? (
+<div style={subStyle}>{timeAgo(p.last_active_at)}</div>
+) : null}
+{p.bio ? (
+<div style={{ opacity: 0.9, marginTop: 8 }}>{p.bio}</div>
+) : null}
 </div>
-
-
+</div>
 </div>
 );
 })}
