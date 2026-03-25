@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { createClient } from "@supabase/supabase-js";
+import { useRouter } from "next/navigation";
 
 type ProfileRow = {
 id: string;
@@ -106,6 +107,7 @@ return `${Math.round(miles)} miles away`;
 }
 
 export default function SearchBox({ initialValue = "" }: { initialValue?: string }) {
+const router = useRouter();
 const supabase = useMemo(() => getSupabase(), []);
 
 const [q, setQ] = useState(initialValue);
@@ -397,15 +399,14 @@ cursor: "pointer",
 fontWeight: 700,
 };
 
-const row: React.CSSProperties = {
+const row = {
 display: "flex",
-alignItems: "center",
-gap: 14,
-padding: "14px 12px",
-marginTop: 10,
-borderRadius: 14,
-border: "1px solid rgba(255,255,255,0.12)",
-background: "rgba(0,0,0,0.30)",
+gap: 12,
+padding: 14,
+borderRadius: 16,
+border: "1px solid rgba(180,120,255,0.18)",
+background: "rgba(20,20,30,0.6)",
+transition: "all 0.2s ease",
 };
 
 const avatar: React.CSSProperties = {
@@ -657,7 +658,27 @@ const locationLine = [p.city, p.state, p.country].filter(Boolean).join(", ");
 const distanceLine = formatDistance(p.distanceMiles);
 
 return (
-<div key={p.id} style={row}>
+<div
+key={p.id}
+style={{ ...row, cursor: "pointer" }}
+onMouseEnter={(e) => {
+e.currentTarget.style.transform = "translateY(-2px)";
+e.currentTarget.style.boxShadow = "0 0 18px rgba(168,85,247,0.35)";
+e.currentTarget.style.border = "1px solid rgba(168,85,247,0.6)";
+}}
+onMouseLeave={(e) => {
+e.currentTarget.style.transform = "translateY(0px)";
+e.currentTarget.style.boxShadow = "none";
+e.currentTarget.style.border = "1px solid rgba(180,120,255,0.18)";
+}}
+onMouseDown={(e) => {
+e.currentTarget.style.transform = "scale(0.98)";
+}}
+onMouseUp={(e) => {
+e.currentTarget.style.transform = "translateY(-2px)";
+}}
+onClick={() => router.push(`/u/${p.id}`)}
+>
 {p.avatar_url ? (
 // eslint-disable-next-line @next/next/no-img-element
 <img src={p.avatar_url} alt="" style={avatar} />
@@ -701,9 +722,7 @@ display: "inline-block",
 {p.bio ? <div style={{ opacity: 0.9, marginTop: 8 }}>{p.bio}</div> : null}
 </div>
 
-<Link href={`/u/${p.id}`} style={viewLink}>
-View →
-</Link>
+
 </div>
 );
 })}
