@@ -12,7 +12,6 @@ const pathname = usePathname();
 const router = useRouter();
 const searchParams = useSearchParams();
 
-// ---------- state ----------
 const [q, setQ] = useState("");
 const [mounted, setMounted] = useState(false);
 
@@ -20,11 +19,9 @@ useEffect(() => {
 setMounted(true);
 }, []);
 
-// ---------- badges ----------
 const { unread, refresh, supabase } = useUnreadCount();
 const { notifUnread, refreshNotifs } = useUnreadNotifications();
 
-// keep stable refs for realtime callbacks
 const refreshRef = useRef(refresh);
 useEffect(() => {
 refreshRef.current = refresh;
@@ -35,7 +32,6 @@ useEffect(() => {
 refreshNotifsRef.current = refreshNotifs;
 }, [refreshNotifs]);
 
-// realtime: messages badge
 useEffect(() => {
 const ch = supabase
 .channel("messages-badge")
@@ -51,20 +47,22 @@ supabase.removeChannel(ch);
 };
 }, [supabase]);
 
-// safety refresh on route change (messages + notifs)
 useEffect(() => {
 refresh();
 refreshNotifs();
 // eslint-disable-next-line react-hooks/exhaustive-deps
 }, [pathname]);
 
-// sync search param
 useEffect(() => {
 setQ(searchParams?.get("q") ?? "");
 }, [searchParams]);
 
-// ---------- hide on auth pages ----------
-const hideOn = new Set(["/login", "/signup", "/forgot-password", "/reset-password"]);
+const hideOn = new Set([
+"/login",
+"/signup",
+"/forgot-password",
+"/reset-password",
+]);
 const shouldHide = !!pathname && hideOn.has(pathname);
 if (shouldHide) return null;
 
@@ -149,6 +147,10 @@ Feed
 
 <Link href="/explore" style={tabStyle(isActive("/explore"))}>
 Explore
+</Link>
+
+<Link href="/groups" style={tabStyle(isActive("/groups"))}>
+Groups
 </Link>
 
 <Link href="/profile" style={tabStyle(isActive("/profile"))}>
