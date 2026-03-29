@@ -322,22 +322,40 @@ distanceMiles,
 }
 
 rows.sort((a, b) => {
-const aActive = isActiveNow(a.last_active_at) ? 1 : 0;
-const bActive = isActiveNow(b.last_active_at) ? 1 : 0;
+const aActiveNow = isActiveNow(a.last_active_at) ? 1 : 0;
+const bActiveNow = isActiveNow(b.last_active_at) ? 1 : 0;
 
-if (aActive !== bActive) return bActive - aActive;
+if (aActiveNow !== bActiveNow) return bActiveNow - aActiveNow;
+
+const aRecent = a.last_active_at
+? new Date(a.last_active_at).getTime()
+: 0;
+const bRecent = b.last_active_at
+? new Date(b.last_active_at).getTime()
+: 0;
 
 const aDist = a.distanceMiles ?? Infinity;
 const bDist = b.distanceMiles ?? Infinity;
 
-if (aDist !== bDist) return aDist - bDist;
+const usingRadiusSort = submittedRadius !== "any";
 
-const aTime = new Date(a.last_active_at || 0).getTime();
-const bTime = new Date(b.last_active_at || 0).getTime();
+if (usingRadiusSort && aDist !== bDist) {
+return aDist - bDist;
+}
 
-return bTime - aTime;
+if (aRecent !== bRecent) {
+return bRecent - aRecent;
+}
+
+if (!usingRadiusSort && aDist !== bDist) {
+return aDist - bDist;
+}
+
+const aName = (a.display_name || a.username || "").toLowerCase();
+const bName = (b.display_name || b.username || "").toLowerCase();
+
+return aName.localeCompare(bName);
 });
-
 setResults(rows);
 setLoading(false);
 }
@@ -771,7 +789,15 @@ zIndex: 0,
 />
 ) : null}
 
-<div style={{ position: "relative", zIndex: 1, display: "flex", gap: 12 }}>
+<div
+style={{
+position: "relative",
+zIndex: 1,
+display: "flex",
+gap: 12,
+}}
+>
+<div style={{ position: "relative" }}>
 {p.avatar_url ? (
 // eslint-disable-next-line @next/next/no-img-element
 <img src={p.avatar_url} alt="" style={avatar} />
@@ -787,6 +813,22 @@ opacity: 0.7,
 ?
 </div>
 )}
+
+{isActiveNow(p.last_active_at) && (
+<span
+style={{
+position: "absolute",
+bottom: 2,
+right: 2,
+width: 10,
+height: 10,
+borderRadius: 999,
+background: "#22c55e",
+boxShadow: "0 0 10px rgba(34,197,94,0.9)",
+}}
+/>
+)}
+</div>
 
 <div style={{ minWidth: 0 }}>
 <div
@@ -809,8 +851,7 @@ borderRadius: 999,
 background: "#22c55e",
 boxShadow: "0 0 10px rgba(34,197,94,0.75)",
 display: "inline-block",
-animation:
-"unboundActivePulse 1.6s ease-in-out infinite",
+animation: "unboundActivePulse 1.6s ease-in-out infinite",
 }}
 />
 ) : null}
