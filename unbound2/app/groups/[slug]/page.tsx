@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { createClient } from "@supabase/supabase-js";
+import Link from "next/link";
 
 function getSupabase() {
 const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -54,6 +55,13 @@ display_name: string | null;
 avatar_url: string | null;
 };
 
+type MemberProfile = {
+user_id: string;
+role: "owner" | "admin" | "member";
+created_at: string;
+profile: ProfileRow | null;
+};
+
 function timeAgo(ts: string) {
 const then = new Date(ts).getTime();
 const now = Date.now();
@@ -83,7 +91,11 @@ const [status, setStatus] = useState("");
 const [postBody, setPostBody] = useState("");
 const [posting, setPosting] = useState(false);
 const [posts, setPosts] = useState<PostRow[]>([]);
-const [profilesById, setProfilesById] = useState<Record<string, ProfileRow>>({});
+const [profilesById, setProfilesById] = useState<Record<string, ProfileRow>>(
+{}
+);
+
+const [members, setMembers] = useState<MemberProfile[]>([]);
 
 useEffect(() => {
 let alive = true;
@@ -111,7 +123,9 @@ if (postErr) throw postErr;
 const safePosts = (postData ?? []) as PostRow[];
 setPosts(safePosts);
 
-const userIds = Array.from(new Set(safePosts.map((p) => p.user_id).filter(Boolean)));
+const userIds = Array.from(
+new Set(safePosts.map((p) => p.user_id).filter(Boolean))
+);
 if (userIds.length === 0) {
 setProfilesById({});
 return;
@@ -129,6 +143,68 @@ for (const p of (profileData ?? []) as ProfileRow[]) {
 map[p.id] = p;
 }
 setProfilesById(map);
+}
+
+async function loadMembers(groupId: number) {
+const { data: memberRows, error: memberErr } = await supabase
+.from("group_members")
+.select("id,group_id,user_id,role,created_at")
+.eq("group_id", groupId)
+.order("created_at", { ascending: true });
+
+if (memberErr) throw memberErr;
+
+const safeMembers = (memberRows ?? []) as MemberRow[];
+
+const ids = Array.from(new Set(safeMembers.map((m) => m.user_id)));
+let profileMap: Record<string, ProfileRow> = {};
+
+if (ids.length > 0) {
+const { data: profileRows, error: profileErr } = await supabase
+.from("profiles")
+.select("id,username,display_name,avatar_url")
+.in("id", ids);
+
+if (profileErr) throw profileErr;
+
+for (const p of (profileRows ?? []) as ProfileRow[]) {
+profileMap[p.id] = p;
+}
+}
+
+const sorted = [...safeMembers].sort((a, b) => {
+const rank = (role: string) => {
+if (role === "owner") return 0;
+if (role === "admin") return 1;
+return 2;
+};
+
+const r = rank(a.role) - rank(b.role);
+if (r !== 0) return r;
+
+const aName = (
+profileMap[a.user_id]?.display_name ||
+profileMap[a.user_id]?.username ||
+""
+).toLowerCase();
+
+const bName = (
+profileMap[b.user_id]?.display_name ||
+profileMap[b.user_id]?.username ||
+""
+).toLowerCase();
+
+return aName.localeCompare(bName);
+});
+
+setMembers(
+sorted.map((m) => ({
+user_id: m.user_id,
+role: m.role,
+created_at: m.created_at,
+profile: profileMap[m.user_id] ?? null,
+}))
+);
 }
 
 useEffect(() => {
@@ -185,7 +261,7 @@ setMyMembership((membership as MemberRow) ?? null);
 setMyMembership(null);
 }
 
-await loadPosts(groupData.id);
+await Promise.all([loadPosts(groupData.id), loadMembers(groupData.id)]);
 
 setLoading(false);
 } catch (e: any) {
@@ -229,6 +305,7 @@ created_at: new Date().toISOString(),
 });
 
 setMemberCount((n) => n + 1);
+await loadMembers(group.id);
 } catch (e: any) {
 setStatus(e?.message || "Could not join group.");
 } finally {
@@ -253,6 +330,7 @@ if (error) throw error;
 
 setMyMembership(null);
 setMemberCount((n) => Math.max(0, n - 1));
+await loadMembers(group.id);
 } catch (e: any) {
 setStatus(e?.message || "Could not leave group.");
 } finally {
@@ -262,6 +340,10 @@ setBusy(false);
 
 async function createGroupPost() {
 if (!group) return;
+if (!myMembership) {
+setStatus("Join the group before posting.");
+return;
+}
 
 const trimmed = postBody.trim();
 if (!trimmed) {
@@ -343,7 +425,13 @@ border: "1px solid rgba(255,255,255,0.08)",
 
 if (loading) {
 return (
-<div style={{ width: "min(940px, 94vw)", margin: "24px auto", opacity: 0.85 }}>
+<div
+style={{
+width: "min(940px, 94vw)",
+margin: "24px auto",
+opacity: 0.85,
+}}
+>
 Loading group...
 </div>
 );
@@ -351,7 +439,13 @@ Loading group...
 
 if (!group) {
 return (
-<div style={{ width: "min(940px, 94vw)", margin: "24px auto", opacity: 0.85 }}>
+<div
+style={{
+width: "min(940px, 94vw)",
+margin: "24px auto",
+opacity: 0.85,
+}}
+>
 Group not found.
 </div>
 );
@@ -407,7 +501,10 @@ fontWeight: 900,
 {busy ? "Leaving..." : "Leave group"}
 </button>
 ) : (
-<button disabled style={{ ...button, opacity: 0.75, cursor: "default" }}>
+<button
+disabled
+style={{ ...button, opacity: 0.75, cursor: "default" }}
+>
 Owner
 </button>
 )}
@@ -415,7 +512,9 @@ Owner
 </div>
 
 {status ? (
-<div style={{ marginTop: 12, fontSize: 13, opacity: 0.9 }}>{status}</div>
+<div style={{ marginTop: 12, fontSize: 13, opacity: 0.9 }}>
+{status}
+</div>
 ) : null}
 
 <div style={card}>
@@ -423,6 +522,8 @@ Owner
 Write to the group
 </div>
 
+{isMember ? (
+<>
 <textarea
 value={postBody}
 onChange={(e) => setPostBody(e.target.value)}
@@ -447,6 +548,87 @@ style={{ ...button, marginTop: 12 }}
 >
 {posting ? "Posting..." : "Post to group"}
 </button>
+</>
+) : (
+<div style={{ opacity: 0.82 }}>
+Join this group to post in it.
+</div>
+)}
+</div>
+
+<div style={{ ...card, marginTop: 18 }}>
+<div style={{ fontSize: 18, fontWeight: 800, marginBottom: 10 }}>
+Members
+</div>
+
+{members.length === 0 ? (
+<div style={{ opacity: 0.78 }}>No members yet.</div>
+) : null}
+
+{members.map((member) => {
+const profile = member.profile;
+const label =
+profile?.display_name || profile?.username || "Unknown user";
+const handle = profile?.username ? `@${profile.username}` : "";
+
+return (
+<Link
+key={`${member.user_id}-${member.role}`}
+href={`/u/${member.user_id}`}
+style={{
+display: "flex",
+alignItems: "center",
+gap: 12,
+padding: 12,
+borderRadius: 14,
+border: "1px solid rgba(180,120,255,0.10)",
+background: "rgba(0,0,0,0.18)",
+marginTop: 10,
+textDecoration: "none",
+color: "white",
+}}
+>
+{profile?.avatar_url ? (
+// eslint-disable-next-line @next/next/no-img-element
+<img
+src={profile.avatar_url}
+alt=""
+style={{
+width: 42,
+height: 42,
+borderRadius: 999,
+objectFit: "cover",
+border: "1px solid rgba(255,255,255,0.16)",
+}}
+/>
+) : (
+<div
+style={{
+width: 42,
+height: 42,
+borderRadius: 999,
+display: "grid",
+placeItems: "center",
+border: "1px solid rgba(255,255,255,0.16)",
+opacity: 0.7,
+}}
+>
+?
+</div>
+)}
+
+<div style={{ minWidth: 0, flex: 1 }}>
+<div style={{ fontWeight: 800 }}>{label}</div>
+<div style={{ opacity: 0.72, fontSize: 13 }}>
+{handle} {handle ? "· " : ""}
+{member.role}
+</div>
+</div>
+
+<div style={{ opacity: 0.62, fontSize: 13 }}>View →</div>
+</Link>
+);
+})}
 </div>
 
 <div style={{ ...card, marginTop: 18 }}>
@@ -508,13 +690,16 @@ opacity: 0.7,
 <div>
 <div style={{ fontWeight: 800 }}>{authorName}</div>
 <div style={{ opacity: 0.72, fontSize: 13 }}>
-{handle} {handle ? "· " : ""}{timeAgo(post.created_at)}
+{handle} {handle ? "· " : ""}
+{timeAgo(post.created_at)}
 </div>
 </div>
 </div>
 
 {post.body ? (
-<div style={{ marginTop: 12, lineHeight: 1.5 }}>{post.body}</div>
+<div style={{ marginTop: 12, lineHeight: 1.5 }}>
+{post.body}
+</div>
 ) : null}
 </div>
 );
