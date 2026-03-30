@@ -62,6 +62,14 @@ created_at: string;
 profile: ProfileRow | null;
 };
 
+type CommentRow = {
+id: number;
+post_id: number;
+user_id: string;
+body: string;
+created_at: string;
+};
+
 function timeAgo(ts: string) {
 const then = new Date(ts).getTime();
 const now = Date.now();
@@ -94,8 +102,21 @@ const [posts, setPosts] = useState<PostRow[]>([]);
 const [profilesById, setProfilesById] = useState<Record<string, ProfileRow>>(
 {}
 );
-
 const [members, setMembers] = useState<MemberProfile[]>([]);
+
+const [likeCounts, setLikeCounts] = useState<Record<number, number>>({});
+const [commentCounts, setCommentCounts] = useState<Record<number, number>>({});
+const [likedByMe, setLikedByMe] = useState<Record<number, boolean>>({});
+const [likeBusy, setLikeBusy] = useState<Record<number, boolean>>({});
+const [openComments, setOpenComments] = useState<Record<number, boolean>>({});
+const [commentsByPost, setCommentsByPost] = useState<Record<number, CommentRow[]>>(
+{}
+);
+const [commentDraft, setCommentDraft] = useState<Record<number, string>>({});
+const [commentBusy, setCommentBusy] = useState<Record<number, boolean>>({});
+const [loadingComments, setLoadingComments] = useState<Record<number, boolean>>(
+{}
+);
 
 useEffect(() => {
 let alive = true;
@@ -111,7 +132,53 @@ alive = false;
 };
 }, [params]);
 
-async function loadPosts(groupId: number) {
+async function loadPostMeta(postIds: number[], uid: string | null) {
+if (postIds.length === 0) {
+setLikeCounts({});
+setCommentCounts({});
+setLikedByMe({});
+return;
+}
+
+const [likesRes, commentsRes] = await Promise.all([
+supabase
+.from("post_likes")
+.select("post_id,user_id")
+.in("post_id", postIds),
+supabase
+.from("post_comments")
+.select("post_id")
+.in("post_id", postIds),
+]);
+
+if (likesRes.error) throw likesRes.error;
+if (commentsRes.error) throw commentsRes.error;
+
+const nextLikeCounts: Record<number, number> = {};
+const nextCommentCounts: Record<number, number> = {};
+const nextLikedByMe: Record<number, boolean> = {};
+
+for (const postId of postIds) {
+nextLikeCounts[postId] = 0;
+nextCommentCounts[postId] = 0;
+nextLikedByMe[postId] = false;
+}
+
+for (const row of likesRes.data ?? []) {
+nextLikeCounts[row.post_id] = (nextLikeCounts[row.post_id] ?? 0) + 1;
+if (uid && row.user_id === uid) nextLikedByMe[row.post_id] = true;
+}
+
+for (const row of commentsRes.data ?? []) {
+nextCommentCounts[row.post_id] = (nextCommentCounts[row.post_id] ?? 0) + 1;
+}
+
+setLikeCounts(nextLikeCounts);
+setCommentCounts(nextCommentCounts);
+setLikedByMe(nextLikedByMe);
+}
+
+async function loadPosts(groupId: number, uid: string | null) {
 const { data: postData, error: postErr } = await supabase
 .from("posts")
 .select("id,user_id,body,kind,created_at,media_url,media_type,group_id")
@@ -126,11 +193,8 @@ setPosts(safePosts);
 const userIds = Array.from(
 new Set(safePosts.map((p) => p.user_id).filter(Boolean))
 );
-if (userIds.length === 0) {
-setProfilesById({});
-return;
-}
 
+if (userIds.length > 0) {
 const { data: profileData, error: profileErr } = await supabase
 .from("profiles")
 .select("id,username,display_name,avatar_url")
@@ -142,7 +206,14 @@ const map: Record<string, ProfileRow> = {};
 for (const p of (profileData ?? []) as ProfileRow[]) {
 map[p.id] = p;
 }
-setProfilesById(map);
+
+setProfilesById((prev) => ({ ...prev, ...map }));
+}
+
+await loadPostMeta(
+safePosts.map((p) => p.id),
+uid
+);
 }
 
 async function loadMembers(groupId: number) {
@@ -155,9 +226,8 @@ const { data: memberRows, error: memberErr } = await supabase
 if (memberErr) throw memberErr;
 
 const safeMembers = (memberRows ?? []) as MemberRow[];
-
 const ids = Array.from(new Set(safeMembers.map((m) => m.user_id)));
-let profileMap: Record<string, ProfileRow> = {};
+const profileMap: Record<string, ProfileRow> = {};
 
 if (ids.length > 0) {
 const { data: profileRows, error: profileErr } = await supabase
@@ -205,6 +275,52 @@ created_at: m.created_at,
 profile: profileMap[m.user_id] ?? null,
 }))
 );
+}
+
+async function loadComments(postId: number) {
+try {
+setLoadingComments((m) => ({ ...m, [postId]: true }));
+
+const { data, error } = await supabase
+.from("post_comments")
+.select("id,post_id,user_id,body,created_at")
+.eq("post_id", postId)
+.order("created_at", { ascending: true });
+
+if (error) throw error;
+
+const safeRows = (data ?? []) as CommentRow[];
+setCommentsByPost((m) => ({ ...m, [postId]: safeRows }));
+
+const missingUserIds = Array.from(
+new Set(
+safeRows
+.map((c) => c.user_id)
+.filter((id) => id && !profilesById[id])
+)
+);
+
+if (missingUserIds.length > 0) {
+const { data: profileRows, error: profileErr } = await supabase
+.from("profiles")
+.select("id,username,display_name,avatar_url")
+.in("id", missingUserIds);
+
+if (profileErr) throw profileErr;
+
+setProfilesById((prev) => {
+const next = { ...prev };
+for (const p of (profileRows ?? []) as ProfileRow[]) {
+next[p.id] = p;
+}
+return next;
+});
+}
+} catch (e: any) {
+setStatus(e?.message || "Could not load comments.");
+} finally {
+setLoadingComments((m) => ({ ...m, [postId]: false }));
+}
 }
 
 useEffect(() => {
@@ -261,7 +377,10 @@ setMyMembership((membership as MemberRow) ?? null);
 setMyMembership(null);
 }
 
-await Promise.all([loadPosts(groupData.id), loadMembers(groupData.id)]);
+await Promise.all([
+loadPosts(groupData.id, uid),
+loadMembers(groupData.id),
+]);
 
 setLoading(false);
 } catch (e: any) {
@@ -375,11 +494,145 @@ group_id: group.id,
 if (error) throw error;
 
 setPostBody("");
-await loadPosts(group.id);
+await loadPosts(group.id, user.id);
 } catch (e: any) {
 setStatus(e?.message || "Could not create post.");
 } finally {
 setPosting(false);
+}
+}
+
+async function createGroupNotification(args: {
+recipientId: string;
+actorId: string;
+type: string;
+postId: number;
+groupName: string;
+message: string;
+}) {
+if (args.recipientId === args.actorId) return;
+
+await supabase.from("notifications").insert({
+user_id: args.recipientId,
+actor_id: args.actorId,
+type: args.type,
+entity_id: args.postId,
+title: args.message,
+body: args.message,
+href: `/groups/${slug}`,
+});
+}
+
+async function toggleLike(postId: number) {
+if (!myUserId) {
+setStatus("You must be logged in.");
+return;
+}
+
+try {
+setLikeBusy((m) => ({ ...m, [postId]: true }));
+setStatus("");
+
+const post = posts.find((p) => p.id === postId);
+if (!post) throw new Error("Post not found.");
+
+if (likedByMe[postId]) {
+const { error } = await supabase
+.from("post_likes")
+.delete()
+.eq("post_id", postId)
+.eq("user_id", myUserId);
+
+if (error) throw error;
+
+setLikedByMe((m) => ({ ...m, [postId]: false }));
+setLikeCounts((m) => ({
+...m,
+[postId]: Math.max(0, (m[postId] ?? 1) - 1),
+}));
+} else {
+const { error } = await supabase.from("post_likes").insert({
+post_id: postId,
+user_id: myUserId,
+});
+
+if (error) throw error;
+
+setLikedByMe((m) => ({ ...m, [postId]: true }));
+setLikeCounts((m) => ({
+...m,
+[postId]: (m[postId] ?? 0) + 1,
+}));
+
+await createGroupNotification({
+recipientId: post.user_id,
+actorId: myUserId,
+type: "group_spank",
+postId,
+groupName: group?.name || "this group",
+message: `Someone spanked your post in ${group?.name || "this group"}`,
+});
+}
+} catch (e: any) {
+setStatus(e?.message || "Could not update spank.");
+} finally {
+setLikeBusy((m) => ({ ...m, [postId]: false }));
+}
+}
+
+async function toggleComments(postId: number) {
+const nextOpen = !openComments[postId];
+setOpenComments((m) => ({ ...m, [postId]: nextOpen }));
+
+if (nextOpen && !commentsByPost[postId]) {
+await loadComments(postId);
+}
+}
+
+async function addComment(postId: number) {
+if (!myUserId) {
+setStatus("You must be logged in.");
+return;
+}
+
+const body = (commentDraft[postId] ?? "").trim();
+if (!body) return;
+
+try {
+setCommentBusy((m) => ({ ...m, [postId]: true }));
+setStatus("");
+
+const post = posts.find((p) => p.id === postId);
+if (!post) throw new Error("Post not found.");
+
+const { error } = await supabase.from("post_comments").insert({
+post_id: postId,
+user_id: myUserId,
+body,
+});
+
+if (error) throw error;
+
+setCommentDraft((m) => ({ ...m, [postId]: "" }));
+setCommentCounts((m) => ({
+...m,
+[postId]: (m[postId] ?? 0) + 1,
+}));
+
+await loadComments(postId);
+
+await createGroupNotification({
+recipientId: post.user_id,
+actorId: myUserId,
+type: "group_comment",
+postId,
+groupName: group?.name || "this group",
+message: `Someone commented on your post in ${group?.name || "this group"}`,
+});
+} catch (e: any) {
+setStatus(e?.message || "Could not add comment.");
+} finally {
+setCommentBusy((m) => ({ ...m, [postId]: false }));
 }
 }
 
@@ -413,6 +666,26 @@ color: "rgba(235,220,255,0.95)",
 fontWeight: 800,
 cursor: "pointer",
 boxShadow: "0 0 18px rgba(170, 90, 255, 0.18)",
+};
+
+const actionBtn: React.CSSProperties = {
+padding: "8px 12px",
+borderRadius: 999,
+border: "1px solid rgba(170, 90, 255, 0.30)",
+background: "rgba(120, 60, 220, 0.12)",
+color: "rgba(235,220,255,0.95)",
+fontWeight: 700,
+cursor: "pointer",
+};
+
+const inputStyle: React.CSSProperties = {
+width: "100%",
+padding: "10px 12px",
+borderRadius: 10,
+border: "1px solid rgba(255,255,255,0.16)",
+background: "rgba(0,0,0,0.30)",
+color: "white",
+outline: "none",
 };
 
 const card: React.CSSProperties = {
@@ -699,6 +972,86 @@ opacity: 0.7,
 {post.body ? (
 <div style={{ marginTop: 12, lineHeight: 1.5 }}>
 {post.body}
+</div>
+) : null}
+
+<div style={{ marginTop: 12, display: "flex", gap: 10, flexWrap: "wrap" }}>
+<button
+onClick={() => toggleLike(post.id)}
+disabled={!!likeBusy[post.id]}
+style={actionBtn}
+>
+{likedByMe[post.id] ? "Unspank" : "Spank"} · {likeCounts[post.id] ?? 0}
+</button>
+
+<button onClick={() => toggleComments(post.id)} style={actionBtn}>
+Comments · {commentCounts[post.id] ?? 0}
+</button>
+</div>
+
+{openComments[post.id] ? (
+<div style={{ marginTop: 12 }}>
+{loadingComments[post.id] ? (
+<div style={{ opacity: 0.72, fontSize: 13 }}>
+Loading comments...
+</div>
+) : null}
+
+{(commentsByPost[post.id] ?? []).map((comment) => {
+const commenter = profilesById[comment.user_id];
+const commenterName =
+commenter?.display_name ||
+commenter?.username ||
+"Unknown user";
+const commenterHandle = commenter?.username
+? `@${commenter.username}`
+: "";
+
+return (
+<div
+key={comment.id}
+style={{
+marginTop: 10,
+padding: 10,
+borderRadius: 12,
+background: "rgba(255,255,255,0.03)",
+border: "1px solid rgba(255,255,255,0.08)",
+}}
+>
+<div style={{ fontWeight: 800, fontSize: 14 }}>
+{commenterName}
+</div>
+<div style={{ opacity: 0.7, fontSize: 12, marginTop: 2 }}>
+{commenterHandle} {commenterHandle ? "· " : ""}
+{timeAgo(comment.created_at)}
+</div>
+<div style={{ marginTop: 8, lineHeight: 1.45 }}>
+{comment.body}
+</div>
+</div>
+);
+})}
+
+<div style={{ marginTop: 12 }}>
+<input
+value={commentDraft[post.id] ?? ""}
+onChange={(e) =>
+setCommentDraft((m) => ({
+...m,
+[post.id]: e.target.value,
+}))
+}
+placeholder="Write a comment..."
+style={inputStyle}
+/>
+<button
+onClick={() => addComment(post.id)}
+disabled={!!commentBusy[post.id]}
+style={{ ...actionBtn, marginTop: 8 }}
+>
+{commentBusy[post.id] ? "Posting..." : "Comment"}
+</button>
+</div>
 </div>
 ) : null}
 </div>
