@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import Link from "next/link";
 import { createClient } from "@supabase/supabase-js";
 import { useSearchParams } from "next/navigation";
 import StoriesBar from "./StoriesBar";
@@ -19,6 +20,14 @@ kind: string;
 created_at: string;
 media_url: string | null;
 media_type: string | null;
+group_id?: number | null;
+};
+
+type GroupRow = {
+id: number;
+name: string;
+slug: string;
+avatar_url?: string | null;
 };
 
 type CommentRow = {
@@ -84,6 +93,7 @@ const [posting, setPosting] = useState(false);
 const [profilesById, setProfilesById] = useState<Record<string, ProfileRow>>(
 {}
 );
+const [groupsById, setGroupsById] = useState<Record<number, GroupRow>>({});
 
 const [likeCounts, setLikeCounts] = useState<Record<number, number>>({});
 const [commentCounts, setCommentCounts] = useState<Record<number, number>>({});
@@ -128,6 +138,29 @@ const { data } = await supabase.auth.getSession();
 const uid = data.session?.user?.id ?? null;
 setMyUserId(uid);
 return uid;
+}
+
+async function loadGroups(groupIds: number[]) {
+if (!groupIds.length) {
+setGroupsById({});
+return;
+}
+
+const { data, error } = await supabase
+.from("groups")
+.select("id,name,slug,avatar_url")
+.in("id", groupIds);
+
+if (error) {
+setBanner(error.message);
+return;
+}
+
+const map: Record<number, GroupRow> = {};
+for (const g of (data ?? []) as GroupRow[]) {
+map[g.id] = g;
+}
+setGroupsById(map);
 }
 
 async function loadCounts(postIds: number[]) {
@@ -181,7 +214,7 @@ if (posts.some((p) => p.id === focusId)) return;
 
 const { data, error } = await supabase
 .from("posts")
-.select("id,user_id,body,kind,created_at,media_url,media_type")
+.select("id,user_id,body,kind,created_at,media_url,media_type,group_id")
 .eq("id", focusId)
 .maybeSingle();
 
@@ -206,13 +239,17 @@ setProfilesById((m) => ({ ...m, [prof.id]: prof as ProfileRow }));
 }
 }
 
+if (typeof p.group_id === "number" && !groupsById[p.group_id]) {
+await loadGroups([p.group_id]);
+}
+
 await loadCounts([focusId]);
 }
 
 async function loadPosts() {
 const { data, error } = await supabase
 .from("posts")
-.select("id,user_id,body,kind,created_at,media_url,media_type")
+.select("id,user_id,body,kind,created_at,media_url,media_type,group_id")
 .order("created_at", { ascending: false })
 .limit(200);
 
@@ -222,6 +259,7 @@ return;
 }
 
 const rows = (data ?? []) as PostRow[];
+
 setPosts((prev) => {
 const byId = new Map<number, PostRow>();
 
@@ -245,6 +283,15 @@ const map: Record<string, ProfileRow> = {};
 for (const p of (profs ?? []) as ProfileRow[]) map[p.id] = p;
 setProfilesById(map);
 }
+
+const groupIds = Array.from(
+new Set(
+rows
+.map((r) => r.group_id)
+.filter((id): id is number => typeof id === "number")
+)
+);
+await loadGroups(groupIds);
 
 if (rows.length) {
 await loadCounts(rows.map((r) => r.id));
@@ -461,6 +508,28 @@ objectFit: "cover",
 border: "1px solid rgba(180,120,255,0.24)",
 flex: "0 0 auto",
 background: "rgba(0,0,0,0.45)",
+};
+
+const groupPillStyle: React.CSSProperties = {
+display: "inline-flex",
+alignItems: "center",
+gap: 8,
+marginTop: 8,
+marginBottom: 2,
+padding: "6px 10px",
+borderRadius: 999,
+background: "rgba(168,85,247,0.18)",
+border: "1px solid rgba(168,85,247,0.45)",
+boxShadow: "0 0 12px rgba(168,85,247,0.35)",
+color: "rgba(240,220,255,0.96)",
+fontSize: 12,
+fontWeight: 700,
+width: "fit-content",
+};
+
+const groupLinkStyle: React.CSSProperties = {
+color: "inherit",
+textDecoration: "none",
 };
 
 const authorName = (uid: string) => {
@@ -771,6 +840,8 @@ const isOpen = !!openComments[p.id];
 
 const isMine = myUserId && p.user_id === myUserId;
 const isFocused = flashPostId === p.id;
+const groupInfo =
+typeof p.group_id === "number" ? groupsById[p.group_id] : null;
 
 return (
 <div
@@ -845,6 +916,49 @@ flexWrap: "wrap",
 ) : null}
 <span>{timeAgo(p.created_at)}</span>
 </div>
+
+{groupInfo ? (
+<div style={groupPillStyle}>
+{groupInfo.avatar_url ? (
+// eslint-disable-next-line @next/next/no-img-element
+<img
+src={groupInfo.avatar_url}
+alt=""
+style={{
+width: 18,
+height: 18,
+borderRadius: 999,
+objectFit: "cover",
+border: "1px solid rgba(255,255,255,0.18)",
+}}
+/>
+) : (
+<div
+style={{
+width: 18,
+height: 18,
+borderRadius: 999,
+display: "grid",
+placeItems: "center",
+fontSize: 10,
+background: "rgba(255,255,255,0.10)",
+border: "1px solid rgba(255,255,255,0.16)",
+}}
+>
+G
+</div>
+)}
+
+<span>Group ·</span>
+
+<Link
+href={`/groups/${groupInfo.slug}`}
+style={groupLinkStyle}
+>
+{groupInfo.name}
+</Link>
+</div>
+) : null}
 </div>
 
 <div style={{ display: "flex", gap: 10, alignItems: "center" }}>

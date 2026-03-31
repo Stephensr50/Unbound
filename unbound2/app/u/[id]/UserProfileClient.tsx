@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { createClient } from "@supabase/supabase-js";
+import Link from "next/link";
 import PublicProfileActions from "./PublicProfileActions";
 
 type ProfileRow = {
@@ -22,6 +23,14 @@ created_at: string;
 media_url?: string | null;
 image_url?: string | null;
 file_url?: string | null;
+group_id?: number | null;
+};
+
+type GroupRow = {
+id: number;
+name: string;
+slug: string;
+avatar_url?: string | null;
 };
 
 type CommentRow = {
@@ -55,6 +64,7 @@ const supabase = useMemo(() => getSupabase(), []);
 const [myUserId, setMyUserId] = useState<string | null>(null);
 const [posts, setPosts] = useState<PostRow[]>([]);
 const [banner, setBanner] = useState<string | null>(null);
+const [groupsById, setGroupsById] = useState<Record<number, GroupRow>>({});
 
 const [likeCounts, setLikeCounts] = useState<Record<number, number>>({});
 const [commentCounts, setCommentCounts] = useState<Record<number, number>>({});
@@ -63,7 +73,9 @@ const [busyPostId, setBusyPostId] = useState<number | null>(null);
 const [spark, setSpark] = useState<Record<number, boolean>>({});
 
 const [openComments, setOpenComments] = useState<Record<number, boolean>>({});
-const [commentsByPost, setCommentsByPost] = useState<Record<number, CommentRow[]>>({});
+const [commentsByPost, setCommentsByPost] = useState<Record<number, CommentRow[]>>(
+{}
+);
 const [commentDraft, setCommentDraft] = useState<Record<number, string>>({});
 
 async function refreshAuth() {
@@ -124,12 +136,35 @@ setLikedByMe(lbm);
 setCommentCounts(cc);
 }
 
+async function loadGroups(groupIds: number[]) {
+if (!groupIds.length) {
+setGroupsById({});
+return;
+}
+
+const { data, error } = await supabase
+.from("groups")
+.select("id,name,slug,avatar_url")
+.in("id", groupIds);
+
+if (error) {
+setBanner(error.message);
+return;
+}
+
+const map: Record<number, GroupRow> = {};
+for (const g of (data ?? []) as GroupRow[]) {
+map[g.id] = g;
+}
+setGroupsById(map);
+}
+
 async function loadProfilePosts(targetUserId: string, viewerId: string | null) {
 setBanner(null);
 
 const { data, error } = await supabase
 .from("posts")
-.select("id,user_id,body,kind,created_at,media_url,media_type")
+.select("id,user_id,body,kind,created_at,media_url,media_type,group_id")
 .eq("user_id", targetUserId)
 .order("created_at", { ascending: false })
 .limit(50);
@@ -142,6 +177,17 @@ return;
 
 const rows = (data ?? []) as PostRow[];
 setPosts(rows);
+
+const groupIds = Array.from(
+new Set(
+rows
+.map((p) => p.group_id)
+.filter((id): id is number => typeof id === "number")
+)
+);
+
+await loadGroups(groupIds);
+
 await loadCounts(
 rows.map((p) => p.id),
 viewerId
@@ -317,6 +363,26 @@ cursor: "pointer",
 fontWeight: 650,
 };
 
+const groupPill: React.CSSProperties = {
+display: "inline-flex",
+alignItems: "center",
+gap: 8,
+marginBottom: 10,
+padding: "6px 10px",
+borderRadius: 999,
+background: "rgba(168,85,247,0.18)",
+border: "1px solid rgba(168,85,247,0.45)",
+boxShadow: "0 0 12px rgba(168,85,247,0.35)",
+color: "rgba(240,220,255,0.96)",
+fontSize: 12,
+fontWeight: 700,
+};
+
+const groupLinkStyle: React.CSSProperties = {
+color: "inherit",
+textDecoration: "none",
+};
+
 const inputStyle: React.CSSProperties = {
 background: "rgba(0,0,0,0.6)",
 color: "white",
@@ -445,6 +511,8 @@ const comments = commentCounts[p.id] ?? 0;
 const iSpanked = !!likedByMe[p.id];
 const isBusy = busyPostId === p.id;
 const isOpen = !!openComments[p.id];
+const groupInfo =
+typeof p.group_id === "number" ? groupsById[p.group_id] : null;
 
 return (
 <div key={p.id} style={card}>
@@ -462,6 +530,31 @@ marginBottom: 8,
 {profile.username ? `@${profile.username}` : ""}
 </div>
 </div>
+
+{groupInfo ? (
+<div style={groupPill}>
+{groupInfo.avatar_url ? (
+// eslint-disable-next-line @next/next/no-img-element
+<img
+src={groupInfo.avatar_url}
+alt=""
+style={{
+width: 18,
+height: 18,
+borderRadius: 999,
+objectFit: "cover",
+border: "1px solid rgba(255,255,255,0.18)",
+}}
+/>
+) : null}
+
+<span>Group ·</span>
+
+<Link href={`/groups/${groupInfo.slug}`} style={groupLinkStyle}>
+{groupInfo.name}
+</Link>
+</div>
+) : null}
 
 {p.body ? (
 <div style={{ fontSize: 16, lineHeight: 1.4, whiteSpace: "pre-wrap" }}>

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import { createClient } from "@supabase/supabase-js";
 
 type PostRow = {
@@ -12,6 +13,14 @@ created_at: string;
 media_url?: string | null;
 image_url?: string | null;
 file_url?: string | null;
+group_id?: number | null;
+};
+
+type GroupRow = {
+id: number;
+name: string;
+slug: string;
+avatar_url?: string | null;
 };
 
 function getSupabase() {
@@ -37,6 +46,7 @@ const supabase = useMemo(() => getSupabase(), []);
 const [myUserId, setMyUserId] = useState<string | null>(null);
 const [posts, setPosts] = useState<PostRow[]>([]);
 const [banner, setBanner] = useState<string | null>(null);
+const [groupsById, setGroupsById] = useState<Record<number, GroupRow>>({});
 
 const [likeCounts, setLikeCounts] = useState<Record<number, number>>({});
 const [commentCounts, setCommentCounts] = useState<Record<number, number>>({});
@@ -102,12 +112,35 @@ setLikedByMe(lbm);
 setCommentCounts(cc);
 }
 
+async function loadGroups(groupIds: number[]) {
+if (!groupIds.length) {
+setGroupsById({});
+return;
+}
+
+const { data, error } = await supabase
+.from("groups")
+.select("id,name,slug,avatar_url")
+.in("id", groupIds);
+
+if (error) {
+setBanner(error.message);
+return;
+}
+
+const map: Record<number, GroupRow> = {};
+for (const g of (data ?? []) as GroupRow[]) {
+map[g.id] = g;
+}
+setGroupsById(map);
+}
+
 async function loadMyPosts(uid: string) {
 setBanner(null);
 
 const { data, error } = await supabase
 .from("posts")
-.select("id,user_id,body,kind,created_at,media_url,media_type")
+.select("id,user_id,body,kind,created_at,media_url,media_type,group_id")
 .eq("user_id", uid)
 .order("created_at", { ascending: false })
 .limit(50);
@@ -120,6 +153,17 @@ return;
 
 const rows = (data ?? []) as PostRow[];
 setPosts(rows);
+
+const groupIds = Array.from(
+new Set(
+rows
+.map((p) => p.group_id)
+.filter((id): id is number => typeof id === "number")
+)
+);
+
+await loadGroups(groupIds);
+
 await loadCounts(
 rows.map((p) => p.id),
 myUserId ?? uid
@@ -249,6 +293,26 @@ cursor: "pointer",
 fontWeight: 650,
 };
 
+const groupPill: React.CSSProperties = {
+display: "inline-flex",
+alignItems: "center",
+gap: 8,
+marginBottom: 10,
+padding: "6px 10px",
+borderRadius: 999,
+background: "rgba(168,85,247,0.18)",
+border: "1px solid rgba(168,85,247,0.45)",
+boxShadow: "0 0 12px rgba(168,85,247,0.35)",
+color: "rgba(240,220,255,0.96)",
+fontSize: 12,
+fontWeight: 700,
+};
+
+const groupLinkStyle: React.CSSProperties = {
+color: "inherit",
+textDecoration: "none",
+};
+
 return (
 <div style={{ width: "min(920px, 94vw)", margin: "16px auto 0" }}>
 <style>{`
@@ -292,6 +356,8 @@ const spanks = likeCounts[p.id] ?? 0;
 const comments = commentCounts[p.id] ?? 0;
 const iSpanked = !!likedByMe[p.id];
 const isBusy = busyPostId === p.id;
+const groupInfo =
+typeof p.group_id === "number" ? groupsById[p.group_id] : null;
 
 return (
 <div key={p.id} style={card}>
@@ -306,9 +372,49 @@ marginBottom: 8,
 {timeAgo(p.created_at)}
 </div>
 <div style={{ opacity: 0.55, fontSize: 12 }}>
-@{/* wire username later */}robby_78
+@robby_78
 </div>
 </div>
+
+{groupInfo ? (
+<div style={groupPill}>
+{groupInfo.avatar_url ? (
+// eslint-disable-next-line @next/next/no-img-element
+<img
+src={groupInfo.avatar_url}
+alt=""
+style={{
+width: 18,
+height: 18,
+borderRadius: 999,
+objectFit: "cover",
+border: "1px solid rgba(255,255,255,0.18)",
+}}
+/>
+) : (
+<div
+style={{
+width: 18,
+height: 18,
+borderRadius: 999,
+display: "grid",
+placeItems: "center",
+fontSize: 10,
+background: "rgba(255,255,255,0.10)",
+border: "1px solid rgba(255,255,255,0.16)",
+}}
+>
+G
+</div>
+)}
+
+<span>Group ·</span>
+
+<Link href={`/groups/${groupInfo.slug}`} style={groupLinkStyle}>
+{groupInfo.name}
+</Link>
+</div>
+) : null}
 
 {p.body ? (
 <div style={{ fontSize: 16, lineHeight: 1.4, whiteSpace: "pre-wrap" }}>
