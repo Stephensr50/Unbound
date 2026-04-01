@@ -164,10 +164,8 @@ n.id === id ? { ...n, read_at: new Date().toISOString() } : n
 }
 
 function computeHref(n: NotifRow) {
-if (n.href) return n.href;
-if (n.link) return n.link;
-
 if (n.type === "friend_request") return "/friend-requests";
+if (n.type === "message") return "/messages";
 
 if (n.type === "spank" || n.type === "comment" || n.type === "comment_reply") {
 const postId = Number(n.entity_id);
@@ -176,7 +174,8 @@ return `/post/${postId}?flash=4000`;
 }
 }
 
-if (n.type === "message") return "/messages";
+if (n.href) return n.href;
+if (n.link) return n.link;
 
 return null;
 }
