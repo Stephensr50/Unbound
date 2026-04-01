@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { createClient } from "@supabase/supabase-js";
 
 type PostRow = {
@@ -42,6 +43,7 @@ return `${Math.floor(s / 86400)}d`;
 
 export default function ProfileFeedClient() {
 const supabase = useMemo(() => getSupabase(), []);
+const router = useRouter();
 
 const [myUserId, setMyUserId] = useState<string | null>(null);
 const [posts, setPosts] = useState<PostRow[]>([]);
@@ -377,7 +379,10 @@ marginBottom: 8,
 </div>
 
 {groupInfo ? (
-<div style={groupPill}>
+<div
+onClick={() => router.push(`/groups/${groupInfo.slug}`)}
+style={{ ...groupPill, cursor: "pointer" }}
+>
 {groupInfo.avatar_url ? (
 // eslint-disable-next-line @next/next/no-img-element
 <img
@@ -408,11 +413,8 @@ G
 </div>
 )}
 
-<span>Group ·</span>
-
-<Link href={`/groups/${groupInfo.slug}`} style={groupLinkStyle}>
-{groupInfo.name}
-</Link>
+<span>Group · </span>
+<span>{groupInfo.name}</span>
 </div>
 ) : null}
 

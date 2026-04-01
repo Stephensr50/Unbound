@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { createClient } from "@supabase/supabase-js";
 import { useSearchParams } from "next/navigation";
 import StoriesBar from "./StoriesBar";
@@ -80,6 +81,7 @@ void updateLastActive();
 }, []);
 
 const supabase = useMemo(() => getSupabase(), []);
+const router = useRouter();
 const searchParams = useSearchParams();
 
 const [myUserId, setMyUserId] = useState<string | null>(null);
@@ -871,10 +873,12 @@ marginBottom: 10,
 <img
 src={authorAvatar(p.user_id)}
 alt=""
-style={avatarStyle}
+style={{ ...avatarStyle, cursor: "pointer" }}
+onClick={() => router.push(`/u/${p.user_id}`)}
 />
 ) : (
 <div
+onClick={() => router.push(`/u/${p.user_id}`)}
 style={{
 ...avatarStyle,
 display: "grid",
@@ -882,6 +886,7 @@ placeItems: "center",
 fontWeight: 800,
 fontSize: 18,
 color: "rgba(255,255,255,0.92)",
+cursor: "pointer",
 }}
 >
 {authorInitial(p.user_id)}
@@ -890,11 +895,30 @@ color: "rgba(255,255,255,0.92)",
 
 <div style={{ flex: 1, minWidth: 0 }}>
 <div
+onClick={() => router.push(`/u/${p.user_id}`)}
 style={{
 display: "flex",
-justifyContent: "space-between",
-gap: 10,
+gap: 12,
 alignItems: "flex-start",
+marginBottom: 10,
+cursor: "pointer",
+borderRadius: 12,
+padding: 6,
+transition: "all 0.18s ease",
+}}
+onMouseEnter={(e) => {
+const el = e.currentTarget;
+el.style.background = "rgba(168,85,247,0.12)";
+el.style.boxShadow = "0 0 60px rgba(192,38,211,0.85), 0 0 120px rgba(168,85,247,0.55)"
+el.style.transform = "translateY(-2px) scale(1.01)";
+el.style.backdropFilter = "blur(6px)";
+}}
+onMouseLeave={(e) => {
+const el = e.currentTarget;
+el.style.background = "transparent";
+el.style.boxShadow = "none";
+el.style.transform = "translateY(0) scale(1)";
+el.style.backdropFilter = "none";
 }}
 >
 <div style={{ minWidth: 0 }}>
@@ -918,7 +942,10 @@ flexWrap: "wrap",
 </div>
 
 {groupInfo ? (
-<div style={groupPillStyle}>
+<div
+onClick={() => router.push(`/groups/${groupInfo.slug}`)}
+style={{ ...groupPillStyle, cursor: "pointer" }}
+>
 {groupInfo.avatar_url ? (
 // eslint-disable-next-line @next/next/no-img-element
 <img
@@ -949,14 +976,8 @@ G
 </div>
 )}
 
-<span>Group ·</span>
-
-<Link
-href={`/groups/${groupInfo.slug}`}
-style={groupLinkStyle}
->
-{groupInfo.name}
-</Link>
+<span>Group · </span>
+<span>{groupInfo.name}</span>
 </div>
 ) : null}
 </div>
