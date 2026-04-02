@@ -1,5 +1,6 @@
 "use client";
 
+import { createClient } from "@supabase/supabase-js";
 import { useEffect, useMemo, useRef, useState } from "react";
 
 type Story = {
@@ -10,7 +11,26 @@ caption?: string | null;
 created_at?: string;
 };
 
+type ViewerProfile = {
+id: string;
+username: string | null;
+display_name: string | null;
+avatar_url: string | null;
+};
+
+type StoryViewerRow = {
+viewer_id: string;
+created_at: string;
+profiles: ViewerProfile | ViewerProfile[] | null;
+};
+
 const PHOTO_DURATION_MS = 4000;
+
+function getSupabase() {
+const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
+return createClient(url, key);
+}
 
 export default function StoryModal({
 open,
@@ -37,8 +57,16 @@ return Math.min(Math.max(0, n), maxIndex);
 
 const [idx, setIdx] = useState<number>(initialIndex);
 const [progressKey, setProgressKey] = useState(0);
+const [storyViewers, setStoryViewers] = useState<StoryViewerRow[]>([]);
 
 const timerRef = useRef<number | null>(null);
+const timeAgo = (ts: string) => {
+const diff = Math.floor((Date.now() - new Date(ts).getTime()) / 1000);
+if (diff < 60) return `${diff}s`;
+if (diff < 3600) return `${Math.floor(diff / 60)}m`;
+if (diff < 86400) return `${Math.floor(diff / 3600)}h`;
+return `${Math.floor(diff / 86400)}d`;
+};
 
 useEffect(() => {
 if (!open) return;
@@ -107,6 +135,116 @@ goNext();
 return () => clearAutoTimer();
 }, [open, idx, current?.id, isVideo]);
 
+useEffect(() => {
+if (!open) return;
+if (!current?.id) return;
+if (!myUserId) return;
+if (current.user_id === myUserId) return;
+
+const supabase = getSupabase();
+
+async function recordStoryView() {
+const { data: existing, error: existingError } = await supabase
+.from("story_views")
+.select("id")
+.eq("story_id", current.id)
+.eq("viewer_id", myUserId)
+.maybeSingle();
+
+if (existingError) {
+alert(
+"story_views existing check error:\n" +
+JSON.stringify(
+{
+message: existingError.message,
+code: existingError.code,
+details: existingError.details,
+hint: existingError.hint,
+},
+null,
+2
+)
+);
+return;
+}
+
+if (existing) return;
+
+const { error } = await supabase.from("story_views").insert({
+story_id: current.id,
+viewer_id: myUserId,
+});
+
+if (error && error.code !== "23505") {
+alert(
+"story_views insert error:\n" +
+JSON.stringify(
+{
+message: error.message,
+code: error.code,
+details: error.details,
+hint: error.hint,
+story_id: current.id,
+viewer_id: myUserId,
+},
+null,
+2
+)
+);
+
+}
+}
+
+recordStoryView();
+}, [open, current?.id, current?.user_id, myUserId]);
+
+useEffect(() => {
+if (!open) return;
+if (!current?.id) {
+setStoryViewers([]);
+return;
+}
+if (!myUserId) {
+setStoryViewers([]);
+return;
+}
+if (current.user_id !== myUserId) {
+setStoryViewers([]);
+return;
+}
+
+const supabase = getSupabase();
+
+async function loadStoryViewers() {
+const { data, error } = await supabase
+.from("story_views")
+.select(
+`
+viewer_id,
+created_at,
+profiles:viewer_id (
+id,
+username,
+display_name,
+avatar_url
+)
+`
+)
+.eq("story_id", current.id)
+.order("created_at", { ascending: false });
+
+if (error) {
+console.error("loadStoryViewers error:", error);
+setStoryViewers([]);
+return;
+}
+
+setStoryViewers((data as StoryViewerRow[]) || []);
+}
+
+loadStoryViewers();
+}, [open, current?.id, current?.user_id, myUserId]);
+
 if (!open) return null;
 
 return (
@@ -117,10 +255,7 @@ return (
 <div style={topBar}>
 <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
 {safeStories.map((s, i) => (
-<div
-key={s.id ?? String(i)}
-style={progressTrack}
->
+<div key={s.id ?? String(i)} style={progressTrack}>
 {i < idx ? (
 <div style={progressFillDone} />
 ) : i === idx ? (
@@ -198,7 +333,6 @@ onEnded={goNext}
 style={media}
 />
 ) : (
-// eslint-disable-next-line @next/next/no-img-element
 <img
 key={current.media_url}
 src={current.media_url}
@@ -211,7 +345,57 @@ style={media}
 )}
 </div>
 
-{current?.caption ? <div style={caption}>{current.caption}</div> : null}
+{isMine ? (
+<div style={viewPanel}>
+<div style={viewTitle}>
+👁 {storyViewers.length} {storyViewers.length === 1 ? "view" : "views"}
+</div>
+
+{storyViewers.length === 0 ? (
+<div style={viewEmpty}>No views yet</div>
+) : (
+<div style={viewerList}>
+{storyViewers.map((row) => {
+const profile = Array.isArray(row.profiles)
+? row.profiles[0]
+: row.profiles;
+
+const label =
+profile?.display_name || profile?.username || "Unknown user";
+
+return (
+<div key={row.viewer_id} style={viewerRow}>
+<img
+src={profile?.avatar_url || "/default-avatar.png"}
+alt={label}
+style={viewerAvatar}
+/>
+<div style={{ minWidth: 0 }}>
+<div style={viewerName}>{label}</div>
+
+{profile?.username ? (
+<div style={viewerUsername}>@{profile.username}</div>
+) : null}
+
+<div style={{ fontSize: 11, opacity: 0.6 }}>
+{timeAgo(row.created_at)} ago
+</div>
+</div>
+</div>
+);
+})}
+</div>
+)}
+</div>
+) : current?.caption ? (
+<div style={caption}>{current.caption}</div>
+) : null}
+
+{isMine && current?.caption ? (
+<div style={myCaptionWrap}>
+<div style={caption}>{current.caption}</div>
+</div>
+) : null}
 </div>
 
 <style>{`
@@ -348,6 +532,78 @@ background: "rgba(0,0,0,0.38)",
 border: "1px solid rgba(168,85,247,0.16)",
 color: "rgba(255,255,255,0.92)",
 fontSize: 14,
+};
+
+const myCaptionWrap: React.CSSProperties = {
+position: "absolute",
+left: 12,
+right: 12,
+bottom: 128,
+zIndex: 6,
+};
+
+const viewPanel: React.CSSProperties = {
+position: "absolute",
+left: 12,
+right: 12,
+bottom: 10,
+zIndex: 6,
+padding: "12px",
+borderRadius: 14,
+background: "rgba(0,0,0,0.52)",
+border: "1px solid rgba(168,85,247,0.18)",
+color: "rgba(255,255,255,0.95)",
+maxHeight: 150,
+overflowY: "auto",
+};
+
+const viewTitle: React.CSSProperties = {
+fontSize: 14,
+fontWeight: 800,
+marginBottom: 8,
+};
+
+const viewEmpty: React.CSSProperties = {
+fontSize: 13,
+color: "rgba(255,255,255,0.75)",
+};
+
+const viewerList: React.CSSProperties = {
+display: "flex",
+flexDirection: "column",
+gap: 8,
+};
+
+const viewerRow: React.CSSProperties = {
+display: "flex",
+alignItems: "center",
+gap: 10,
+};
+
+const viewerAvatar: React.CSSProperties = {
+width: 30,
+height: 30,
+borderRadius: "50%",
+objectFit: "cover",
+border: "1px solid rgba(255,255,255,0.16)",
+flexShrink: 0,
+};
+
+const viewerName: React.CSSProperties = {
+fontSize: 13,
+fontWeight: 700,
+color: "rgba(255,255,255,0.95)",
+whiteSpace: "nowrap",
+overflow: "hidden",
+textOverflow: "ellipsis",
+};
+
+const viewerUsername: React.CSSProperties = {
+fontSize: 12,
+color: "rgba(255,255,255,0.65)",
+whiteSpace: "nowrap",
+overflow: "hidden",
+textOverflow: "ellipsis",
 };
 
 const empty: React.CSSProperties = {
