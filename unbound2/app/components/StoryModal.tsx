@@ -60,6 +60,8 @@ const [progressKey, setProgressKey] = useState(0);
 const [storyViewers, setStoryViewers] = useState<StoryViewerRow[]>([]);
 
 const timerRef = useRef<number | null>(null);
+const recordedViewRef = useRef<string | null>(null);
+
 const timeAgo = (ts: string) => {
 const diff = Math.floor((Date.now() - new Date(ts).getTime()) / 1000);
 if (diff < 60) return `${diff}s`;
@@ -72,6 +74,7 @@ useEffect(() => {
 if (!open) return;
 setIdx(initialIndex);
 setProgressKey((v) => v + 1);
+recordedViewRef.current = null;
 }, [open, initialIndex]);
 
 function clearAutoTimer() {
@@ -144,6 +147,10 @@ if (current.user_id === myUserId) return;
 const supabase = getSupabase();
 
 async function recordStoryView() {
+const key = `${current.id}:${myUserId}`;
+if (recordedViewRef.current === key) return;
+recordedViewRef.current = key;
+
 const { data: existing, error: existingError } = await supabase
 .from("story_views")
 .select("id")
@@ -191,7 +198,6 @@ null,
 2
 )
 );
-
 }
 }
 
@@ -218,8 +224,7 @@ const supabase = getSupabase();
 async function loadStoryViewers() {
 const { data, error } = await supabase
 .from("story_views")
-.select(
-`
+.select(`
 viewer_id,
 created_at,
 profiles:viewer_id (
@@ -228,8 +233,7 @@ username,
 display_name,
 avatar_url
 )
-`
-)
+`)
 .eq("story_id", current.id)
 .order("created_at", { ascending: false });
 
@@ -363,8 +367,16 @@ const profile = Array.isArray(row.profiles)
 const label =
 profile?.display_name || profile?.username || "Unknown user";
 
+const profileHref = `/u/${profile?.username || profile?.id || row.viewer_id}`;
+
 return (
-<div key={row.viewer_id} style={viewerRow}>
+<div
+key={row.viewer_id}
+style={{ ...viewerRow, cursor: "pointer" }}
+onClick={() => {
+window.location.href = profileHref;
+}}
+>
 <img
 src={profile?.avatar_url || "/default-avatar.png"}
 alt={label}
@@ -372,12 +384,8 @@ style={viewerAvatar}
 />
 <div style={{ minWidth: 0 }}>
 <div style={viewerName}>{label}</div>
-
-{profile?.username ? (
-<div style={viewerUsername}>@{profile.username}</div>
-) : null}
-
 <div style={{ fontSize: 11, opacity: 0.6 }}>
+{profile?.username ? `@${profile.username} • ` : ""}
 {timeAgo(row.created_at)} ago
 </div>
 </div>
