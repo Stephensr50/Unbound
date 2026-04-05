@@ -819,7 +819,7 @@ onClick={createGroupPost}
 disabled={posting}
 style={{ ...button, marginTop: 12 }}
 >
-{posting ? "Posting..." : "Post to group"}
+{posting ? "Reaching climax..." : "Post to group"}
 </button>
 </>
 ) : (
@@ -1049,7 +1049,7 @@ onClick={() => addComment(post.id)}
 disabled={!!commentBusy[post.id]}
 style={{ ...actionBtn, marginTop: 8 }}
 >
-{commentBusy[post.id] ? "Posting..." : "Comment"}
+{commentBusy[post.id] ? "Reaching climax..." : "Comment"}
 </button>
 </div>
 </div>

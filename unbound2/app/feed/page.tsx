@@ -893,7 +893,7 @@ onClick={submitPost}
 disabled={posting || uploading}
 style={postBtn}
 >
-{uploading ? "Uploading…" : posting ? "Posting…" : "Post"}
+{uploading ? "Uploading…" : posting ? "Reaching climax..." : "Post"}
 </button>
 </div>
 </div>
