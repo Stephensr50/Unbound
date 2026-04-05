@@ -278,7 +278,22 @@ if (uid === targetProfileId) {
 setBanner("That’s you 😄");
 return;
 }
-router.push(`/messages/${targetProfileId}`);
+const res = await fetch("/api/conversations/get-or-create", {
+  method: "POST",
+  headers: {
+    "Content-Type": "application/json",
+    Authorization: `Bearer ${(await supabase.auth.getSession()).data.session?.access_token ?? ""}`,
+  },
+  body: JSON.stringify({ to: targetProfileId }),
+});
+
+const json = await res.json().catch(() => ({}));
+
+if (!res.ok) {
+  throw new Error(json?.error ?? "Could not start conversation");
+}
+
+router.push(`/messages/${json.conversation_id}`);
 }
 
 async function toggleFollow() {
