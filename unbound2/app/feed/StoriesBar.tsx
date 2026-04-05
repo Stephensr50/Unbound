@@ -16,6 +16,7 @@ created_at?: string;
 type ProfileRow = {
 id: string;
 username: string | null;
+display_name: string | null;
 avatar_url: string | null;
 };
 
@@ -59,7 +60,7 @@ return;
 
 const { data: profs } = await supabase
 .from("profiles")
-.select("id,username,avatar_url")
+.select("id,username,display_name,avatar_url")
 .in("id", uids);
 
 const map: Record<string, ProfileRow> = {};
@@ -111,7 +112,7 @@ new Set(rows.map((s) => s.user_id).filter(Boolean))
 if (uids.length) {
 const { data: profs } = await supabase
 .from("profiles")
-.select("id,username,avatar_url")
+.select("id,username,display_name,avatar_url")
 .in("id", uids);
 
 if (!alive) return;
@@ -259,26 +260,26 @@ setOpenCreate(true);
 
 {dedupedStories.map((s) => {
 const profile = profilesById[s.user_id];
-const username = profile?.username || "user";
+const storyLabel = profile?.display_name || profile?.username || "user";
 
 return (
 <div key={s.id} className={styles.storyItem}>
 <button
 type="button"
 className={styles.storyBubble}
-title={username}
-aria-label={`Open ${username}'s story`}
+title={storyLabel}
+aria-label={`Open ${storyLabel}'s story`}
 onClick={() => openStoryViewer(s)}
 >
 <img
 className={styles.storyAvatar}
 src={profile?.avatar_url || s.media_url}
-alt={username}
+alt={storyLabel}
 />
 </button>
 
 <div className={styles.storyUsername}>
-{username.length > 12 ? `${username.slice(0, 12)}…` : username}
+{storyLabel.length > 12 ? `${storyLabel.slice(0, 12)}…` : storyLabel}
 </div>
 </div>
 );

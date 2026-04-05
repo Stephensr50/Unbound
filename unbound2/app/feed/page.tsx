@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { createClient } from "@supabase/supabase-js";
 import { useSearchParams } from "next/navigation";
 import StoriesBar from "./StoriesBar";
+import Twemoji from "@/app/components/Twemoji";
 
 
 function getSupabase() {
@@ -796,6 +797,9 @@ return (
 `}</style>
 
 <StoriesBar />
+
+ 
+ 
 
 {banner ? (
 <div
