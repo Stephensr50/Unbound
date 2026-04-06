@@ -19,12 +19,13 @@ type Profile = {
 const QUESTIONS = [
   "Would you let them tie you up?",
   "Would you let them take control?",
-  "Would you let them flirt with you all night?",
+  "Would you let them fuck you all night?",
   "Would you let them tell you what to do?",
   "Would you let them tease you in public?",
   "Would you let them be your guilty pleasure?",
   "Would you let them boss you around?",
   "Would you let them ruin your focus?",
+  "Would you let them spank your ass?"
 ];
 
 export default function GamePage() {

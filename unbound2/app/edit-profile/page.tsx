@@ -267,7 +267,7 @@ color: "white",
 cursor: "pointer",
 }}
 >
-{uploading ? "Uploading..." : "Change photo"}
+{uploading ? "Reaching climax..." : "Change photo"}
 </button>
 </div>
 

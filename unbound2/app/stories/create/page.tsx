@@ -123,7 +123,7 @@ cursor: busy ? "not-allowed" : "pointer",
 boxShadow: "0 0 18px rgba(180,120,255,0.25)",
 }}
 >
-{busy ? "Posting..." : "Post Story"}
+{busy ? "Reaching climax..." : "Post Story"}
 </button>
 
 {msg ? (

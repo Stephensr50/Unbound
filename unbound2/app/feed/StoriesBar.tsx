@@ -410,7 +410,7 @@ function onRowMouseMove(e: React.MouseEvent<HTMLDivElement>) {
               disabled={busy || !pickedFile}
               style={{ marginTop: 12, opacity: busy || !pickedFile ? 0.55 : 1 }}
             >
-              {busy ? "Posting..." : "Post story"}
+              {busy ? "Reachimg climax..." : "Post story"}
             </button>
 
             <div style={{ marginTop: 10, fontSize: 12, opacity: 0.8 }}>

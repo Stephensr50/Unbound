@@ -39,7 +39,35 @@ router.push("/feed");
 }
 
 return (
-<div style={wrap}>
+<div
+  style={{
+    ...wrap,
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "center",
+  }}
+>
+<div
+  style={{
+    textAlign: "center",
+    fontSize: 120,
+    fontWeight: 900,
+    letterSpacing: 2,
+    marginBottom: 20,
+    color: "#fc0ce8",
+textShadow: `
+  0 0 10px rgba(168,85,247,0.9),
+  0 0 25px rgba(168,85,247,0.9),
+  0 0 50px rgba(168,85,247,0.8),
+  0 0 90px rgba(168,85,247,0.7)
+`,
+animation: "glowPulse 1.5s ease-in-out infinite alternate",
+  }}
+>
+  UNBOUND 
+</div>
+
+    
 <form onSubmit={handleLogin} style={card}>
 <h1 style={title}>Welcome Back</h1>
 
