@@ -798,10 +798,27 @@ return (
 
 <StoriesBar />
 
- 
- 
+<div
+  style={{
+    textAlign: "center",
+    fontFamily: '"Gloock", serif',
+    fontSize: 100,
+    fontWeight: 400,
+    color: "#d109ac",
+    textShadow:
+      "0 0 10px rgba(255,79,191,0.28), 0 0 22px rgba(255,79,191,0.18)",
+    letterSpacing: "0.5px",
+    marginTop: 2,
+    marginBottom: 14,
+    lineHeight: 1,
+  }}
+>
+  Unbound
+</div>
 
 {banner ? (
+
+
 <div
 style={{
 marginTop: 12,
@@ -821,8 +838,8 @@ fontSize: 13,
 <div
 style={{
 background: "rgba(0,0,0,0.55)",
-border: "1px solid rgba(180,120,255,0.25)",
-borderRadius: 16,
+border: "1px solid rgba(238, 8, 169, 0.25)",
+borderRadius: 20,
 padding: 14,
 marginBottom: 18,
 }}

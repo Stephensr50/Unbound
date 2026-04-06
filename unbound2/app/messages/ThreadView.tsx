@@ -44,6 +44,8 @@ const [text, setText] = useState("");
 const [sending, setSending] = useState(false);
 const [err, setErr] = useState<string | null>(null);
 
+const initialMessageRef = useRef<string | null>(null);
+
 // typing indicator
 const [otherTyping, setOtherTyping] = useState(false);
 const otherTypingTimerRef = useRef<number | null>(null);
@@ -304,6 +306,40 @@ if (error) throw error;
 
 const rows = (data ?? []) as MsgRow[];
 if (!cancelled) setMsgs(rows);
+// auto-send initial message from URL (ONLY ONCE)
+if (typeof window !== "undefined") {
+  const params = new URLSearchParams(window.location.search);
+  const firstMsg = params.get("firstMessage");
+
+  if (firstMsg && !initialMessageRef.current && me) {
+    initialMessageRef.current = firstMsg;
+
+const { data: inserted, error } = await supabase
+  .from("messages")
+  .insert({
+    conversation_id: conversationId,
+    sender_id: me,
+    body: firstMsg,
+  })
+  .select("id, conversation_id, sender_id, body, created_at")
+  .single();
+
+if (!error && inserted) {
+  setMsgs((prev) => {
+    if (prev.some((m) => m.id === inserted.id)) return prev;
+    return [...prev, inserted];
+  });
+
+  setTimeout(() => {
+    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, 50);
+
+  window.history.replaceState({}, "", `/messages/${conversationId}`);
+}
+
+
+  }
+}
 
 const latestId = rows.length ? rows[rows.length - 1].id : null;
 if (latestId != null) {

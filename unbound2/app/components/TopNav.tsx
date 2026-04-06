@@ -153,6 +153,11 @@ Explore
 Groups
 </Link>
 
+<Link href="/game" style={tabStyle(isActive("/game"))}>
+  Game
+</Link>
+
+
 <Link href="/profile" style={tabStyle(isActive("/profile"))}>
 Profile
 </Link>
@@ -166,6 +171,8 @@ Messages
 Notifications
 {notifUnread > 0 && <span style={badgeStyle}>{notifBadgeText}</span>}
 </Link>
+
+
 
 <form onSubmit={onSubmit}>
 <div
