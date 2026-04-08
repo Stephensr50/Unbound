@@ -801,19 +801,21 @@ return (
 <div
   style={{
     textAlign: "center",
-    fontFamily: '"Gloock", serif',
-    fontSize: 100,
-    fontWeight: 400,
-    color: "#d109ac",
-    textShadow:
-      "0 0 10px rgba(255,79,191,0.28), 0 0 22px rgba(255,79,191,0.18)",
-    letterSpacing: "0.5px",
-    marginTop: 2,
-    marginBottom: 14,
-    lineHeight: 1,
+    fontSize: 90,
+    fontWeight: 900,
+    letterSpacing: 2,
+    marginBottom: 20,
+    color: " rgba(238, 8, 169, 0.72)",
+textShadow: `
+  0 0 2.5px rgba(168,85,247,0.9),
+  0 0 20px rgba(168,85,247,0.9),
+  0 0 20px rgba(168,85,247,0.8),
+  0 0 35px rgba(168,85,247,0.7)
+`,
+animation: "glowPulse 1.5s ease-in-out infinite alternate",
   }}
 >
-  Unbound
+  UNBOUND 
 </div>
 
 {banner ? (
