@@ -5,6 +5,15 @@ import { createClient } from "@supabase/supabase-js";
 import Link from "next/link";
 import PublicProfileActions from "./PublicProfileActions";
 
+type ReactionKey = "devil" | "fire" | "eyes" | "purple_heart";
+
+const REACTIONS: Record<ReactionKey, string> = {
+devil: "😈",
+fire: "🔥",
+eyes: "👀",
+purple_heart: "💜",
+};
+
 type ProfileRow = {
 id: string;
 username: string | null;
@@ -23,6 +32,7 @@ created_at: string;
 media_url?: string | null;
 image_url?: string | null;
 file_url?: string | null;
+media_type?: string | null;
 group_id?: number | null;
 };
 
@@ -69,6 +79,13 @@ const [groupsById, setGroupsById] = useState<Record<number, GroupRow>>({});
 const [likeCounts, setLikeCounts] = useState<Record<number, number>>({});
 const [commentCounts, setCommentCounts] = useState<Record<number, number>>({});
 const [likedByMe, setLikedByMe] = useState<Record<number, boolean>>({});
+const [myReactionByPost, setMyReactionByPost] = useState<
+Record<number, ReactionKey | undefined>
+>({});
+const [openReactionPicker, setOpenReactionPicker] = useState<
+Record<number, boolean>
+>({});
+
 const [busyPostId, setBusyPostId] = useState<number | null>(null);
 const [spark, setSpark] = useState<Record<number, boolean>>({});
 
@@ -89,13 +106,14 @@ async function loadCounts(postIds: number[], uid: string | null) {
 if (!postIds.length) {
 setLikeCounts({});
 setLikedByMe({});
+setMyReactionByPost({});
 setCommentCounts({});
 return;
 }
 
 const { data: likeRows, error: likeErr } = await supabase
 .from("post_likes")
-.select("post_id,user_id")
+.select("post_id,user_id,reaction")
 .in("post_id", postIds);
 
 if (likeErr) {
@@ -105,12 +123,19 @@ return;
 
 const lc: Record<number, number> = {};
 const lbm: Record<number, boolean> = {};
+const reactionsByMe: Record<number, ReactionKey | undefined> = {};
 
 for (const r of likeRows ?? []) {
 const pid = (r as any).post_id as number;
 const likerId = (r as any).user_id as string;
+const reaction = (((r as any).reaction || "devil") as ReactionKey) ?? "devil";
+
 lc[pid] = (lc[pid] ?? 0) + 1;
-if (uid && likerId === uid) lbm[pid] = true;
+
+if (uid && likerId === uid) {
+lbm[pid] = true;
+reactionsByMe[pid] = reaction;
+}
 }
 
 const { data: commentRows, error: commentErr } = await supabase
@@ -121,6 +146,7 @@ const { data: commentRows, error: commentErr } = await supabase
 if (commentErr) {
 setLikeCounts(lc);
 setLikedByMe(lbm);
+setMyReactionByPost(reactionsByMe);
 setCommentCounts({});
 return;
 }
@@ -133,6 +159,7 @@ cc[pid] = (cc[pid] ?? 0) + 1;
 
 setLikeCounts(lc);
 setLikedByMe(lbm);
+setMyReactionByPost(reactionsByMe);
 setCommentCounts(cc);
 }
 
@@ -209,16 +236,26 @@ setSpark((m) => ({ ...m, [postId]: false }));
 }, 260);
 }
 
-async function toggleSpank(postId: number) {
+function closeReactionPicker(postId: number) {
+setOpenReactionPicker((m) => ({ ...m, [postId]: false }));
+}
+
+function toggleReactionPicker(postId: number) {
+setOpenReactionPicker((m) => ({ ...m, [postId]: !m[postId] }));
+}
+
+async function setReaction(postId: number, reaction: ReactionKey = "devil") {
 const uid = myUserId ?? (await refreshAuth());
 if (!uid) return;
 
 if (busyPostId) return;
 setBusyPostId(postId);
+setBanner(null);
 
+const currentReaction = myReactionByPost[postId];
 const already = !!likedByMe[postId];
 
-if (already) {
+if (already && currentReaction === reaction) {
 const { error } = await supabase
 .from("post_likes")
 .delete()
@@ -232,57 +269,91 @@ return;
 }
 
 setLikedByMe((m) => ({ ...m, [postId]: false }));
+setMyReactionByPost((m) => ({ ...m, [postId]: undefined }));
 setLikeCounts((m) => ({
 ...m,
 [postId]: Math.max(0, (m[postId] ?? 0) - 1),
 }));
+closeReactionPicker(postId);
 setBusyPostId(null);
 return;
 }
 
-const { error: insErr } = await supabase.from("post_likes").insert({
-post_id: postId,
-user_id: uid,
-});
-
-if (!insErr) {
-setLikedByMe((m) => ({ ...m, [postId]: true }));
-setLikeCounts((m) => ({ ...m, [postId]: (m[postId] ?? 0) + 1 }));
-triggerSpark(postId);
-setBusyPostId(null);
-return;
-}
-
-const isConflict =
-(insErr as any)?.status === 409 ||
-(insErr as any)?.code === "23505" ||
-String((insErr as any)?.message || "").toLowerCase().includes("duplicate") ||
-String((insErr as any)?.message || "").toLowerCase().includes("unique");
-
-if (isConflict) {
-const { error: delErr } = await supabase
+if (already && currentReaction && currentReaction !== reaction) {
+const { error } = await supabase
 .from("post_likes")
-.delete()
+.update({ reaction })
 .eq("post_id", postId)
 .eq("user_id", uid);
 
-if (delErr) {
-setBanner(delErr.message);
+if (error) {
+setBanner(error.message);
 setBusyPostId(null);
 return;
 }
 
-setLikedByMe((m) => ({ ...m, [postId]: false }));
-setLikeCounts((m) => ({
-...m,
-[postId]: Math.max(0, (m[postId] ?? 0) - 1),
-}));
+setLikedByMe((m) => ({ ...m, [postId]: true }));
+setMyReactionByPost((m) => ({ ...m, [postId]: reaction }));
+triggerSpark(postId);
+closeReactionPicker(postId);
 setBusyPostId(null);
 return;
 }
 
-setBanner(insErr.message);
+const { error } = await supabase.from("post_likes").insert({
+post_id: postId,
+user_id: uid,
+reaction,
+});
+
+if (error) {
+const isConflict =
+(error as any)?.status === 409 ||
+(error as any)?.code === "23505" ||
+String((error as any)?.message || "")
+.toLowerCase()
+.includes("duplicate") ||
+String((error as any)?.message || "")
+.toLowerCase()
+.includes("unique");
+
+if (isConflict) {
+const { error: updateErr } = await supabase
+.from("post_likes")
+.update({ reaction })
+.eq("post_id", postId)
+.eq("user_id", uid);
+
+if (updateErr) {
+setBanner(updateErr.message);
 setBusyPostId(null);
+return;
+}
+
+setLikedByMe((m) => ({ ...m, [postId]: true }));
+setMyReactionByPost((m) => ({ ...m, [postId]: reaction }));
+triggerSpark(postId);
+closeReactionPicker(postId);
+setBusyPostId(null);
+return;
+}
+
+setBanner(error.message);
+setBusyPostId(null);
+return;
+}
+
+setLikedByMe((m) => ({ ...m, [postId]: true }));
+setMyReactionByPost((m) => ({ ...m, [postId]: reaction }));
+setLikeCounts((m) => ({ ...m, [postId]: (m[postId] ?? 0) + 1 }));
+triggerSpark(postId);
+closeReactionPicker(postId);
+setBusyPostId(null);
+}
+
+async function toggleSpank(postId: number) {
+const existing = myReactionByPost[postId];
+await setReaction(postId, existing || "devil");
 }
 
 async function openCommentsFor(postId: number) {
@@ -509,6 +580,7 @@ const isPhoto =
 const spanks = likeCounts[p.id] ?? 0;
 const comments = commentCounts[p.id] ?? 0;
 const iSpanked = !!likedByMe[p.id];
+const myReaction = myReactionByPost[p.id];
 const isBusy = busyPostId === p.id;
 const isOpen = !!openComments[p.id];
 const groupInfo =
@@ -577,8 +649,10 @@ display: "flex",
 gap: 14,
 marginTop: 12,
 alignItems: "center",
+flexWrap: "wrap",
 }}
 >
+<div style={{ position: "relative", display: "flex", gap: 8 }}>
 <button
 onClick={() => !isBusy && toggleSpank(p.id)}
 disabled={isBusy}
@@ -601,12 +675,12 @@ title="Spank"
 >
 <span
 style={{
-fontSize: 18,
+fontSize: 16,
 lineHeight: 1,
 display: "inline-flex",
 }}
 >
-{iSpanked ? "♥" : "♡"}
+{iSpanked ? REACTIONS[myReaction || "devil"] : "👿"}
 </span>
 
 <span>
@@ -614,6 +688,67 @@ display: "inline-flex",
 {spanks ? ` · ${spanks}` : ""}
 </span>
 </button>
+
+<button
+onClick={() => toggleReactionPicker(p.id)}
+disabled={isBusy}
+style={{
+...pillBtn,
+padding: "8px 10px",
+minWidth: 40,
+opacity: isBusy ? 0.6 : 1,
+}}
+title="Choose reaction"
+>
+▾
+</button>
+
+{openReactionPicker[p.id] ? (
+<div
+style={{
+position: "absolute",
+top: "100%",
+left: 0,
+marginTop: 8,
+display: "flex",
+gap: 8,
+padding: 8,
+borderRadius: 14,
+background: "rgba(10,10,10,0.94)",
+border: "1px solid rgba(180,120,255,0.28)",
+boxShadow: "0 10px 28px rgba(0,0,0,0.35)",
+zIndex: 40,
+}}
+>
+{(Object.keys(REACTIONS) as ReactionKey[]).map((reaction) => (
+<button
+key={reaction}
+onClick={() => setReaction(p.id, reaction)}
+style={{
+width: 40,
+height: 40,
+borderRadius: 999,
+border:
+myReaction === reaction
+? "1px solid rgba(192,38,211,0.55)"
+: "1px solid rgba(180,120,255,0.25)",
+background:
+myReaction === reaction
+? "rgba(192,38,211,0.16)"
+: "rgba(0,0,0,0.35)",
+color: "white",
+cursor: "pointer",
+fontSize: 20,
+lineHeight: "20px",
+}}
+title={reaction}
+>
+{REACTIONS[reaction]}
+</button>
+))}
+</div>
+) : null}
+</div>
 
 <button onClick={() => openCommentsFor(p.id)} style={pillBtn}>
 Comments {comments ? `· ${comments}` : ""}
@@ -675,9 +810,7 @@ No comments yet.
 })}
 
 {posts.length === 0 ? (
-<div style={{ opacity: 0.65, fontSize: 13, padding: 8 }}>
-No posts yet.
-</div>
+<div style={{ opacity: 0.65, fontSize: 13, padding: 8 }}>No posts yet.</div>
 ) : null}
 </div>
 </div>
