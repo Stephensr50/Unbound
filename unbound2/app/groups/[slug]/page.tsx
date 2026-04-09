@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { createClient } from "@supabase/supabase-js";
 import Link from "next/link";
+import ReactionBar from "@/app/components/ReactionBar";
 
 function getSupabase() {
 const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -70,6 +71,15 @@ body: string;
 created_at: string;
 };
 
+type ReactionKey = "devil" | "fire" | "eyes" | "purple_heart";
+
+const REACTIONS: Record<ReactionKey, string> = {
+devil: "😈",
+fire: "🔥",
+eyes: "👀",
+purple_heart: "💜",
+};
+
 function timeAgo(ts: string) {
 const then = new Date(ts).getTime();
 const now = Date.now();
@@ -107,7 +117,15 @@ const [members, setMembers] = useState<MemberProfile[]>([]);
 const [likeCounts, setLikeCounts] = useState<Record<number, number>>({});
 const [commentCounts, setCommentCounts] = useState<Record<number, number>>({});
 const [likedByMe, setLikedByMe] = useState<Record<number, boolean>>({});
+const [myReactionByPost, setMyReactionByPost] = useState<
+Record<number, ReactionKey | undefined>
+>({});
+const [openReactionPicker, setOpenReactionPicker] = useState<
+Record<number, boolean>
+>({});
 const [likeBusy, setLikeBusy] = useState<Record<number, boolean>>({});
+const [spark, setSpark] = useState<Record<number, boolean>>({});
+
 const [openComments, setOpenComments] = useState<Record<number, boolean>>({});
 const [commentsByPost, setCommentsByPost] = useState<Record<number, CommentRow[]>>(
 {}
@@ -137,13 +155,14 @@ if (postIds.length === 0) {
 setLikeCounts({});
 setCommentCounts({});
 setLikedByMe({});
+setMyReactionByPost({});
 return;
 }
 
 const [likesRes, commentsRes] = await Promise.all([
 supabase
 .from("post_likes")
-.select("post_id,user_id")
+.select("post_id,user_id,reaction")
 .in("post_id", postIds),
 supabase
 .from("post_comments")
@@ -157,16 +176,25 @@ if (commentsRes.error) throw commentsRes.error;
 const nextLikeCounts: Record<number, number> = {};
 const nextCommentCounts: Record<number, number> = {};
 const nextLikedByMe: Record<number, boolean> = {};
+const nextReactionByPost: Record<number, ReactionKey | undefined> = {};
 
 for (const postId of postIds) {
 nextLikeCounts[postId] = 0;
 nextCommentCounts[postId] = 0;
 nextLikedByMe[postId] = false;
+nextReactionByPost[postId] = undefined;
 }
 
 for (const row of likesRes.data ?? []) {
-nextLikeCounts[row.post_id] = (nextLikeCounts[row.post_id] ?? 0) + 1;
-if (uid && row.user_id === uid) nextLikedByMe[row.post_id] = true;
+const pid = row.post_id as number;
+const reaction = ((row as any).reaction || "devil") as ReactionKey;
+
+nextLikeCounts[pid] = (nextLikeCounts[pid] ?? 0) + 1;
+
+if (uid && row.user_id === uid) {
+nextLikedByMe[pid] = true;
+nextReactionByPost[pid] = reaction;
+}
 }
 
 for (const row of commentsRes.data ?? []) {
@@ -176,6 +204,7 @@ nextCommentCounts[row.post_id] = (nextCommentCounts[row.post_id] ?? 0) + 1;
 setLikeCounts(nextLikeCounts);
 setCommentCounts(nextCommentCounts);
 setLikedByMe(nextLikedByMe);
+setMyReactionByPost(nextReactionByPost);
 }
 
 async function loadPosts(groupId: number, uid: string | null) {
@@ -523,20 +552,39 @@ href: `/groups/${slug}`,
 });
 }
 
-async function toggleLike(postId: number) {
+function triggerSpark(postId: number) {
+setSpark((m) => ({ ...m, [postId]: true }));
+
+window.setTimeout(() => {
+setSpark((m) => ({ ...m, [postId]: false }));
+}, 260);
+}
+
+function toggleReactionPicker(postId: number) {
+setOpenReactionPicker((m) => ({ ...m, [postId]: !m[postId] }));
+}
+
+async function setReaction(postId: number, reaction: ReactionKey = "devil") {
 if (!myUserId) {
 setStatus("You must be logged in.");
 return;
 }
+if (likeBusy[postId]) return;
 
-try {
+const post = posts.find((p) => p.id === postId);
+if (!post) {
+setStatus("Post not found.");
+return;
+}
+
 setLikeBusy((m) => ({ ...m, [postId]: true }));
 setStatus("");
 
-const post = posts.find((p) => p.id === postId);
-if (!post) throw new Error("Post not found.");
+const currentReaction = myReactionByPost[postId];
+const already = !!likedByMe[postId];
 
-if (likedByMe[postId]) {
+try {
+if (already && currentReaction === reaction) {
 const { error } = await supabase
 .from("post_likes")
 .delete()
@@ -546,23 +594,72 @@ const { error } = await supabase
 if (error) throw error;
 
 setLikedByMe((m) => ({ ...m, [postId]: false }));
+setMyReactionByPost((m) => ({ ...m, [postId]: undefined }));
 setLikeCounts((m) => ({
 ...m,
-[postId]: Math.max(0, (m[postId] ?? 1) - 1),
+[postId]: Math.max(0, (m[postId] ?? 0) - 1),
 }));
-} else {
-const { error } = await supabase.from("post_likes").insert({
-post_id: postId,
-user_id: myUserId,
-});
+setOpenReactionPicker((m) => ({ ...m, [postId]: false }));
+return;
+}
+
+if (already && currentReaction && currentReaction !== reaction) {
+const { error } = await supabase
+.from("post_likes")
+.update({ reaction })
+.eq("post_id", postId)
+.eq("user_id", myUserId);
 
 if (error) throw error;
 
 setLikedByMe((m) => ({ ...m, [postId]: true }));
-setLikeCounts((m) => ({
-...m,
-[postId]: (m[postId] ?? 0) + 1,
-}));
+setMyReactionByPost((m) => ({ ...m, [postId]: reaction }));
+triggerSpark(postId);
+setOpenReactionPicker((m) => ({ ...m, [postId]: false }));
+return;
+}
+
+const { error } = await supabase.from("post_likes").insert({
+post_id: postId,
+user_id: myUserId,
+reaction,
+});
+
+if (error) {
+const isConflict =
+(error as any)?.status === 409 ||
+(error as any)?.code === "23505" ||
+String((error as any)?.message || "")
+.toLowerCase()
+.includes("duplicate") ||
+String((error as any)?.message || "")
+.toLowerCase()
+.includes("unique");
+
+if (isConflict) {
+const { error: updateErr } = await supabase
+.from("post_likes")
+.update({ reaction })
+.eq("post_id", postId)
+.eq("user_id", myUserId);
+
+if (updateErr) throw updateErr;
+
+setLikedByMe((m) => ({ ...m, [postId]: true }));
+setMyReactionByPost((m) => ({ ...m, [postId]: reaction }));
+triggerSpark(postId);
+setOpenReactionPicker((m) => ({ ...m, [postId]: false }));
+return;
+}
+
+throw error;
+}
+
+setLikedByMe((m) => ({ ...m, [postId]: true }));
+setMyReactionByPost((m) => ({ ...m, [postId]: reaction }));
+setLikeCounts((m) => ({ ...m, [postId]: (m[postId] ?? 0) + 1 }));
+triggerSpark(postId);
+setOpenReactionPicker((m) => ({ ...m, [postId]: false }));
 
 await createGroupNotification({
 recipientId: post.user_id,
@@ -572,12 +669,16 @@ postId,
 groupName: group?.name || "this group",
 message: `Someone spanked your post in ${group?.name || "this group"}`,
 });
-}
 } catch (e: any) {
 setStatus(e?.message || "Could not update spank.");
 } finally {
 setLikeBusy((m) => ({ ...m, [postId]: false }));
 }
+}
+
+async function toggleLike(postId: number) {
+const existing = myReactionByPost[postId];
+await setReaction(postId, existing || "devil");
 }
 
 async function toggleComments(postId: number) {
@@ -729,6 +830,14 @@ const isMember = !!myMembership;
 
 return (
 <div style={shell}>
+<style>{`
+@keyframes unboundPop {
+0% { transform: scale(1); }
+45% { transform: scale(1.22); }
+100% { transform: scale(1); }
+}
+`}</style>
+
 <div style={banner} />
 
 <div style={inner}>
@@ -975,19 +1084,21 @@ opacity: 0.7,
 </div>
 ) : null}
 
-<div style={{ marginTop: 12, display: "flex", gap: 10, flexWrap: "wrap" }}>
-<button
-onClick={() => toggleLike(post.id)}
-disabled={!!likeBusy[post.id]}
-style={actionBtn}
->
-{likedByMe[post.id] ? "Unspank" : "Spank"} · {likeCounts[post.id] ?? 0}
-</button>
-
-<button onClick={() => toggleComments(post.id)} style={actionBtn}>
-Comments · {commentCounts[post.id] ?? 0}
-</button>
-</div>
+<ReactionBar
+postId={post.id}
+spanks={likeCounts[post.id] ?? 0}
+comments={commentCounts[post.id] ?? 0}
+iSpanked={!!likedByMe[post.id]}
+myReaction={myReactionByPost[post.id]}
+isBusy={!!likeBusy[post.id]}
+isPickerOpen={!!openReactionPicker[post.id]}
+sparkOn={!!spark[post.id]}
+pillBtn={actionBtn}
+onToggleSpank={toggleLike}
+onTogglePicker={toggleReactionPicker}
+onSetReaction={setReaction}
+onOpenComments={toggleComments}
+/>
 
 {openComments[post.id] ? (
 <div style={{ marginTop: 12 }}>

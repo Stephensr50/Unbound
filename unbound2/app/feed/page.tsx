@@ -7,6 +7,7 @@ import { createClient } from "@supabase/supabase-js";
 import { useSearchParams } from "next/navigation";
 import StoriesBar from "./StoriesBar";
 import Twemoji from "@/app/components/Twemoji";
+import ReactionBar from "@/app/components/ReactionBar";
 
 
 function getSupabase() {
@@ -1116,110 +1117,25 @@ alignItems: "center",
 flexWrap: "wrap",
 }}
 >
-<div style={{ position: "relative", display: "flex", gap: 8 }}>
-<button
-onClick={() => !isBusy && toggleSpank(p.id)}
-disabled={isBusy}
-style={{
-...pillBtn,
-display: "flex",
-alignItems: "center",
-gap: 8,
-opacity: isBusy ? 0.6 : 1,
-animation: spark[p.id] ? "unboundPop .22s ease" : undefined,
-color: iSpanked ? "#e879f9" : "white",
-border: iSpanked
-? "1px solid rgba(192,38,211,0.55)"
-: "1px solid rgba(180,120,255,0.25)",
-background: iSpanked
-? "rgba(192,38,211,0.16)"
-: "rgba(0,0,0,0.35)",
-}}
-title="Spank"
->
-<span
-style={{
-fontSize: 16,
-lineHeight: 1,
-display: "inline-flex",
-}}
->
 
 
-{iSpanked ? REACTIONS[myReaction || "devil"] : "👿"}
-</span>
-
-<span>
-{iSpanked ? "Spanked" : "Spank"}
-{spanks ? ` · ${spanks}` : ""}
-</span>
-</button>
-
-<button
-onClick={() => toggleReactionPicker(p.id)}
-disabled={isBusy}
-style={{
-...pillBtn,
-padding: "8px 10px",
-minWidth: 40,
-opacity: isBusy ? 0.6 : 1,
-}}
-title="Choose reaction"
->
-▾
-</button>
-
-{openReactionPicker[p.id] ? (
-<div
-style={{
-position: "absolute",
-top: "100%",
-left: 0,
-marginTop: 8,
-display: "flex",
-gap: 8,
-padding: 8,
-borderRadius: 14,
-background: "rgba(10,10,10,0.94)",
-border: "1px solid rgba(180,120,255,0.28)",
-boxShadow: "0 10px 28px rgba(0,0,0,0.35)",
-zIndex: 40,
-}}
->
-{(Object.keys(REACTIONS) as ReactionKey[]).map((reaction) => (
-<button
-key={reaction}
-onClick={() => setReaction(p.id, reaction)}
-style={{
-width: 40,
-height: 40,
-borderRadius: 999,
-border:
-myReaction === reaction
-? "1px solid rgba(192,38,211,0.55)"
-: "1px solid rgba(180,120,255,0.25)",
-background:
-myReaction === reaction
-? "rgba(192,38,211,0.16)"
-: "rgba(0,0,0,0.35)",
-color: "white",
-cursor: "pointer",
-fontSize: 20,
-lineHeight: "20px",
-}}
-title={reaction}
->
-{REACTIONS[reaction]}
-</button>
-))}
-</div>
-) : null}
 </div>
 
-<button onClick={() => openCommentsFor(p.id)} style={pillBtn}>
-Comments {comments ? `· ${comments}` : ""}
-</button>
-</div>
+<ReactionBar
+postId={p.id}
+spanks={spanks}
+comments={comments}
+iSpanked={iSpanked}
+myReaction={myReaction}
+isBusy={isBusy}
+isPickerOpen={!!openReactionPicker[p.id]}
+sparkOn={!!spark[p.id]}
+pillBtn={pillBtn}
+onToggleSpank={toggleSpank}
+onTogglePicker={toggleReactionPicker}
+onSetReaction={setReaction}
+onOpenComments={openCommentsFor}
+/>
 
 {isOpen ? (
 <div style={{ marginTop: 12 }}>
