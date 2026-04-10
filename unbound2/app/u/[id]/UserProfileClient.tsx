@@ -4,15 +4,10 @@ import { useEffect, useMemo, useState } from "react";
 import { createClient } from "@supabase/supabase-js";
 import Link from "next/link";
 import PublicProfileActions from "./PublicProfileActions";
+import ReactionBar from "@/app/components/ReactionBar";
 
 type ReactionKey = "devil" | "fire" | "eyes" | "purple_heart";
-
-const REACTIONS: Record<ReactionKey, string> = {
-devil: "😈",
-fire: "🔥",
-eyes: "👀",
-purple_heart: "💜",
-};
+type ReactionCountsMap = Partial<Record<ReactionKey, number>>;
 
 type ProfileRow = {
 id: string;
@@ -77,6 +72,9 @@ const [banner, setBanner] = useState<string | null>(null);
 const [groupsById, setGroupsById] = useState<Record<number, GroupRow>>({});
 
 const [likeCounts, setLikeCounts] = useState<Record<number, number>>({});
+const [reactionCountsByPost, setReactionCountsByPost] = useState<
+Record<number, ReactionCountsMap>
+>({});
 const [commentCounts, setCommentCounts] = useState<Record<number, number>>({});
 const [likedByMe, setLikedByMe] = useState<Record<number, boolean>>({});
 const [myReactionByPost, setMyReactionByPost] = useState<
@@ -105,6 +103,7 @@ return uid;
 async function loadCounts(postIds: number[], uid: string | null) {
 if (!postIds.length) {
 setLikeCounts({});
+setReactionCountsByPost({});
 setLikedByMe({});
 setMyReactionByPost({});
 setCommentCounts({});
@@ -124,6 +123,7 @@ return;
 const lc: Record<number, number> = {};
 const lbm: Record<number, boolean> = {};
 const reactionsByMe: Record<number, ReactionKey | undefined> = {};
+const reactionTotals: Record<number, ReactionCountsMap> = {};
 
 for (const r of likeRows ?? []) {
 const pid = (r as any).post_id as number;
@@ -131,6 +131,12 @@ const likerId = (r as any).user_id as string;
 const reaction = (((r as any).reaction || "devil") as ReactionKey) ?? "devil";
 
 lc[pid] = (lc[pid] ?? 0) + 1;
+
+if (!reactionTotals[pid]) {
+reactionTotals[pid] = {};
+}
+reactionTotals[pid][reaction] =
+(reactionTotals[pid][reaction] ?? 0) + 1;
 
 if (uid && likerId === uid) {
 lbm[pid] = true;
@@ -145,6 +151,7 @@ const { data: commentRows, error: commentErr } = await supabase
 
 if (commentErr) {
 setLikeCounts(lc);
+setReactionCountsByPost(reactionTotals);
 setLikedByMe(lbm);
 setMyReactionByPost(reactionsByMe);
 setCommentCounts({});
@@ -158,6 +165,7 @@ cc[pid] = (cc[pid] ?? 0) + 1;
 }
 
 setLikeCounts(lc);
+setReactionCountsByPost(reactionTotals);
 setLikedByMe(lbm);
 setMyReactionByPost(reactionsByMe);
 setCommentCounts(cc);
@@ -274,6 +282,19 @@ setLikeCounts((m) => ({
 ...m,
 [postId]: Math.max(0, (m[postId] ?? 0) - 1),
 }));
+setReactionCountsByPost((m) => {
+const current = { ...(m[postId] ?? {}) };
+if (currentReaction) {
+current[currentReaction] = Math.max(
+0,
+(current[currentReaction] ?? 0) - 1
+);
+if ((current[currentReaction] ?? 0) === 0) {
+delete current[currentReaction];
+}
+}
+return { ...m, [postId]: current };
+});
 closeReactionPicker(postId);
 setBusyPostId(null);
 return;
@@ -294,6 +315,18 @@ return;
 
 setLikedByMe((m) => ({ ...m, [postId]: true }));
 setMyReactionByPost((m) => ({ ...m, [postId]: reaction }));
+setReactionCountsByPost((m) => {
+const current = { ...(m[postId] ?? {}) };
+current[currentReaction] = Math.max(
+0,
+(current[currentReaction] ?? 0) - 1
+);
+if ((current[currentReaction] ?? 0) === 0) {
+delete current[currentReaction];
+}
+current[reaction] = (current[reaction] ?? 0) + 1;
+return { ...m, [postId]: current };
+});
 triggerSpark(postId);
 closeReactionPicker(postId);
 setBusyPostId(null);
@@ -332,6 +365,18 @@ return;
 
 setLikedByMe((m) => ({ ...m, [postId]: true }));
 setMyReactionByPost((m) => ({ ...m, [postId]: reaction }));
+setReactionCountsByPost((m) => {
+const current = { ...(m[postId] ?? {}) };
+const prev = currentReaction;
+if (prev) {
+current[prev] = Math.max(0, (current[prev] ?? 0) - 1);
+if ((current[prev] ?? 0) === 0) {
+delete current[prev];
+}
+}
+current[reaction] = (current[reaction] ?? 0) + 1;
+return { ...m, [postId]: current };
+});
 triggerSpark(postId);
 closeReactionPicker(postId);
 setBusyPostId(null);
@@ -346,6 +391,13 @@ return;
 setLikedByMe((m) => ({ ...m, [postId]: true }));
 setMyReactionByPost((m) => ({ ...m, [postId]: reaction }));
 setLikeCounts((m) => ({ ...m, [postId]: (m[postId] ?? 0) + 1 }));
+setReactionCountsByPost((m) => ({
+...m,
+[postId]: {
+...(m[postId] ?? {}),
+[reaction]: ((m[postId] ?? {})[reaction] ?? 0) + 1,
+},
+}));
 triggerSpark(postId);
 closeReactionPicker(postId);
 setBusyPostId(null);
@@ -471,6 +523,17 @@ padding: 18,
 marginBottom: 18,
 };
 
+const postBtn: React.CSSProperties = {
+padding: "8px 16px",
+borderRadius: 999,
+border: "none",
+cursor: "pointer",
+color: "white",
+fontWeight: 700,
+background: "linear-gradient(90deg,#7c3aed,#c026d3)",
+boxShadow: "0 0 14px rgba(168,85,247,0.6)",
+};
+
 return (
 <div style={{ width: "min(920px, 94vw)", margin: "16px auto 0" }}>
 <style>{`
@@ -577,10 +640,6 @@ const isPhoto =
 (p.kind ?? "").toLowerCase().includes("image") ||
 (!!media && /\.(jpg|jpeg|png|gif|webp)(\?|$)/i.test(media));
 
-const spanks = likeCounts[p.id] ?? 0;
-const comments = commentCounts[p.id] ?? 0;
-const iSpanked = !!likedByMe[p.id];
-const myReaction = myReactionByPost[p.id];
 const isBusy = busyPostId === p.id;
 const isOpen = !!openComments[p.id];
 const groupInfo =
@@ -643,117 +702,22 @@ isVideo ? (
 )
 ) : null}
 
-<div
-style={{
-display: "flex",
-gap: 14,
-marginTop: 12,
-alignItems: "center",
-flexWrap: "wrap",
-}}
->
-<div style={{ position: "relative", display: "flex", gap: 8 }}>
-<button
-onClick={() => !isBusy && toggleSpank(p.id)}
-disabled={isBusy}
-style={{
-...pillBtn,
-display: "flex",
-alignItems: "center",
-gap: 8,
-opacity: isBusy ? 0.6 : 1,
-animation: spark[p.id] ? "unboundPop .22s ease" : undefined,
-color: iSpanked ? "#e879f9" : "white",
-border: iSpanked
-? "1px solid rgba(192,38,211,0.55)"
-: "1px solid rgba(180,120,255,0.25)",
-background: iSpanked
-? "rgba(192,38,211,0.16)"
-: "rgba(0,0,0,0.35)",
-}}
-title="Spank"
->
-<span
-style={{
-fontSize: 16,
-lineHeight: 1,
-display: "inline-flex",
-}}
->
-{iSpanked ? REACTIONS[myReaction || "devil"] : "👿"}
-</span>
-
-<span>
-{iSpanked ? "Spanked" : "Spank"}
-{spanks ? ` · ${spanks}` : ""}
-</span>
-</button>
-
-<button
-onClick={() => toggleReactionPicker(p.id)}
-disabled={isBusy}
-style={{
-...pillBtn,
-padding: "8px 10px",
-minWidth: 40,
-opacity: isBusy ? 0.6 : 1,
-}}
-title="Choose reaction"
->
-▾
-</button>
-
-{openReactionPicker[p.id] ? (
-<div
-style={{
-position: "absolute",
-top: "100%",
-left: 0,
-marginTop: 8,
-display: "flex",
-gap: 8,
-padding: 8,
-borderRadius: 14,
-background: "rgba(10,10,10,0.94)",
-border: "1px solid rgba(180,120,255,0.28)",
-boxShadow: "0 10px 28px rgba(0,0,0,0.35)",
-zIndex: 40,
-}}
->
-{(Object.keys(REACTIONS) as ReactionKey[]).map((reaction) => (
-<button
-key={reaction}
-onClick={() => setReaction(p.id, reaction)}
-style={{
-width: 40,
-height: 40,
-borderRadius: 999,
-border:
-myReaction === reaction
-? "1px solid rgba(192,38,211,0.55)"
-: "1px solid rgba(180,120,255,0.25)",
-background:
-myReaction === reaction
-? "rgba(192,38,211,0.16)"
-: "rgba(0,0,0,0.35)",
-color: "white",
-cursor: "pointer",
-fontSize: 20,
-lineHeight: "20px",
-}}
-title={reaction}
->
-{REACTIONS[reaction]}
-</button>
-))}
-</div>
-) : null}
-</div>
-
-<button onClick={() => openCommentsFor(p.id)} style={pillBtn}>
-Comments {comments ? `· ${comments}` : ""}
-</button>
-</div>
+<ReactionBar
+postId={p.id}
+spanks={likeCounts[p.id] ?? 0}
+comments={commentCounts[p.id] ?? 0}
+iSpanked={!!likedByMe[p.id]}
+myReaction={myReactionByPost[p.id]}
+isBusy={isBusy}
+isPickerOpen={!!openReactionPicker[p.id]}
+sparkOn={!!spark[p.id]}
+pillBtn={pillBtn}
+reactionCounts={reactionCountsByPost[p.id]}
+onToggleSpank={toggleSpank}
+onTogglePicker={toggleReactionPicker}
+onSetReaction={setReaction}
+onOpenComments={openCommentsFor}
+/>
 
 {isOpen ? (
 <div style={{ marginTop: 12 }}>
@@ -767,7 +731,11 @@ placeholder="Write a comment…"
 style={{ ...inputStyle, flex: 1 }}
 />
 
-<button onClick={() => addComment(p.id)} disabled={isBusy} style={pillBtn}>
+<button
+onClick={() => addComment(p.id)}
+disabled={isBusy}
+style={postBtn}
+>
 {isBusy ? "…" : "Send"}
 </button>
 </div>
@@ -810,7 +778,9 @@ No comments yet.
 })}
 
 {posts.length === 0 ? (
-<div style={{ opacity: 0.65, fontSize: 13, padding: 8 }}>No posts yet.</div>
+<div style={{ opacity: 0.65, fontSize: 13, padding: 8 }}>
+No posts yet.
+</div>
 ) : null}
 </div>
 </div>

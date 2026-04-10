@@ -3,12 +3,17 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createClient } from "@supabase/supabase-js";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
+import ReactionBar from "@/app/components/ReactionBar";
 
 function getSupabase() {
 const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
 return createClient(url, key);
 }
+
+type ReactionKey = "devil" | "fire" | "eyes" | "purple_heart";
+
+type ReactionCountsMap = Partial<Record<ReactionKey, number>>;
 
 type PostRow = {
 id: number;
@@ -68,10 +73,17 @@ const [banner, setBanner] = useState<string | null>(null);
 const [likeCount, setLikeCount] = useState(0);
 const [commentCount, setCommentCount] = useState(0);
 const [liked, setLiked] = useState(false);
+const [myReaction, setMyReaction] = useState<ReactionKey | undefined>(
+undefined
+);
+const [reactionCounts, setReactionCounts] = useState<ReactionCountsMap>({});
+const [openReactionPicker, setOpenReactionPicker] = useState(false);
 
 const [openComments, setOpenComments] = useState(true);
 const [comments, setComments] = useState<CommentRow[]>([]);
-const [commentAuthors, setCommentAuthors] = useState<Record<string, ProfileRow>>({});
+const [commentAuthors, setCommentAuthors] = useState<Record<string, ProfileRow>>(
+{}
+);
 const [draft, setDraft] = useState("");
 const [busy, setBusy] = useState(false);
 const [spark, setSpark] = useState(false);
@@ -148,7 +160,7 @@ if (prof) setAuthor(prof as ProfileRow);
 
 const { data: likeRows, error: likeErr } = await supabase
 .from("post_likes")
-.select("user_id")
+.select("user_id,reaction")
 .eq("post_id", pid);
 
 if (likeErr) {
@@ -156,9 +168,23 @@ setBanner(`Spanks disabled: ${likeErr.message}`);
 return;
 }
 
-const users = (likeRows ?? []).map((r: any) => String(r.user_id));
-setLikeCount(users.length);
-setLiked(!!uid && users.includes(uid));
+const rows = (likeRows ?? []) as Array<{
+user_id: string;
+reaction?: ReactionKey | null;
+}>;
+
+const totals: ReactionCountsMap = {};
+for (const row of rows) {
+const reaction = (row.reaction || "devil") as ReactionKey;
+totals[reaction] = (totals[reaction] ?? 0) + 1;
+}
+
+setReactionCounts(totals);
+setLikeCount(rows.length);
+
+const mine = uid ? rows.find((r) => String(r.user_id) === uid) : null;
+setLiked(!!mine);
+setMyReaction((mine?.reaction as ReactionKey | undefined) || undefined);
 
 const { data: cRows, error: cErr } = await supabase
 .from("post_comments")
@@ -214,25 +240,83 @@ setSpark(false);
 }, 260);
 }
 
-async function toggleSpank() {
+function toggleReactionPicker(_postId: number) {
+setOpenReactionPicker((v) => !v);
+}
+
+async function setReaction(
+_postId: number,
+reaction: ReactionKey = "devil"
+) {
 if (!post) return;
+
 const uid = myUserId ?? (await refreshAuth());
 if (!uid) return;
-
 if (busy) return;
-setBusy(true);
 
-if (liked) {
+setBusy(true);
+setBanner(null);
+
+const currentReaction = myReaction;
+const already = liked;
+
+if (already && currentReaction === reaction) {
 const { error } = await supabase
 .from("post_likes")
 .delete()
 .eq("post_id", post.id)
 .eq("user_id", uid);
 
-if (error) setBanner(error.message);
+if (error) {
+setBanner(error.message);
+setBusy(false);
+return;
+}
 
 setLiked(false);
+setMyReaction(undefined);
 setLikeCount((n) => Math.max(0, n - 1));
+setReactionCounts((prev) => {
+const next = { ...prev };
+if (currentReaction) {
+next[currentReaction] = Math.max(0, (next[currentReaction] ?? 0) - 1);
+if ((next[currentReaction] ?? 0) === 0) {
+delete next[currentReaction];
+}
+}
+return next;
+});
+setOpenReactionPicker(false);
+setBusy(false);
+return;
+}
+
+if (already && currentReaction && currentReaction !== reaction) {
+const { error } = await supabase
+.from("post_likes")
+.update({ reaction })
+.eq("post_id", post.id)
+.eq("user_id", uid);
+
+if (error) {
+setBanner(error.message);
+setBusy(false);
+return;
+}
+
+setLiked(true);
+setMyReaction(reaction);
+setReactionCounts((prev) => {
+const next = { ...prev };
+next[currentReaction] = Math.max(0, (next[currentReaction] ?? 0) - 1);
+if ((next[currentReaction] ?? 0) === 0) {
+delete next[currentReaction];
+}
+next[reaction] = (next[reaction] ?? 0) + 1;
+return next;
+});
+triggerSpark();
+setOpenReactionPicker(false);
 setBusy(false);
 return;
 }
@@ -240,12 +324,19 @@ return;
 const { error: insErr } = await supabase.from("post_likes").insert({
 post_id: post.id,
 user_id: uid,
+reaction,
 });
 
 if (!insErr) {
 setLiked(true);
+setMyReaction(reaction);
 setLikeCount((n) => n + 1);
+setReactionCounts((prev) => ({
+...prev,
+[reaction]: (prev[reaction] ?? 0) + 1,
+}));
 triggerSpark();
+setOpenReactionPicker(false);
 setBusy(false);
 return;
 }
@@ -257,13 +348,46 @@ String((insErr as any)?.message || "").toLowerCase().includes("duplicate") ||
 String((insErr as any)?.message || "").toLowerCase().includes("unique");
 
 if (isConflict) {
+const { error: updateErr } = await supabase
+.from("post_likes")
+.update({ reaction })
+.eq("post_id", post.id)
+.eq("user_id", uid);
+
+if (updateErr) {
+setBanner(updateErr.message);
+setBusy(false);
+return;
+}
+
 setLiked(true);
+setMyReaction(reaction);
+setReactionCounts((prev) => {
+const next = { ...prev };
+if (currentReaction) {
+next[currentReaction] = Math.max(
+0,
+(next[currentReaction] ?? 0) - 1
+);
+if ((next[currentReaction] ?? 0) === 0) {
+delete next[currentReaction];
+}
+}
+next[reaction] = (next[reaction] ?? 0) + 1;
+return next;
+});
+triggerSpark();
+setOpenReactionPicker(false);
 setBusy(false);
 return;
 }
 
 setBanner(insErr.message);
 setBusy(false);
+}
+
+async function toggleSpank(_postId: number) {
+await setReaction(post?.id ?? 0, myReaction || "devil");
 }
 
 async function addComment() {
@@ -307,7 +431,8 @@ await hydrateCommentAuthors([newComment]);
 
 function startReply(c: CommentRow) {
 const p = commentAuthors[c.user_id];
-const label = p?.display_name || (p?.username ? `@${p.username}` : "this comment");
+const label =
+p?.display_name || (p?.username ? `@${p.username}` : "this comment");
 setReplyTo({
 id: c.id,
 userId: c.user_id,
@@ -476,54 +601,22 @@ marginBottom: 8,
 </div>
 ) : null}
 
-<div
-style={{
-display: "flex",
-gap: 14,
-marginTop: 12,
-alignItems: "center",
-}}
->
-<button
-onClick={() => !busy && toggleSpank()}
-disabled={busy}
-style={{
-...pillBtn,
-display: "flex",
-alignItems: "center",
-gap: 8,
-opacity: busy ? 0.6 : 1,
-animation: spark ? "unboundPop .22s ease" : undefined,
-color: liked ? "#e879f9" : "white",
-border: liked
-? "1px solid rgba(192,38,211,0.55)"
-: "1px solid rgba(180,120,255,0.25)",
-background: liked
-? "rgba(192,38,211,0.16)"
-: "rgba(0,0,0,0.35)",
-}}
-title="Spank"
->
-<span
-style={{
-fontSize: 18,
-lineHeight: 1,
-display: "inline-flex",
-}}
->
-{liked ? "♥" : "♡"}
-</span>
-
-<span>
-{liked ? "Spanked" : "Spank"}
-{likeCount ? ` · ${likeCount}` : ""}
-</span>
-</button>
-
-<button onClick={() => setOpenComments((v) => !v)} style={pillBtn}>
-Comments {commentCount ? `· ${commentCount}` : ""}
-</button>
-</div>
+<ReactionBar
+postId={post.id}
+spanks={likeCount}
+comments={commentCount}
+iSpanked={liked}
+myReaction={myReaction}
+isBusy={busy}
+isPickerOpen={openReactionPicker}
+sparkOn={spark}
+pillBtn={pillBtn}
+reactionCounts={reactionCounts}
+onToggleSpank={toggleSpank}
+onTogglePicker={toggleReactionPicker}
+onSetReaction={setReaction}
+onOpenComments={() => setOpenComments((v) => !v)}
+/>
 
 {openComments ? (
 <div style={{ marginTop: 12 }}>
@@ -554,7 +647,9 @@ Cancel
 <input
 value={draft}
 onChange={(e) => setDraft(e.target.value)}
-placeholder={replyTo ? `Reply to ${replyTo.label}…` : "Write a comment…"}
+placeholder={
+replyTo ? `Reply to ${replyTo.label}…` : "Write a comment…"
+}
 style={{ ...inputStyle, flex: 1 }}
 />
 <button onClick={addComment} disabled={busy} style={postBtn}>
@@ -580,7 +675,10 @@ const parent = c.parent_comment_id
 ? comments.find((x) => x.id === c.parent_comment_id) ?? null
 : null;
 
-const parentAuthor = parent ? commentAuthors[parent.user_id] ?? null : null;
+const parentAuthor = parent
+? commentAuthors[parent.user_id] ?? null
+: null;
+
 const replyLabel =
 parentAuthor?.display_name ||
 (parentAuthor?.username ? `@${parentAuthor.username}` : null) ||
@@ -641,10 +739,19 @@ alignItems: "baseline",
 flexWrap: "wrap",
 }}
 >
-<div style={{ display: "flex", gap: 8, alignItems: "baseline", flexWrap: "wrap" }}>
+<div
+style={{
+display: "flex",
+gap: 8,
+alignItems: "baseline",
+flexWrap: "wrap",
+}}
+>
 <div style={{ fontWeight: 800 }}>{cName}</div>
 {cHandle ? (
-<div style={{ opacity: 0.6, fontSize: 12 }}>{cHandle}</div>
+<div style={{ opacity: 0.6, fontSize: 12 }}>
+{cHandle}
+</div>
 ) : null}
 </div>
 

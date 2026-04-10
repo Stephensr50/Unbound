@@ -9,6 +9,8 @@ eyes: "👀",
 purple_heart: "💜",
 };
 
+type ReactionCounts = Partial<Record<ReactionKey, number>>;
+
 export default function ReactionBar({
 postId,
 spanks,
@@ -19,6 +21,7 @@ isBusy,
 isPickerOpen,
 sparkOn,
 pillBtn,
+reactionCounts,
 onToggleSpank,
 onTogglePicker,
 onSetReaction,
@@ -33,11 +36,16 @@ isBusy: boolean;
 isPickerOpen: boolean;
 sparkOn: boolean;
 pillBtn: React.CSSProperties;
+reactionCounts?: ReactionCounts;
 onToggleSpank: (postId: number) => void;
 onTogglePicker: (postId: number) => void;
 onSetReaction: (postId: number, reaction: ReactionKey) => void;
 onOpenComments: (postId: number) => void;
 }) {
+const orderedReactions = (Object.keys(REACTIONS) as ReactionKey[]).filter(
+(key) => (reactionCounts?.[key] ?? 0) > 0
+);
+
 return (
 <div
 style={{
@@ -149,6 +157,39 @@ title={reaction}
 <button onClick={() => onOpenComments(postId)} style={pillBtn}>
 Comments {comments ? `· ${comments}` : ""}
 </button>
+
+{orderedReactions.length > 0 ? (
+<div
+style={{
+display: "flex",
+gap: 10,
+alignItems: "center",
+flexWrap: "wrap",
+opacity: 0.95,
+}}
+>
+{orderedReactions.map((reaction) => (
+<div
+key={reaction}
+style={{
+display: "inline-flex",
+alignItems: "center",
+gap: 6,
+padding: "6px 10px",
+borderRadius: 999,
+border: "1px solid rgba(180,120,255,0.18)",
+background: "rgba(255,255,255,0.04)",
+fontSize: 13,
+lineHeight: 1,
+}}
+title={`${reaction} reactions`}
+>
+<span style={{ fontSize: 16 }}>{REACTIONS[reaction]}</span>
+<span>{reactionCounts?.[reaction] ?? 0}</span>
+</div>
+))}
+</div>
+) : null}
 </div>
 );
 }

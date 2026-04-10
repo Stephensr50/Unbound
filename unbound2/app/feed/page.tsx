@@ -1,14 +1,10 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@supabase/supabase-js";
-import { useSearchParams } from "next/navigation";
 import StoriesBar from "./StoriesBar";
-import Twemoji from "@/app/components/Twemoji";
 import ReactionBar from "@/app/components/ReactionBar";
-
 
 function getSupabase() {
 const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
@@ -17,13 +13,6 @@ return createClient(url, key);
 }
 
 type ReactionKey = "devil" | "fire" | "eyes" | "purple_heart";
-
-const REACTIONS: Record<ReactionKey, string> = {
-devil: "😈",
-fire: "🔥",
-eyes: "👀",
-purple_heart: "💜",
-};
 
 type PostRow = {
 id: number;
@@ -57,6 +46,8 @@ username: string | null;
 display_name: string | null;
 avatar_url: string | null;
 };
+
+type ReactionCountsMap = Partial<Record<ReactionKey, number>>;
 
 function timeAgo(ts: string) {
 const then = new Date(ts).getTime();
@@ -110,6 +101,9 @@ const [profilesById, setProfilesById] = useState<Record<string, ProfileRow>>(
 const [groupsById, setGroupsById] = useState<Record<number, GroupRow>>({});
 
 const [likeCounts, setLikeCounts] = useState<Record<number, number>>({});
+const [reactionCountsByPost, setReactionCountsByPost] = useState<
+Record<number, ReactionCountsMap>
+>({});
 const [commentCounts, setCommentCounts] = useState<Record<number, number>>({});
 const [likedByMe, setLikedByMe] = useState<Record<number, boolean>>({});
 const [myReactionByPost, setMyReactionByPost] = useState<
@@ -199,6 +193,7 @@ return;
 const lc: Record<number, number> = {};
 const lbm: Record<number, boolean> = {};
 const reactionsByMe: Record<number, ReactionKey | undefined> = {};
+const reactionTotals: Record<number, ReactionCountsMap> = {};
 
 for (const r of likeRows ?? []) {
 const pid = (r as any).post_id as number;
@@ -206,6 +201,13 @@ const uid = (r as any).user_id as string;
 const reaction = ((r as any).reaction || "devil") as ReactionKey;
 
 lc[pid] = (lc[pid] ?? 0) + 1;
+
+if (!reactionTotals[pid]) {
+reactionTotals[pid] = {};
+}
+
+reactionTotals[pid][reaction] =
+(reactionTotals[pid][reaction] ?? 0) + 1;
 
 if (myUserId && uid === myUserId) {
 lbm[pid] = true;
@@ -222,6 +224,7 @@ if (cErr) {
 setLikeCounts(lc);
 setLikedByMe(lbm);
 setMyReactionByPost(reactionsByMe);
+setReactionCountsByPost(reactionTotals);
 setCommentCounts({});
 return;
 }
@@ -235,6 +238,7 @@ cc[pid] = (cc[pid] ?? 0) + 1;
 setLikeCounts(lc);
 setLikedByMe(lbm);
 setMyReactionByPost(reactionsByMe);
+setReactionCountsByPost(reactionTotals);
 setCommentCounts(cc);
 }
 
@@ -403,6 +407,19 @@ setLikeCounts((m) => ({
 ...m,
 [postId]: Math.max(0, (m[postId] ?? 0) - 1),
 }));
+setReactionCountsByPost((m) => {
+const current = { ...(m[postId] ?? {}) };
+if (currentReaction) {
+current[currentReaction] = Math.max(
+0,
+(current[currentReaction] ?? 0) - 1
+);
+if ((current[currentReaction] ?? 0) === 0) {
+delete current[currentReaction];
+}
+}
+return { ...m, [postId]: current };
+});
 closeReactionPicker(postId);
 setBusyPostId(null);
 return;
@@ -423,6 +440,18 @@ return;
 
 setLikedByMe((m) => ({ ...m, [postId]: true }));
 setMyReactionByPost((m) => ({ ...m, [postId]: reaction }));
+setReactionCountsByPost((m) => {
+const current = { ...(m[postId] ?? {}) };
+current[currentReaction] = Math.max(
+0,
+(current[currentReaction] ?? 0) - 1
+);
+if ((current[currentReaction] ?? 0) === 0) {
+delete current[currentReaction];
+}
+current[reaction] = (current[reaction] ?? 0) + 1;
+return { ...m, [postId]: current };
+});
 triggerSpark(postId);
 closeReactionPicker(postId);
 setBusyPostId(null);
@@ -461,6 +490,18 @@ return;
 
 setLikedByMe((m) => ({ ...m, [postId]: true }));
 setMyReactionByPost((m) => ({ ...m, [postId]: reaction }));
+setReactionCountsByPost((m) => {
+const current = { ...(m[postId] ?? {}) };
+const prev = currentReaction;
+if (prev) {
+current[prev] = Math.max(0, (current[prev] ?? 0) - 1);
+if ((current[prev] ?? 0) === 0) {
+delete current[prev];
+}
+}
+current[reaction] = (current[reaction] ?? 0) + 1;
+return { ...m, [postId]: current };
+});
 triggerSpark(postId);
 closeReactionPicker(postId);
 setBusyPostId(null);
@@ -475,6 +516,13 @@ return;
 setLikedByMe((m) => ({ ...m, [postId]: true }));
 setMyReactionByPost((m) => ({ ...m, [postId]: reaction }));
 setLikeCounts((m) => ({ ...m, [postId]: (m[postId] ?? 0) + 1 }));
+setReactionCountsByPost((m) => ({
+...m,
+[postId]: {
+...(m[postId] ?? {}),
+[reaction]: ((m[postId] ?? {})[reaction] ?? 0) + 1,
+},
+}));
 triggerSpark(postId);
 closeReactionPicker(postId);
 setBusyPostId(null);
@@ -762,6 +810,7 @@ background: "rgba(0,0,0,0.5)",
 
 if (isImage) {
 return (
+// eslint-disable-next-line @next/next/no-img-element
 <img
 src={p.media_url}
 alt=""
@@ -800,28 +849,26 @@ return (
 <StoriesBar />
 
 <div
-  style={{
-    textAlign: "center",
-    fontSize: 90,
-    fontWeight: 900,
-    letterSpacing: 2,
-    marginBottom: 20,
-    color: " rgba(238, 8, 169, 0.72)",
+style={{
+textAlign: "center",
+fontSize: 90,
+fontWeight: 900,
+letterSpacing: 2,
+marginBottom: 20,
+color: "rgba(238, 8, 169, 0.72)",
 textShadow: `
-  0 0 2.5px rgba(168,85,247,0.9),
-  0 0 20px rgba(168,85,247,0.9),
-  0 0 20px rgba(168,85,247,0.8),
-  0 0 35px rgba(168,85,247,0.7)
+0 0 2.5px rgba(168,85,247,0.9),
+0 0 20px rgba(168,85,247,0.9),
+0 0 20px rgba(168,85,247,0.8),
+0 0 35px rgba(168,85,247,0.7)
 `,
 animation: "glowPulse 1.5s ease-in-out infinite alternate",
-  }}
+}}
 >
-  UNBOUND 
+UNBOUND
 </div>
 
 {banner ? (
-
-
 <div
 style={{
 marginTop: 12,
@@ -908,11 +955,7 @@ maxWidth: 260,
 
 <div style={{ flex: 1 }} />
 
-<button
-onClick={submitPost}
-disabled={posting || uploading}
-style={postBtn}
->
+<button onClick={submitPost} disabled={posting || uploading} style={postBtn}>
 {uploading ? "Reaching climax..." : posting ? "Reaching climax..." : "Post"}
 </button>
 </div>
@@ -956,6 +999,7 @@ marginBottom: 10,
 }}
 >
 {authorAvatar(p.user_id) ? (
+// eslint-disable-next-line @next/next/no-img-element
 <img
 src={authorAvatar(p.user_id)}
 alt=""
@@ -1034,6 +1078,7 @@ onClick={() => router.push(`/groups/${groupInfo.slug}`)}
 style={{ ...groupPillStyle, cursor: "pointer" }}
 >
 {groupInfo.avatar_url ? (
+// eslint-disable-next-line @next/next/no-img-element
 <img
 src={groupInfo.avatar_url}
 alt=""
@@ -1108,19 +1153,6 @@ whiteSpace: "pre-wrap",
 </div>
 </div>
 
-<div
-style={{
-display: "flex",
-gap: 14,
-marginTop: 12,
-alignItems: "center",
-flexWrap: "wrap",
-}}
->
-
-
-</div>
-
 <ReactionBar
 postId={p.id}
 spanks={spanks}
@@ -1131,6 +1163,7 @@ isBusy={isBusy}
 isPickerOpen={!!openReactionPicker[p.id]}
 sparkOn={!!spark[p.id]}
 pillBtn={pillBtn}
+reactionCounts={reactionCountsByPost[p.id]}
 onToggleSpank={toggleSpank}
 onTogglePicker={toggleReactionPicker}
 onSetReaction={setReaction}
@@ -1152,11 +1185,7 @@ placeholder="Write a comment…"
 style={{ ...inputStyle, flex: 1 }}
 />
 
-<button
-onClick={() => addComment(p.id)}
-disabled={isBusy}
-style={postBtn}
->
+<button onClick={() => addComment(p.id)} disabled={isBusy} style={postBtn}>
 {isBusy ? "…" : "Send"}
 </button>
 </div>
@@ -1231,6 +1260,7 @@ padding: 12,
 }}
 >
 {viewer.type === "image" ? (
+// eslint-disable-next-line @next/next/no-img-element
 <img
 src={viewer.url}
 alt=""

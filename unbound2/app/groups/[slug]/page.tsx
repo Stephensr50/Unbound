@@ -72,13 +72,7 @@ created_at: string;
 };
 
 type ReactionKey = "devil" | "fire" | "eyes" | "purple_heart";
-
-const REACTIONS: Record<ReactionKey, string> = {
-devil: "😈",
-fire: "🔥",
-eyes: "👀",
-purple_heart: "💜",
-};
+type ReactionCountsMap = Partial<Record<ReactionKey, number>>;
 
 function timeAgo(ts: string) {
 const then = new Date(ts).getTime();
@@ -115,6 +109,9 @@ const [profilesById, setProfilesById] = useState<Record<string, ProfileRow>>(
 const [members, setMembers] = useState<MemberProfile[]>([]);
 
 const [likeCounts, setLikeCounts] = useState<Record<number, number>>({});
+const [reactionCountsByPost, setReactionCountsByPost] = useState<
+Record<number, ReactionCountsMap>
+>({});
 const [commentCounts, setCommentCounts] = useState<Record<number, number>>({});
 const [likedByMe, setLikedByMe] = useState<Record<number, boolean>>({});
 const [myReactionByPost, setMyReactionByPost] = useState<
@@ -153,6 +150,7 @@ alive = false;
 async function loadPostMeta(postIds: number[], uid: string | null) {
 if (postIds.length === 0) {
 setLikeCounts({});
+setReactionCountsByPost({});
 setCommentCounts({});
 setLikedByMe({});
 setMyReactionByPost({});
@@ -174,12 +172,14 @@ if (likesRes.error) throw likesRes.error;
 if (commentsRes.error) throw commentsRes.error;
 
 const nextLikeCounts: Record<number, number> = {};
+const nextReactionCounts: Record<number, ReactionCountsMap> = {};
 const nextCommentCounts: Record<number, number> = {};
 const nextLikedByMe: Record<number, boolean> = {};
 const nextReactionByPost: Record<number, ReactionKey | undefined> = {};
 
 for (const postId of postIds) {
 nextLikeCounts[postId] = 0;
+nextReactionCounts[postId] = {};
 nextCommentCounts[postId] = 0;
 nextLikedByMe[postId] = false;
 nextReactionByPost[postId] = undefined;
@@ -190,6 +190,8 @@ const pid = row.post_id as number;
 const reaction = ((row as any).reaction || "devil") as ReactionKey;
 
 nextLikeCounts[pid] = (nextLikeCounts[pid] ?? 0) + 1;
+nextReactionCounts[pid][reaction] =
+(nextReactionCounts[pid][reaction] ?? 0) + 1;
 
 if (uid && row.user_id === uid) {
 nextLikedByMe[pid] = true;
@@ -202,6 +204,7 @@ nextCommentCounts[row.post_id] = (nextCommentCounts[row.post_id] ?? 0) + 1;
 }
 
 setLikeCounts(nextLikeCounts);
+setReactionCountsByPost(nextReactionCounts);
 setCommentCounts(nextCommentCounts);
 setLikedByMe(nextLikedByMe);
 setMyReactionByPost(nextReactionByPost);
@@ -599,6 +602,19 @@ setLikeCounts((m) => ({
 ...m,
 [postId]: Math.max(0, (m[postId] ?? 0) - 1),
 }));
+setReactionCountsByPost((m) => {
+const current = { ...(m[postId] ?? {}) };
+if (currentReaction) {
+current[currentReaction] = Math.max(
+0,
+(current[currentReaction] ?? 0) - 1
+);
+if ((current[currentReaction] ?? 0) === 0) {
+delete current[currentReaction];
+}
+}
+return { ...m, [postId]: current };
+});
 setOpenReactionPicker((m) => ({ ...m, [postId]: false }));
 return;
 }
@@ -614,6 +630,18 @@ if (error) throw error;
 
 setLikedByMe((m) => ({ ...m, [postId]: true }));
 setMyReactionByPost((m) => ({ ...m, [postId]: reaction }));
+setReactionCountsByPost((m) => {
+const current = { ...(m[postId] ?? {}) };
+current[currentReaction] = Math.max(
+0,
+(current[currentReaction] ?? 0) - 1
+);
+if ((current[currentReaction] ?? 0) === 0) {
+delete current[currentReaction];
+}
+current[reaction] = (current[reaction] ?? 0) + 1;
+return { ...m, [postId]: current };
+});
 triggerSpark(postId);
 setOpenReactionPicker((m) => ({ ...m, [postId]: false }));
 return;
@@ -647,6 +675,18 @@ if (updateErr) throw updateErr;
 
 setLikedByMe((m) => ({ ...m, [postId]: true }));
 setMyReactionByPost((m) => ({ ...m, [postId]: reaction }));
+setReactionCountsByPost((m) => {
+const current = { ...(m[postId] ?? {}) };
+const prev = currentReaction;
+if (prev) {
+current[prev] = Math.max(0, (current[prev] ?? 0) - 1);
+if ((current[prev] ?? 0) === 0) {
+delete current[prev];
+}
+}
+current[reaction] = (current[reaction] ?? 0) + 1;
+return { ...m, [postId]: current };
+});
 triggerSpark(postId);
 setOpenReactionPicker((m) => ({ ...m, [postId]: false }));
 return;
@@ -658,6 +698,13 @@ throw error;
 setLikedByMe((m) => ({ ...m, [postId]: true }));
 setMyReactionByPost((m) => ({ ...m, [postId]: reaction }));
 setLikeCounts((m) => ({ ...m, [postId]: (m[postId] ?? 0) + 1 }));
+setReactionCountsByPost((m) => ({
+...m,
+[postId]: {
+...(m[postId] ?? {}),
+[reaction]: ((m[postId] ?? {})[reaction] ?? 0) + 1,
+},
+}));
 triggerSpark(postId);
 setOpenReactionPicker((m) => ({ ...m, [postId]: false }));
 
@@ -1094,6 +1141,7 @@ isBusy={!!likeBusy[post.id]}
 isPickerOpen={!!openReactionPicker[post.id]}
 sparkOn={!!spark[post.id]}
 pillBtn={actionBtn}
+reactionCounts={reactionCountsByPost[post.id]}
 onToggleSpank={toggleLike}
 onTogglePicker={toggleReactionPicker}
 onSetReaction={setReaction}
