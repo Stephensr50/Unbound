@@ -17,6 +17,7 @@ username: string | null;
 display_name: string | null;
 bio: string | null;
 avatar_url: string | null;
+buy_me_a_coffee_url?: string | null;
 location?: string | null;
 };
 
@@ -1061,7 +1062,10 @@ Friends · {relationshipCounts.friends}
 </div>
 
 <div style={{ marginTop: 14 }}>
-<PublicProfileActions targetProfileId={profile.id} />
+<PublicProfileActions
+targetProfileId={profile.id}
+buyMeACoffeeUrl={profile.buy_me_a_coffee_url ?? null}
+/>
 </div>
 </div>
 </div>
@@ -1416,10 +1420,13 @@ position: "fixed",
 inset: 0,
 background: "rgba(0,0,0,0.82)",
 display: "flex",
-alignItems: "center",
+alignItems: "flex-start",
 justifyContent: "center",
 zIndex: 9999,
-padding: 16,
+paddingTop: 80,
+paddingRight: 16,
+paddingBottom: 16,
+paddingLeft: 16,
 }}
 >
 <div

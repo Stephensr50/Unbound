@@ -9,6 +9,7 @@ username: string | null;
 display_name: string | null;
 bio: string | null;
 avatar_url: string | null;
+buy_me_a_coffee_url: string | null;
 };
 
 function getSupabase() {
@@ -34,7 +35,6 @@ const routeId = (id ?? "").toString();
 
 const supabase = getSupabase();
 
-// Detect UUID vs username
 const isUuid =
 /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
 routeId
@@ -42,7 +42,7 @@ routeId
 
 const base = supabase
 .from("profiles")
-.select("id, username, display_name, bio, avatar_url")
+.select("id, username, display_name, bio, avatar_url, buy_me_a_coffee_url")
 .limit(1);
 
 const { data, error } = isUuid

@@ -25,12 +25,14 @@ throw lastErr ?? new Error("Operation failed");
 }
 
 type FriendState = "none" | "pending_out" | "pending_in" | "friends";
-type HoverKey = "message" | "follow" | "friend" | null;
+type HoverKey = "message" | "follow" | "friend" | "coffee" | null;
 
 export default function PublicProfileActions({
 targetProfileId,
+buyMeACoffeeUrl,
 }: {
 targetProfileId: string;
+buyMeACoffeeUrl?: string | null;
 }) {
 const supabase = useMemo(() => getSupabase(), []);
 const router = useRouter();
@@ -226,6 +228,16 @@ borderColor: "rgba(210,160,255,0.9)",
 color: "#ffffff",
 };
 
+const coffeeBtn: React.CSSProperties = {
+...btnBase,
+background:
+"linear-gradient(180deg, rgba(168,85,247,0.98), rgba(140,80,255,0.98))",
+boxShadow:
+"0 0 28px rgba(168,85,247,0.9), inset 0 0 16px rgba(255,255,255,0.28)",
+borderColor: "rgba(210,160,255,0.9)",
+color: "#ffffff",
+};
+
 const disabledBtn: CSSProperties = {
 opacity: 0.65,
 cursor: "not-allowed",
@@ -259,6 +271,12 @@ borderColor: isOn
 : (base.borderColor as CSSProperties["borderColor"]),
 };
 };
+
+function getMessagePriceLabel() {
+if (friendState === "friends") return "Free";
+if (following) return "$1.49";
+return "$2.49";
+}
 
 async function onMessage() {
 try {
@@ -298,6 +316,11 @@ router.push(`/messages/${json.conversation_id}`);
 } catch (e: any) {
 setBanner(String(e?.message || e || "Could not start conversation"));
 }
+}
+
+function onBuyMeACoffee() {
+if (!buyMeACoffeeUrl) return;
+window.open(buyMeACoffeeUrl, "_blank", "noopener,noreferrer");
 }
 
 async function toggleFollow() {
@@ -462,6 +485,21 @@ filter: drop-shadow(0 0 8px rgba(168,85,247,0.28))
 drop-shadow(0 0 14px rgba(192,38,211,0.18));
 }
 }
+
+@keyframes coffeePulseGlow {
+0% {
+filter: drop-shadow(0 0 10px rgba(236,72,153,0.24))
+drop-shadow(0 0 18px rgba(192,38,211,0.14));
+}
+50% {
+filter: drop-shadow(0 0 18px rgba(236,72,153,0.45))
+drop-shadow(0 0 30px rgba(192,38,211,0.22));
+}
+100% {
+filter: drop-shadow(0 0 10px rgba(236,72,153,0.24))
+drop-shadow(0 0 18px rgba(192,38,211,0.14));
+}
+}
 `}</style>
 
 {banner ? (
@@ -491,14 +529,30 @@ willChange: "filter",
 onMouseEnter={() => setHover("message")}
 onMouseLeave={() => setHover(null)}
 >
-Message
+{`Message  ${getMessagePriceLabel()}`}
 </button>
+
+{buyMeACoffeeUrl ? (
+<button
+onClick={onBuyMeACoffee}
+style={{
+...applyHover(coffeeBtn, "coffee", false),
+
+
+}}
+onMouseEnter={() => setHover("coffee")}
+onMouseLeave={() => setHover(null)}
+title="Support this creator"
+>
+Buy Me a Coffee
+</button>
+) : null}
 
 {friendState !== "friends" && (
 <button
 onClick={toggleFollow}
 disabled={followBusy}
-style={applyHover(btnBase, "follow", followBusy)}
+style={applyHover(primaryBtn, "follow", followBusy)}
 onMouseEnter={() => !followBusy && setHover("follow")}
 onMouseLeave={() => setHover(null)}
 >
