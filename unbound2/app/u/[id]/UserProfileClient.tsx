@@ -8,6 +8,8 @@ import ReactionBar from "@/app/components/ReactionBar";
 
 type ReactionKey = "devil" | "fire" | "eyes" | "purple_heart";
 type ReactionCountsMap = Partial<Record<ReactionKey, number>>;
+type ProfileTab = "posts" | "photos" | "videos";
+type RelationshipTab = "followers" | "following" | "friends";
 
 type ProfileRow = {
 id: string;
@@ -46,6 +48,14 @@ body: string;
 created_at: string;
 };
 
+type GalleryItem = {
+postId: number;
+url: string;
+type: "image" | "video";
+caption: string | null;
+createdAt: string;
+};
+
 function getSupabase() {
 const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
@@ -63,6 +73,29 @@ if (s < 86400) return `${Math.floor(s / 3600)}h`;
 return `${Math.floor(s / 86400)}d`;
 }
 
+function getPostMedia(post: PostRow) {
+return post.media_url ?? post.image_url ?? post.file_url ?? null;
+}
+
+function isVideoPost(post: PostRow) {
+const media = getPostMedia(post);
+return (
+(post.kind ?? "").toLowerCase().includes("video") ||
+(!!post.media_type && post.media_type.toLowerCase().startsWith("video/")) ||
+(!!media && /\.(mp4|webm|mov)(\?|$)/i.test(media))
+);
+}
+
+function isPhotoPost(post: PostRow) {
+const media = getPostMedia(post);
+return (
+(post.kind ?? "").toLowerCase().includes("photo") ||
+(post.kind ?? "").toLowerCase().includes("image") ||
+(!!post.media_type && post.media_type.toLowerCase().startsWith("image/")) ||
+(!!media && /\.(jpg|jpeg|png|gif|webp)(\?|$)/i.test(media))
+);
+}
+
 export default function UserProfileClient({ profile }: { profile: ProfileRow }) {
 const supabase = useMemo(() => getSupabase(), []);
 
@@ -70,6 +103,7 @@ const [myUserId, setMyUserId] = useState<string | null>(null);
 const [posts, setPosts] = useState<PostRow[]>([]);
 const [banner, setBanner] = useState<string | null>(null);
 const [groupsById, setGroupsById] = useState<Record<number, GroupRow>>({});
+const [activeTab, setActiveTab] = useState<ProfileTab>("posts");
 
 const [likeCounts, setLikeCounts] = useState<Record<number, number>>({});
 const [reactionCountsByPost, setReactionCountsByPost] = useState<
@@ -92,6 +126,21 @@ const [commentsByPost, setCommentsByPost] = useState<Record<number, CommentRow[]
 {}
 );
 const [commentDraft, setCommentDraft] = useState<Record<number, string>>({});
+
+const [relationshipCounts, setRelationshipCounts] = useState({
+followers: 0,
+following: 0,
+friends: 0,
+});
+const [relationshipModalOpen, setRelationshipModalOpen] = useState(false);
+const [relationshipTab, setRelationshipTab] = useState<RelationshipTab>("followers");
+const [relationshipLoading, setRelationshipLoading] = useState(false);
+const [relationshipProfiles, setRelationshipProfiles] = useState<ProfileRow[]>([]);
+
+const [gallery, setGallery] = useState<{
+items: GalleryItem[];
+index: number;
+} | null>(null);
 
 async function refreshAuth() {
 const { data } = await supabase.auth.getSession();
@@ -194,6 +243,135 @@ map[g.id] = g;
 setGroupsById(map);
 }
 
+async function loadRelationshipCounts(targetUserId: string) {
+try {
+const [
+followersRes,
+followingRes,
+friendsLeftRes,
+friendsRightRes,
+] = await Promise.all([
+supabase
+.from("follows")
+.select("follower_id", { count: "exact" })
+.eq("following_id", targetUserId),
+supabase
+.from("follows")
+.select("following_id", { count: "exact" })
+.eq("follower_id", targetUserId),
+supabase
+.from("friends")
+.select("friend_id")
+.eq("user_id", targetUserId),
+supabase
+.from("friends")
+.select("user_id")
+.eq("friend_id", targetUserId),
+]);
+
+const friendIds = new Set<string>();
+for (const row of friendsLeftRes.data ?? []) {
+const id = (row as any).friend_id as string;
+if (id) friendIds.add(id);
+}
+for (const row of friendsRightRes.data ?? []) {
+const id = (row as any).user_id as string;
+if (id) friendIds.add(id);
+}
+
+setRelationshipCounts({
+followers: followersRes.count ?? 0,
+following: followingRes.count ?? 0,
+friends: friendIds.size,
+});
+} catch {
+// keep quiet for now
+}
+}
+
+async function loadRelationshipProfiles(
+targetUserId: string,
+mode: RelationshipTab
+) {
+setRelationshipLoading(true);
+try {
+let ids: string[] = [];
+
+if (mode === "followers") {
+const { data, error } = await supabase
+.from("follows")
+.select("follower_id")
+.eq("following_id", targetUserId);
+
+if (error) throw error;
+ids = Array.from(
+new Set((data ?? []).map((r: any) => String(r.follower_id)).filter(Boolean))
+);
+} else if (mode === "following") {
+const { data, error } = await supabase
+.from("follows")
+.select("following_id")
+.eq("follower_id", targetUserId);
+
+if (error) throw error;
+ids = Array.from(
+new Set((data ?? []).map((r: any) => String(r.following_id)).filter(Boolean))
+);
+} else {
+const [left, right] = await Promise.all([
+supabase.from("friends").select("friend_id").eq("user_id", targetUserId),
+supabase.from("friends").select("user_id").eq("friend_id", targetUserId),
+]);
+
+if (left.error) throw left.error;
+if (right.error) throw right.error;
+
+const set = new Set<string>();
+for (const row of left.data ?? []) {
+const id = (row as any).friend_id as string;
+if (id) set.add(id);
+}
+for (const row of right.data ?? []) {
+const id = (row as any).user_id as string;
+if (id) set.add(id);
+}
+ids = Array.from(set);
+}
+
+if (!ids.length) {
+setRelationshipProfiles([]);
+setRelationshipLoading(false);
+return;
+}
+
+const { data: profs, error: profErr } = await supabase
+.from("profiles")
+.select("id,username,display_name,avatar_url")
+.in("id", ids);
+
+if (profErr) throw profErr;
+
+const rows = ((profs ?? []) as ProfileRow[]).sort((a, b) => {
+const aName = (a.display_name || a.username || "").toLowerCase();
+const bName = (b.display_name || b.username || "").toLowerCase();
+return aName.localeCompare(bName);
+});
+
+setRelationshipProfiles(rows);
+} catch (e: any) {
+setBanner(e?.message || "Could not load profile list.");
+setRelationshipProfiles([]);
+} finally {
+setRelationshipLoading(false);
+}
+}
+
+async function openRelationshipModal(mode: RelationshipTab) {
+setRelationshipTab(mode);
+setRelationshipModalOpen(true);
+await loadRelationshipProfiles(profile.id, mode);
+}
+
 async function loadProfilePosts(targetUserId: string, viewerId: string | null) {
 setBanner(null);
 
@@ -202,7 +380,7 @@ const { data, error } = await supabase
 .select("id,user_id,body,kind,created_at,media_url,media_type,group_id")
 .eq("user_id", targetUserId)
 .order("created_at", { ascending: false })
-.limit(50);
+.limit(100);
 
 if (error) {
 setBanner(error.message);
@@ -232,7 +410,10 @@ viewerId
 useEffect(() => {
 (async () => {
 const uid = await refreshAuth();
-await loadProfilePosts(profile.id, uid);
+await Promise.all([
+loadProfilePosts(profile.id, uid),
+loadRelationshipCounts(profile.id),
+]);
 })();
 // eslint-disable-next-line react-hooks/exhaustive-deps
 }, [profile.id]);
@@ -486,6 +667,41 @@ cursor: "pointer",
 fontWeight: 650,
 };
 
+const countPill: React.CSSProperties = {
+padding: "8px 14px",
+borderRadius: 999,
+border: "2px solid rgba(236,72,153,0.85)", // thicker + brighter
+background: "rgba(236, 72, 154, 0.17)",
+cursor: "pointer",
+color: "white",
+fontWeight: 700,
+boxShadow:
+"0 0 10px rgba(236,72,153,0.25), 0 0 20px rgba(192,38,211,0.18)",
+};
+
+
+const tabBtn = (active: boolean): React.CSSProperties => ({
+padding: "9px 16px",
+borderRadius: 999,
+border: active
+? "1px solid rgba(236,72,153,0.95)"
+: "1px solid rgba(180,120,255,0.25)",
+
+background: active
+? "linear-gradient(180deg, rgba(240, 32, 139, 0.95), rgba(192,38,211,0.85))"
+: "rgba(0,0,0,0.35)",
+
+color: "white",
+cursor: "pointer",
+fontWeight: 800,
+
+boxShadow: active
+? "0 0 18px rgba(236,72,153,0.45), 0 0 35px rgba(192,38,211,0.35)"
+: undefined,
+});
+
+
+
 const groupPill: React.CSSProperties = {
 display: "inline-flex",
 alignItems: "center",
@@ -533,6 +749,200 @@ fontWeight: 700,
 background: "linear-gradient(90deg,#7c3aed,#c026d3)",
 boxShadow: "0 0 14px rgba(168,85,247,0.6)",
 };
+
+const mediaGrid: React.CSSProperties = {
+display: "grid",
+gridTemplateColumns: "repeat(auto-fill, minmax(180px, 1fr))",
+gap: 14,
+};
+
+const mediaTile: React.CSSProperties = {
+position: "relative",
+borderRadius: 16,
+overflow: "hidden",
+border: "2px solid rgba(236,72,153,0.35)",
+background: "rgba(20,0,20,0.55)",
+cursor: "pointer",
+aspectRatio: "1 / 1",
+transition: "all 0.18s ease",
+boxShadow: "0 0 18px rgba(192,38,211,0.22)",
+};
+
+const photoPosts = posts.filter((p) => isPhotoPost(p));
+const videoPosts = posts.filter((p) => isVideoPost(p));
+
+function makeGalleryItems(items: PostRow[], mode: "photos" | "videos"): GalleryItem[] {
+return items
+.map((p) => {
+const media = getPostMedia(p);
+if (!media) return null;
+return {
+postId: p.id,
+url: media,
+type: mode === "photos" ? "image" : "video",
+caption: p.body,
+createdAt: p.created_at,
+} as GalleryItem;
+})
+.filter(Boolean) as GalleryItem[];
+}
+
+function openGalleryForPost(postId: number, mode: "photos" | "videos") {
+const items = makeGalleryItems(mode === "photos" ? photoPosts : videoPosts, mode);
+const index = Math.max(
+0,
+items.findIndex((item) => item.postId === postId)
+);
+setGallery({ items, index });
+}
+
+function galleryPrev() {
+setGallery((prev) => {
+if (!prev || prev.items.length <= 1) return prev;
+return {
+...prev,
+index: (prev.index - 1 + prev.items.length) % prev.items.length,
+};
+});
+}
+
+function galleryNext() {
+setGallery((prev) => {
+if (!prev || prev.items.length <= 1) return prev;
+return {
+...prev,
+index: (prev.index + 1) % prev.items.length,
+};
+});
+}
+
+const renderMediaGrid = (items: PostRow[], mode: "photos" | "videos") => {
+if (items.length === 0) {
+return (
+<div style={{ opacity: 0.65, fontSize: 13, padding: 8 }}>
+{mode === "photos" ? "No photos yet." : "No videos yet."}
+</div>
+);
+}
+
+return (
+<div style={mediaGrid}>
+{items.map((p) => {
+const media = getPostMedia(p);
+if (!media) return null;
+
+const groupInfo =
+typeof p.group_id === "number" ? groupsById[p.group_id] : null;
+
+return (
+<div
+key={p.id}
+style={mediaTile}
+onClick={() => openGalleryForPost(p.id, mode)}
+onMouseEnter={(e) => {
+const el = e.currentTarget;
+el.style.transform = "translateY(-10px) scale(1.04)";
+el.style.borderColor = "rgba(236,72,153,0.95)";
+el.style.boxShadow =
+"0 24px 50px rgba(0,0,0,0.45), 0 0 22px rgba(236,72,153,0.55), 0 0 55px rgba(192,38,211,0.55), 0 0 90px rgba(168,85,247,0.30)";
+}}
+onMouseLeave={(e) => {
+const el = e.currentTarget;
+el.style.transform = "translateY(0) scale(1)";
+el.style.borderColor = "rgba(236,72,153,0.35)";
+el.style.boxShadow = "0 0 18px rgba(192,38,211,0.22)";
+}}
+title={p.body || (mode === "photos" ? "Open photo" : "Open video")}
+>
+{mode === "photos" ? (
+// eslint-disable-next-line @next/next/no-img-element
+<img
+src={media}
+alt=""
+style={{
+width: "100%",
+height: "100%",
+objectFit: "cover",
+display: "block",
+}}
+/>
+) : (
+<video
+src={media}
+muted
+playsInline
+preload="metadata"
+style={{
+width: "100%",
+height: "100%",
+objectFit: "cover",
+display: "block",
+}}
+/>
+)}
+
+<div
+style={{
+position: "absolute",
+inset: "auto 0 0 0",
+padding: 10,
+background:
+"linear-gradient(to top, rgba(0,0,0,0.78), rgba(0,0,0,0.00))",
+}}
+>
+<div style={{ fontSize: 12, opacity: 0.86 }}>
+{timeAgo(p.created_at)}
+</div>
+
+{groupInfo ? (
+<div
+style={{
+marginTop: 4,
+fontSize: 12,
+color: "rgba(240,220,255,0.96)",
+whiteSpace: "nowrap",
+overflow: "hidden",
+textOverflow: "ellipsis",
+}}
+>
+Group · {groupInfo.name}
+</div>
+) : null}
+</div>
+
+{mode === "videos" ? (
+<div
+style={{
+position: "absolute",
+top: 10,
+right: 10,
+padding: "5px 8px",
+borderRadius: 999,
+background: "rgba(0,0,0,0.58)",
+border: "1px solid rgba(255,255,255,0.12)",
+fontSize: 12,
+fontWeight: 800,
+}}
+>
+Video
+</div>
+) : null}
+</div>
+);
+})}
+</div>
+);
+};
+
+const relationshipTitle =
+relationshipTab === "followers"
+? "Followers"
+: relationshipTab === "following"
+? "Following"
+: "Friends";
+
+const currentGalleryItem =
+gallery && gallery.items.length > 0 ? gallery.items[gallery.index] : null;
 
 return (
 <div style={{ width: "min(920px, 94vw)", margin: "16px auto 0" }}>
@@ -620,6 +1030,36 @@ flex: "0 0 auto",
 </div>
 ) : null}
 
+<div
+style={{
+display: "flex",
+gap: 10,
+flexWrap: "wrap",
+marginTop: 14,
+}}
+>
+<button
+onClick={() => openRelationshipModal("followers")}
+style={countPill}
+>
+Followers · {relationshipCounts.followers}
+</button>
+
+<button
+onClick={() => openRelationshipModal("following")}
+style={countPill}
+>
+Following · {relationshipCounts.following}
+</button>
+
+<button
+onClick={() => openRelationshipModal("friends")}
+style={countPill}
+>
+Friends · {relationshipCounts.friends}
+</button>
+</div>
+
 <div style={{ marginTop: 14 }}>
 <PublicProfileActions targetProfileId={profile.id} />
 </div>
@@ -627,18 +1067,40 @@ flex: "0 0 auto",
 </div>
 </div>
 
+<div
+style={{
+display: "flex",
+gap: 10,
+flexWrap: "wrap",
+marginBottom: 16,
+}}
+>
+<button onClick={() => setActiveTab("posts")} style={tabBtn(activeTab === "posts")}>
+Posts {posts.length ? `· ${posts.length}` : ""}
+</button>
+
+<button
+onClick={() => setActiveTab("photos")}
+style={tabBtn(activeTab === "photos")}
+>
+Photos {photoPosts.length ? `· ${photoPosts.length}` : ""}
+</button>
+
+<button
+onClick={() => setActiveTab("videos")}
+style={tabBtn(activeTab === "videos")}
+>
+Videos {videoPosts.length ? `· ${videoPosts.length}` : ""}
+</button>
+</div>
+
+{activeTab === "posts" ? (
 <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
 {posts.map((p) => {
-const media = p.media_url ?? p.image_url ?? p.file_url ?? null;
+const media = getPostMedia(p);
 
-const isVideo =
-(p.kind ?? "").toLowerCase().includes("video") ||
-(!!media && /\.(mp4|webm|mov)(\?|$)/i.test(media));
-
-const isPhoto =
-(p.kind ?? "").toLowerCase().includes("photo") ||
-(p.kind ?? "").toLowerCase().includes("image") ||
-(!!media && /\.(jpg|jpeg|png|gif|webp)(\?|$)/i.test(media));
+const isVideo = isVideoPost(p);
+const isPhoto = isPhotoPost(p);
 
 const isBusy = busyPostId === p.id;
 const isOpen = !!openComments[p.id];
@@ -695,10 +1157,20 @@ border: "1px solid rgba(255,255,255,0.18)",
 
 {media && (isPhoto || isVideo) ? (
 isVideo ? (
-<video src={media} controls style={mediaStyle} />
+<video
+src={media}
+controls
+style={mediaStyle}
+onClick={() => openGalleryForPost(p.id, "videos")}
+/>
 ) : (
 // eslint-disable-next-line @next/next/no-img-element
-<img src={media} alt="" style={mediaStyle} />
+<img
+src={media}
+alt=""
+style={{ ...mediaStyle, cursor: "pointer" }}
+onClick={() => openGalleryForPost(p.id, "photos")}
+/>
 )
 ) : null}
 
@@ -783,6 +1255,262 @@ No posts yet.
 </div>
 ) : null}
 </div>
+) : activeTab === "photos" ? (
+renderMediaGrid(photoPosts, "photos")
+) : (
+renderMediaGrid(videoPosts, "videos")
+)}
+
+{relationshipModalOpen ? (
+<div
+onClick={() => setRelationshipModalOpen(false)}
+style={{
+position: "fixed",
+inset: 0,
+background: "rgba(0,0,0,0.72)",
+display: "flex",
+alignItems: "center",
+justifyContent: "center",
+zIndex: 9998,
+padding: 16,
+}}
+>
+<div
+onClick={(e) => e.stopPropagation()}
+style={{
+width: "min(680px, 96vw)",
+maxHeight: "82vh",
+overflow: "auto",
+background: "rgba(0,0,0,0.88)",
+border: "1px solid rgba(180,120,255,0.22)",
+borderRadius: 16,
+padding: 14,
+}}
+>
+<div
+style={{
+display: "flex",
+gap: 10,
+flexWrap: "wrap",
+marginBottom: 14,
+}}
+>
+<button
+onClick={() => {
+setRelationshipTab("followers");
+void loadRelationshipProfiles(profile.id, "followers");
+}}
+style={tabBtn(relationshipTab === "followers")}
+>
+Followers
+</button>
+
+<button
+onClick={() => {
+setRelationshipTab("following");
+void loadRelationshipProfiles(profile.id, "following");
+}}
+style={tabBtn(relationshipTab === "following")}
+>
+Following
+</button>
+
+<button
+onClick={() => {
+setRelationshipTab("friends");
+void loadRelationshipProfiles(profile.id, "friends");
+}}
+style={tabBtn(relationshipTab === "friends")}
+>
+Friends
+</button>
+
+<div style={{ flex: 1 }} />
+
+<button onClick={() => setRelationshipModalOpen(false)} style={pillBtn}>
+Close
+</button>
+</div>
+
+<div style={{ fontSize: 22, fontWeight: 850, marginBottom: 12 }}>
+{relationshipTitle}
+</div>
+
+{relationshipLoading ? (
+<div style={{ opacity: 0.72 }}>Loading…</div>
+) : relationshipProfiles.length === 0 ? (
+<div style={{ opacity: 0.72 }}>No {relationshipTitle.toLowerCase()} yet.</div>
+) : (
+<div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+{relationshipProfiles.map((p) => (
+<Link
+key={p.id}
+href={`/u/${p.id}`}
+onClick={() => setRelationshipModalOpen(false)}
+style={{
+display: "flex",
+alignItems: "center",
+gap: 12,
+padding: 12,
+borderRadius: 14,
+border: "1px solid rgba(180,120,255,0.10)",
+background: "rgba(0,0,0,0.18)",
+textDecoration: "none",
+color: "white",
+}}
+>
+{p.avatar_url ? (
+// eslint-disable-next-line @next/next/no-img-element
+<img
+src={p.avatar_url}
+alt=""
+style={{
+width: 46,
+height: 46,
+borderRadius: 999,
+objectFit: "cover",
+border: "1px solid rgba(255,255,255,0.16)",
+}}
+/>
+) : (
+<div
+style={{
+width: 46,
+height: 46,
+borderRadius: 999,
+display: "grid",
+placeItems: "center",
+border: "1px solid rgba(255,255,255,0.16)",
+background: "rgba(255,255,255,0.04)",
+fontWeight: 800,
+opacity: 0.75,
+}}
+>
+{(p.display_name || p.username || "?").charAt(0).toUpperCase()}
+</div>
+)}
+
+<div style={{ minWidth: 0, flex: 1 }}>
+<div style={{ fontWeight: 800 }}>
+{p.display_name || p.username || "Unknown"}
+</div>
+{p.username ? (
+<div style={{ opacity: 0.72, fontSize: 13 }}>@{p.username}</div>
+) : null}
+</div>
+
+<div style={{ opacity: 0.62, fontSize: 13 }}>View →</div>
+</Link>
+))}
+</div>
+)}
+</div>
+</div>
+) : null}
+
+{gallery && currentGalleryItem ? (
+<div
+onClick={() => setGallery(null)}
+style={{
+position: "fixed",
+inset: 0,
+background: "rgba(0,0,0,0.82)",
+display: "flex",
+alignItems: "center",
+justifyContent: "center",
+zIndex: 9999,
+padding: 16,
+}}
+>
+<div
+onClick={(e) => e.stopPropagation()}
+style={{
+width: "min(1040px, 96vw)",
+background: "rgba(0,0,0,0.90)",
+border: "1px solid rgba(180,120,255,0.22)",
+borderRadius: 16,
+padding: 12,
+}}
+>
+<div
+style={{
+display: "flex",
+alignItems: "center",
+justifyContent: "space-between",
+gap: 10,
+marginBottom: 10,
+}}
+>
+<div style={{ fontSize: 13, opacity: 0.8 }}>
+{gallery.index + 1} of {gallery.items.length}
+</div>
+
+<div style={{ display: "flex", gap: 8 }}>
+<button
+onClick={galleryPrev}
+disabled={gallery.items.length <= 1}
+style={{
+...pillBtn,
+opacity: gallery.items.length <= 1 ? 0.5 : 1,
+}}
+>
+← Prev
+</button>
+<button
+onClick={galleryNext}
+disabled={gallery.items.length <= 1}
+style={{
+...pillBtn,
+opacity: gallery.items.length <= 1 ? 0.5 : 1,
+}}
+>
+Next →
+</button>
+<button onClick={() => setGallery(null)} style={pillBtn}>
+Close
+</button>
+</div>
+</div>
+
+{currentGalleryItem.type === "image" ? (
+// eslint-disable-next-line @next/next/no-img-element
+<img
+src={currentGalleryItem.url}
+alt=""
+style={{
+width: "100%",
+borderRadius: 12,
+maxHeight: "76vh",
+objectFit: "contain",
+}}
+/>
+) : (
+<video
+src={currentGalleryItem.url}
+controls
+autoPlay
+style={{
+width: "100%",
+borderRadius: 12,
+maxHeight: "76vh",
+background: "black",
+}}
+/>
+)}
+
+<div style={{ marginTop: 10 }}>
+<div style={{ fontSize: 13, opacity: 0.72 }}>
+{timeAgo(currentGalleryItem.createdAt)}
+</div>
+{currentGalleryItem.caption ? (
+<div style={{ marginTop: 6, whiteSpace: "pre-wrap", lineHeight: 1.45 }}>
+{currentGalleryItem.caption}
+</div>
+) : null}
+</div>
+</div>
+</div>
+) : null}
 </div>
 );
 }

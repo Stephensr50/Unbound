@@ -10,10 +10,9 @@ const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
 return createClient(url, key);
 }
 
-// Tries multiple table strategies so you don’t hard-crash if your schema name differs.
-// It will run the first one that works.
 async function tryTables<T>(attempts: Array<() => Promise<T>>): Promise<T> {
 let lastErr: any = null;
+
 for (const fn of attempts) {
 try {
 return await fn();
@@ -21,10 +20,12 @@ return await fn();
 lastErr = e;
 }
 }
+
 throw lastErr ?? new Error("Operation failed");
 }
 
 type FriendState = "none" | "pending_out" | "pending_in" | "friends";
+type HoverKey = "message" | "follow" | "friend" | null;
 
 export default function PublicProfileActions({
 targetProfileId,
@@ -37,16 +38,13 @@ const router = useRouter();
 const [myUid, setMyUid] = useState<string | null>(null);
 const [banner, setBanner] = useState<string | null>(null);
 
-const [following, setFollowing] = useState<boolean>(false);
+const [following, setFollowing] = useState(false);
 const [followBusy, setFollowBusy] = useState(false);
 
 const [friendBusy, setFriendBusy] = useState(false);
 const [friendState, setFriendState] = useState<FriendState>("none");
 
-// Hover state for glow/lift
-const [hover, setHover] = useState<"message" | "follow" | "friend" | null>(
-null
-);
+const [hover, setHover] = useState<HoverKey>(null);
 
 async function refreshAuth() {
 const { data } = await supabase.auth.getSession();
@@ -55,19 +53,15 @@ setMyUid(uid);
 return uid;
 }
 
-// ---- check friendship + pending requests ----
 async function refreshFriendState(uid: string) {
-// if viewing self, ignore
 if (!uid || uid === targetProfileId) {
 setFriendState("none");
 return;
 }
 
-// 1) Are we already friends? (friends table)
 try {
 const isFriends = await tryTables<boolean>([
 async () => {
-// friends(user_id, friend_id) with possibly 1 or 2 rows
 const { data, error } = await supabase
 .from("friends")
 .select("user_id, friend_id")
@@ -75,11 +69,11 @@ const { data, error } = await supabase
 `and(user_id.eq.${uid},friend_id.eq.${targetProfileId}),and(user_id.eq.${targetProfileId},friend_id.eq.${uid})`
 )
 .limit(1);
+
 if (error) throw error;
 return (data ?? []).length > 0;
 },
 async () => {
-// alternate naming if your table differs (best-effort)
 const { data, error } = await supabase
 .from("friends")
 .select("user_id, friend_user_id")
@@ -87,6 +81,7 @@ const { data, error } = await supabase
 `and(user_id.eq.${uid},friend_user_id.eq.${targetProfileId}),and(user_id.eq.${targetProfileId},friend_user_id.eq.${uid})`
 )
 .limit(1);
+
 if (error) throw error;
 return (data ?? []).length > 0;
 },
@@ -97,14 +92,12 @@ setFriendState("friends");
 return;
 }
 } catch {
-// If friends table doesn't exist or columns differ, ignore
+// ignore schema mismatch
 }
 
-// 2) Any pending friend request either direction? (friend_requests table)
 try {
 const state = await tryTables<FriendState>([
 async () => {
-// friend_requests(requester_id, receiver_id)
 const { data, error } = await supabase
 .from("friend_requests")
 .select("requester_id, receiver_id, status")
@@ -121,13 +114,11 @@ const pending = rows.find(
 String(r.status ?? "pending").toLowerCase() === "pending" ||
 String(r.status ?? "").toLowerCase() === ""
 );
-if (!pending) return "none";
 
-const out = pending.requester_id === uid;
-return out ? "pending_out" : "pending_in";
+if (!pending) return "none";
+return pending.requester_id === uid ? "pending_out" : "pending_in";
 },
 async () => {
-// friend_requests(from_user_id, to_user_id)
 const { data, error } = await supabase
 .from("friend_requests")
 .select("from_user_id, to_user_id, status")
@@ -144,10 +135,9 @@ const pending = rows.find(
 String(r.status ?? "pending").toLowerCase() === "pending" ||
 String(r.status ?? "").toLowerCase() === ""
 );
-if (!pending) return "none";
 
-const out = pending.from_user_id === uid;
-return out ? "pending_out" : "pending_in";
+if (!pending) return "none";
+return pending.from_user_id === uid ? "pending_out" : "pending_in";
 },
 ]);
 
@@ -158,11 +148,10 @@ setFriendState("none");
 }
 
 useEffect(() => {
-(async () => {
+void (async () => {
 const uid = await refreshAuth();
 if (!uid) return;
 
-// Check follow status
 try {
 const isFollowing = await tryTables<boolean>([
 async () => {
@@ -172,6 +161,7 @@ const { data, error } = await supabase
 .eq("follower_id", uid)
 .eq("following_id", targetProfileId)
 .maybeSingle();
+
 if (error) throw error;
 return !!data;
 },
@@ -182,29 +172,28 @@ const { data, error } = await supabase
 .eq("follower_id", uid)
 .eq("following_id", targetProfileId)
 .maybeSingle();
+
 if (error) throw error;
 return !!data;
 },
 ]);
+
 setFollowing(isFollowing);
 } catch {
 // ignore
 }
 
-// Check friend status
 await refreshFriendState(uid);
 })();
-// eslint-disable-next-line react-hooks/exhaustive-deps
-}, [targetProfileId]);
+}, [supabase, targetProfileId]);
 
-// ===== Glass button styles (12px, more square, frosted) =====
 const btnBase: CSSProperties = {
 padding: "10px 14px",
 borderRadius: 12,
 borderWidth: 1,
 borderStyle: "solid",
 borderColor: "rgba(169, 85, 247, 0.71)",
-background: "rgba(169, 85, 247, 0.22)",
+background: "rgba(169, 85, 247, 0.18)",
 backdropFilter: "blur(12px)",
 WebkitBackdropFilter: "blur(12px)",
 color: "rgba(255,255,255,0.98)",
@@ -217,9 +206,8 @@ transition:
 "transform 140ms ease, box-shadow 140ms ease, border-color 140ms ease, background 140ms ease, opacity 140ms ease",
 };
 
-const primaryBtn:React. CSSProperties = {
+const primaryBtn: React.CSSProperties = {
 ...btnBase,
-
 background:
 "linear-gradient(180deg, rgba(168,85,247,0.98), rgba(140,80,255,0.98))",
 boxShadow:
@@ -228,8 +216,8 @@ borderColor: "rgba(210,160,255,0.9)",
 color: "#ffffff",
 };
 
-const friendBtn: React.CSSProperties = {
-...primaryBtn,
+const messageBtn: React.CSSProperties = {
+...btnBase,
 background:
 "linear-gradient(180deg, rgba(168,85,247,0.98), rgba(140,80,255,0.98))",
 boxShadow:
@@ -249,11 +237,13 @@ const hoverGlow = "0 0 26px rgba(168,85,247,0.75)";
 
 const applyHover = (
 base: CSSProperties,
-key: "message" | "follow" | "friend",
+key: Exclude<HoverKey, null>,
 disabled?: boolean
 ): CSSProperties => {
 if (disabled) return { ...base, ...disabledBtn };
+
 const isOn = hover === key;
+
 return {
 ...base,
 boxShadow: isOn
@@ -264,50 +254,67 @@ boxShadow: isOn
 ? `${base.boxShadow}, ${idleGlow}`
 : idleGlow,
 transform: isOn ? "translateY(-1px)" : "translateY(0px)",
-borderColor: isOn ? "rgba(168,85,247,0.65)" : (base.borderColor as any),
+borderColor: isOn
+? "rgba(168,85,247,0.65)"
+: (base.borderColor as CSSProperties["borderColor"]),
 };
 };
 
 async function onMessage() {
+try {
 const uid = myUid ?? (await refreshAuth());
+
 if (!uid) {
 setBanner("Please sign in to message.");
 return;
 }
+
 if (uid === targetProfileId) {
 setBanner("That’s you 😄");
 return;
 }
+
+setBanner(null);
+
+const { data: sessionData } = await supabase.auth.getSession();
+const accessToken = sessionData.session?.access_token ?? "";
+
 const res = await fetch("/api/conversations/get-or-create", {
-  method: "POST",
-  headers: {
-    "Content-Type": "application/json",
-    Authorization: `Bearer ${(await supabase.auth.getSession()).data.session?.access_token ?? ""}`,
-  },
-  body: JSON.stringify({ to: targetProfileId }),
+method: "POST",
+headers: {
+"Content-Type": "application/json",
+Authorization: `Bearer ${accessToken}`,
+},
+body: JSON.stringify({ to: targetProfileId }),
 });
 
 const json = await res.json().catch(() => ({}));
 
 if (!res.ok) {
-  throw new Error(json?.error ?? "Could not start conversation");
+throw new Error(json?.error ?? "Could not start conversation");
 }
 
 router.push(`/messages/${json.conversation_id}`);
+} catch (e: any) {
+setBanner(String(e?.message || e || "Could not start conversation"));
+}
 }
 
 async function toggleFollow() {
 const uid = myUid ?? (await refreshAuth());
+
 if (!uid) {
 setBanner("Please sign in to follow.");
 return;
 }
+
 if (uid === targetProfileId) {
 setBanner("You can’t follow yourself 😄");
 return;
 }
 
 if (followBusy) return;
+
 setFollowBusy(true);
 setBanner(null);
 
@@ -320,9 +327,11 @@ const { error } = await supabase
 .delete()
 .eq("follower_id", uid)
 .eq("following_id", targetProfileId);
+
 if (error) throw error;
 },
 ]);
+
 setFollowing(false);
 } else {
 await tryTables([
@@ -331,9 +340,11 @@ const { error } = await supabase.from("follows").insert({
 follower_id: uid,
 following_id: targetProfileId,
 });
+
 if (error) throw error;
 },
 ]);
+
 setFollowing(true);
 }
 } catch (e: any) {
@@ -345,31 +356,36 @@ setFollowBusy(false);
 
 async function sendFriendRequest() {
 const uid = myUid ?? (await refreshAuth());
+
 if (!uid) {
 setBanner("Please sign in to send a friend request.");
 return;
 }
+
 if (uid === targetProfileId) {
 setBanner("That’s you 😄");
 return;
 }
 
-// Re-check before sending
 await refreshFriendState(uid);
+
 if (friendState === "friends") {
 setBanner("You’re already friends ✓");
 return;
 }
+
 if (friendState === "pending_out") {
 setBanner("Friend request already pending ✓");
 return;
 }
+
 if (friendState === "pending_in") {
 setBanner("They already requested you — accept it in Notifications ✓");
 return;
 }
 
 if (friendBusy) return;
+
 setFriendBusy(true);
 setBanner(null);
 
@@ -381,6 +397,7 @@ requester_id: uid,
 receiver_id: targetProfileId,
 status: "pending",
 });
+
 if (error) throw error;
 },
 async () => {
@@ -389,6 +406,7 @@ from_user_id: uid,
 to_user_id: targetProfileId,
 status: "pending",
 });
+
 if (error) throw error;
 },
 ]);
@@ -397,6 +415,7 @@ setFriendState("pending_out");
 setBanner("Friend request sent ✅");
 } catch (e: any) {
 const msg = String(e?.message || e).toLowerCase();
+
 if (msg.includes("duplicate key") || msg.includes("unique")) {
 setFriendState("pending_out");
 setBanner("Friend request already pending ✓");
@@ -408,14 +427,15 @@ setFriendBusy(false);
 }
 }
 
-// Hide actions if you’re viewing your own profile
 if (myUid && myUid === targetProfileId) return null;
 
 const friendBtnDisabled =
-friendBusy || friendState === "friends" || friendState === "pending_out" || friendState === "pending_in";
+friendBusy ||
+friendState === "friends" ||
+friendState === "pending_out" ||
+friendState === "pending_in";
 
-const friendBtnLabel =
-friendBusy
+const friendBtnLabel = friendBusy
 ? "…"
 : friendState === "friends"
 ? "Friends ✓"
@@ -427,6 +447,23 @@ friendBusy
 
 return (
 <div style={{ marginTop: 14 }}>
+<style>{`
+@keyframes messagePulseGlow {
+0% {
+filter: drop-shadow(0 0 8px rgba(168,85,247,0.28))
+drop-shadow(0 0 14px rgba(192,38,211,0.18));
+}
+50% {
+filter: drop-shadow(0 0 16px rgba(168,85,247,0.52))
+drop-shadow(0 0 28px rgba(192,38,211,0.30));
+}
+100% {
+filter: drop-shadow(0 0 8px rgba(168,85,247,0.28))
+drop-shadow(0 0 14px rgba(192,38,211,0.18));
+}
+}
+`}</style>
+
 {banner ? (
 <div
 style={{
@@ -446,7 +483,11 @@ fontSize: 13,
 <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
 <button
 onClick={onMessage}
-style={applyHover(friendBtn, "message", false)}
+style={{
+...applyHover(messageBtn, "message", false),
+animation: "messagePulseGlow 1.6s ease-in-out infinite",
+willChange: "filter",
+}}
 onMouseEnter={() => setHover("message")}
 onMouseLeave={() => setHover(null)}
 >
@@ -468,7 +509,7 @@ onMouseLeave={() => setHover(null)}
 <button
 onClick={sendFriendRequest}
 disabled={friendBtnDisabled}
-style={applyHover(primaryBtn, "friend", false)}
+style={applyHover(primaryBtn, "friend", friendBtnDisabled)}
 onMouseEnter={() => !friendBtnDisabled && setHover("friend")}
 onMouseLeave={() => setHover(null)}
 title={
