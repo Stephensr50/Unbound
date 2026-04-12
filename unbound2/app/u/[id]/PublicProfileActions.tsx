@@ -208,7 +208,7 @@ transition:
 "transform 140ms ease, box-shadow 140ms ease, border-color 140ms ease, background 140ms ease, opacity 140ms ease",
 };
 
-const primaryBtn: React.CSSProperties = {
+const primaryBtn: CSSProperties = {
 ...btnBase,
 background:
 "linear-gradient(180deg, rgba(168,85,247,0.98), rgba(140,80,255,0.98))",
@@ -218,7 +218,7 @@ borderColor: "rgba(210,160,255,0.9)",
 color: "#ffffff",
 };
 
-const messageBtn: React.CSSProperties = {
+const messageBtn: CSSProperties = {
 ...btnBase,
 background:
 "linear-gradient(180deg, rgba(168,85,247,0.98), rgba(140,80,255,0.98))",
@@ -228,7 +228,7 @@ borderColor: "rgba(210,160,255,0.9)",
 color: "#ffffff",
 };
 
-const coffeeBtn: React.CSSProperties = {
+const coffeeBtn: CSSProperties = {
 ...btnBase,
 background:
 "linear-gradient(180deg, rgba(168,85,247,0.98), rgba(140,80,255,0.98))",
@@ -316,11 +316,6 @@ router.push(`/messages/${json.conversation_id}`);
 } catch (e: any) {
 setBanner(String(e?.message || e || "Could not start conversation"));
 }
-}
-
-function onBuyMeACoffee() {
-if (!buyMeACoffeeUrl) return;
-window.open(buyMeACoffeeUrl, "_blank", "noopener,noreferrer");
 }
 
 async function toggleFollow() {
@@ -529,16 +524,43 @@ willChange: "filter",
 onMouseEnter={() => setHover("message")}
 onMouseLeave={() => setHover(null)}
 >
-{`Message  ${getMessagePriceLabel()}`}
+{`Message ${getMessagePriceLabel()}`}
 </button>
 
-{buyMeACoffeeUrl ? (
 <button
-onClick={onBuyMeACoffee}
+onClick={async () => {
+try {
+const message = prompt("Add a message with your tip 😈") || "";
+
+const { data: sessionData } = await supabase.auth.getSession();
+const accessToken = sessionData.session?.access_token ?? "";
+
+const res = await fetch("/api/tip-messages/send", {
+method: "POST",
+headers: {
+"Content-Type": "application/json",
+Authorization: `Bearer ${accessToken}`,
+},
+body: JSON.stringify({
+receiver_id: targetProfileId,
+amount: 5,
+message,
+}),
+});
+
+const json = await res.json();
+
+if (!res.ok) {
+throw new Error(json.error || "Failed to send tip");
+}
+
+alert("Tip sent 😈");
+} catch (err: any) {
+alert(err.message || "Something went wrong");
+}
+}}
 style={{
 ...applyHover(coffeeBtn, "coffee", false),
-
-
 }}
 onMouseEnter={() => setHover("coffee")}
 onMouseLeave={() => setHover(null)}
@@ -546,7 +568,6 @@ title="Support this creator"
 >
 Buy Me a Coffee
 </button>
-) : null}
 
 {friendState !== "friends" && (
 <button
