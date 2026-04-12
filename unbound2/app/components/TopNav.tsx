@@ -154,8 +154,9 @@ Groups
 </Link>
 
 <Link href="/game" style={tabStyle(isActive("/game"))}>
-  Game
+  Kinky Games
 </Link>
+
 
 
 <Link href="/profile" style={tabStyle(isActive("/profile"))}>

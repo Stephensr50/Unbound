@@ -22,7 +22,9 @@ return (
 <html lang="en" suppressHydrationWarning>
 <body suppressHydrationWarning className={`unbound-bg ${gloock.className}`}>
 <TopNav />
-<main className="app-shell">{children}</main>
+<main className="app-shell" style={{ paddingTop: 110 }}>
+{children}
+</main>
 </body>
 </html>
 );
