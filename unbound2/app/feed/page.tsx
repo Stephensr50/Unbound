@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@supabase/supabase-js";
 import StoriesBar from "./StoriesBar";
@@ -88,6 +88,7 @@ const router = useRouter();
 const searchParams = useSearchParams();
 
 const [myUserId, setMyUserId] = useState<string | null>(null);
+const [allowedAuthorIds, setAllowedAuthorIds] = useState<string[]>([]);
 const [posts, setPosts] = useState<PostRow[]>([]);
 const [text, setText] = useState("");
 
@@ -154,6 +155,45 @@ setMyUserId(uid);
 return uid;
 }
 
+async function getAllowedAuthorIds(uid: string) {
+const allowed = new Set<string>([uid]);
+
+const { data: followingRows, error: followsErr } = await supabase
+.from("follows")
+.select("following_id")
+.eq("follower_id", uid);
+
+if (followsErr) {
+setBanner(followsErr.message);
+} else {
+for (const row of followingRows ?? []) {
+const followingId = (row as any).following_id as string | null;
+if (followingId) allowed.add(followingId);
+}
+}
+
+const { data: friendRows, error: friendsErr } = await supabase
+.from("friends")
+.select("user_id,friend_id")
+.or(`user_id.eq.${uid},friend_id.eq.${uid}`);
+
+if (friendsErr) {
+setBanner(friendsErr.message);
+} else {
+for (const row of friendRows ?? []) {
+const userId = (row as any).user_id as string | null;
+const friendId = (row as any).friend_id as string | null;
+
+if (userId && userId !== uid) allowed.add(userId);
+if (friendId && friendId !== uid) allowed.add(friendId);
+}
+}
+
+const ids = Array.from(allowed);
+setAllowedAuthorIds(ids);
+return ids;
+}
+
 async function loadGroups(groupIds: number[]) {
 if (!groupIds.length) {
 setGroupsById({});
@@ -178,6 +218,15 @@ setGroupsById(map);
 }
 
 async function loadCounts(postIds: number[]) {
+if (!postIds.length) {
+setLikeCounts({});
+setLikedByMe({});
+setMyReactionByPost({});
+setReactionCountsByPost({});
+setCommentCounts({});
+return;
+}
+
 setBanner(null);
 
 const { data: likeRows, error: likeErr } = await supabase
@@ -245,6 +294,12 @@ setCommentCounts(cc);
 async function ensureFocusPostLoaded(focusId: number) {
 if (posts.some((p) => p.id === focusId)) return;
 
+const uid = myUserId ?? (await refreshAuth());
+if (!uid) return;
+
+const allowedIds =
+allowedAuthorIds.length > 0 ? allowedAuthorIds : await getAllowedAuthorIds(uid);
+
 const { data, error } = await supabase
 .from("posts")
 .select("id,user_id,body,kind,created_at,media_url,media_type,group_id")
@@ -254,6 +309,11 @@ const { data, error } = await supabase
 if (error || !data) return;
 
 const p = data as PostRow;
+
+if (!allowedIds.includes(p.user_id)) {
+setBanner("That post is not available in your feed.");
+return;
+}
 
 setPosts((prev) => {
 if (prev.some((x) => x.id === p.id)) return prev;
@@ -280,9 +340,26 @@ await loadCounts([focusId]);
 }
 
 async function loadPosts() {
+const uid = myUserId ?? (await refreshAuth());
+if (!uid) {
+setPosts([]);
+return;
+}
+
+const allowedIds = await getAllowedAuthorIds(uid);
+
+if (!allowedIds.length) {
+setPosts([]);
+setProfilesById({});
+setGroupsById({});
+await loadCounts([]);
+return;
+}
+
 const { data, error } = await supabase
 .from("posts")
 .select("id,user_id,body,kind,created_at,media_url,media_type,group_id")
+.in("user_id", allowedIds)
 .order("created_at", { ascending: false })
 .limit(200);
 
@@ -293,17 +370,7 @@ return;
 
 const rows = (data ?? []) as PostRow[];
 
-setPosts((prev) => {
-const byId = new Map<number, PostRow>();
-
-for (const p of prev ?? []) byId.set(p.id, p);
-for (const p of rows) byId.set(p.id, p);
-
-return Array.from(byId.values()).sort(
-(a, b) =>
-new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
-);
-});
+setPosts(rows);
 
 const uids = Array.from(new Set(rows.map((r) => r.user_id).filter(Boolean)));
 if (uids.length) {
@@ -315,6 +382,8 @@ const { data: profs } = await supabase
 const map: Record<string, ProfileRow> = {};
 for (const p of (profs ?? []) as ProfileRow[]) map[p.id] = p;
 setProfilesById(map);
+} else {
+setProfilesById({});
 }
 
 const groupIds = Array.from(
@@ -328,14 +397,21 @@ await loadGroups(groupIds);
 
 if (rows.length) {
 await loadCounts(rows.map((r) => r.id));
+} else {
+await loadCounts([]);
 }
 }
 
 useEffect(() => {
 void (async () => {
-await refreshAuth();
+const uid = await refreshAuth();
+if (!uid) {
+setPosts([]);
+return;
+}
 await loadPosts();
 })();
+// eslint-disable-next-line react-hooks/exhaustive-deps
 }, []);
 
 useEffect(() => {
@@ -360,6 +436,7 @@ setFlashPostId(null);
 }
 }, 60);
 })();
+// eslint-disable-next-line react-hooks/exhaustive-deps
 }, [focusPostId, posts.length]);
 
 function triggerSpark(postId: number) {
@@ -583,7 +660,7 @@ setCommentDraft((m) => ({ ...m, [postId]: "" }));
 setCommentCounts((m) => ({ ...m, [postId]: (m[postId] ?? 0) + 1 }));
 }
 
-const postBtn: React.CSSProperties = {
+const postBtn: CSSProperties = {
 padding: "8px 16px",
 borderRadius: 999,
 border: "none",
@@ -594,7 +671,7 @@ background: "linear-gradient(90deg,#7c3aed,#c026d3)",
 boxShadow: "0 0 14px rgba(168,85,247,0.6)",
 };
 
-const pillBtn: React.CSSProperties = {
+const pillBtn: CSSProperties = {
 padding: "8px 14px",
 borderRadius: 999,
 border: "1px solid rgba(180,120,255,0.25)",
@@ -604,23 +681,23 @@ cursor: "pointer",
 fontWeight: 650,
 };
 
-const cardStyle: React.CSSProperties = {
+const cardStyle: CSSProperties = {
 background: "rgba(0,0,0,0.55)",
-border: "1px solid rgba(180,120,255,0.16)",
+border: "3px solid rgba(181, 120, 255, 0.33)",
 borderRadius: 16,
 padding: 14,
 };
 
-const inputStyle: React.CSSProperties = {
+const inputStyle: CSSProperties = {
 background: "rgba(0,0,0,0.6)",
 color: "white",
-border: "1px solid rgba(180,120,255,0.22)",
+border: "1px solid rgba(181, 120, 255, 0.44)",
 borderRadius: 12,
 padding: "10px 12px",
 outline: "none",
 };
 
-const avatarStyle: React.CSSProperties = {
+const avatarStyle: CSSProperties = {
 width: 46,
 height: 46,
 borderRadius: 999,
@@ -630,7 +707,7 @@ flex: "0 0 auto",
 background: "rgba(0,0,0,0.45)",
 };
 
-const groupPillStyle: React.CSSProperties = {
+const groupPillStyle: CSSProperties = {
 display: "inline-flex",
 alignItems: "center",
 gap: 8,
@@ -962,6 +1039,102 @@ maxWidth: 260,
 </div>
 
 <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+    {posts.length === 0 && (
+<div
+style={{
+background: "rgba(0,0,0,0.65)",
+border: "1px solid rgba(192,38,211,0.35)",
+borderRadius: 20,
+padding: 24,
+textAlign: "center",
+boxShadow: `
+0 0 20px rgba(192,38,211,0.25),
+0 0 40px rgba(168,85,247,0.15)
+`,
+backdropFilter: "blur(8px)",
+}}
+>
+<div
+style={{
+fontSize: 28,
+fontWeight: 900,
+marginBottom: 10,
+color: "rgba(236,72,153,0.95)",
+textShadow: `
+0 0 6px rgba(236,72,153,0.9),
+0 0 18px rgba(168,85,247,0.8)
+`,
+}}
+>
+Welcome to Unbound
+</div>
+
+<div
+style={{
+opacity: 0.75,
+fontSize: 14,
+marginBottom: 18,
+}}
+>
+Your feed comes alive when you follow people, make friends, or join groups.
+</div>
+
+<div
+style={{
+display: "flex",
+justifyContent: "center",
+gap: 12,
+flexWrap: "wrap",
+}}
+>
+<button
+onClick={() => router.push("/explore")}
+style={{
+padding: "10px 18px",
+borderRadius: 999,
+border: "none",
+cursor: "pointer",
+fontWeight: 800,
+color: "white",
+background: "linear-gradient(90deg,#ec4899,#a855f7)",
+boxShadow: "0 0 16px rgba(168,85,247,0.7)",
+}}
+>
+Explore
+</button>
+
+<button
+onClick={() => router.push("/search")}
+style={{
+padding: "10px 18px",
+borderRadius: 999,
+border: "1px solid rgba(168,85,247,0.35)",
+background: "rgba(0,0,0,0.4)",
+color: "white",
+cursor: "pointer",
+fontWeight: 700,
+}}
+>
+Find People
+</button>
+
+<button
+onClick={() => router.push("/groups")}
+style={{
+padding: "10px 18px",
+borderRadius: 999,
+border: "1px solid rgba(168,85,247,0.35)",
+background: "rgba(0,0,0,0.4)",
+color: "white",
+cursor: "pointer",
+fontWeight: 700,
+}}
+>
+Browse Groups
+</button>
+</div>
+</div>
+)}
 {posts.map((p) => {
 const spanks = likeCounts[p.id] ?? 0;
 const comments = commentCounts[p.id] ?? 0;

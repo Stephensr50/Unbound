@@ -90,7 +90,7 @@ return;
 const userId = authData.user.id;
 const ext = (file.name.split(".").pop() || "jpg").toLowerCase();
 const safeExt = ["jpg", "jpeg", "png", "webp"].includes(ext) ? ext : "jpg";
-const path = `public/${userId}/avatar.${safeExt}`;
+const path = `${userId}/avatar.${safeExt}`;
 
 const { error: uploadErr } = await supabase.storage.from("avatars").upload(path, file, {
 upsert: true,
