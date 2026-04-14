@@ -45,6 +45,7 @@ id: string;
 username: string | null;
 display_name: string | null;
 avatar_url: string | null;
+last_active_at?: string | null;
 };
 
 type ReactionCountsMap = Partial<Record<ReactionKey, number>>;
@@ -99,6 +100,9 @@ const [posting, setPosting] = useState(false);
 const [profilesById, setProfilesById] = useState<Record<string, ProfileRow>>(
 {}
 );
+const [suggestedUsers, setSuggestedUsers] = useState<ProfileRow[]>([]);
+const [followingIds, setFollowingIds] = useState<string[]>([]);
+const [followBusyId, setFollowBusyId] = useState<string | null>(null);
 const [groupsById, setGroupsById] = useState<Record<number, GroupRow>>({});
 
 const [likeCounts, setLikeCounts] = useState<Record<number, number>>({});
@@ -194,6 +198,79 @@ setAllowedAuthorIds(ids);
 return ids;
 }
 
+async function loadSuggestedUsers(uid: string) {
+const { data: followingRows, error: followingErr } = await supabase
+.from("follows")
+.select("following_id")
+.eq("follower_id", uid);
+
+if (followingErr) {
+setBanner(followingErr.message);
+return;
+}
+
+const alreadyFollowing = (followingRows ?? [])
+.map((row) => (row as any).following_id as string | null)
+.filter((id): id is string => !!id);
+
+setFollowingIds(alreadyFollowing);
+
+const excludeIds = new Set<string>([uid, ...alreadyFollowing]);
+
+const { data, error } = await supabase
+.from("profiles")
+.select("id,username,display_name,avatar_url,last_active_at")
+.order("last_active_at", { ascending: false })
+.limit(30);
+
+if (error) {
+setBanner(error.message);
+return;
+}
+
+const filtered = ((data ?? []) as ProfileRow[]).filter(
+(profile) => !excludeIds.has(profile.id)
+);
+
+setSuggestedUsers(filtered.slice(0, 12));
+}
+
+async function followUser(targetUserId: string) {
+const uid = myUserId ?? (await refreshAuth());
+if (!uid) return;
+if (targetUserId === uid) return;
+
+setFollowBusyId(targetUserId);
+setBanner(null);
+
+const { error } = await supabase.from("follows").insert({
+follower_id: uid,
+following_id: targetUserId,
+});
+
+if (error) {
+const isConflict =
+(error as any)?.status === 409 ||
+(error as any)?.code === "23505" ||
+String((error as any)?.message || "").toLowerCase().includes("duplicate") ||
+String((error as any)?.message || "").toLowerCase().includes("unique");
+
+if (!isConflict) {
+setBanner(error.message);
+setFollowBusyId(null);
+return;
+}
+}
+
+setFollowingIds((prev) => [...new Set([...prev, targetUserId])]);
+setSuggestedUsers((prev) => prev.filter((u) => u.id !== targetUserId));
+
+await loadPosts();
+await loadSuggestedUsers(uid);
+
+setFollowBusyId(null);
+}
+
 async function loadGroups(groupIds: number[]) {
 if (!groupIds.length) {
 setGroupsById({});
@@ -228,7 +305,6 @@ return;
 }
 
 setBanner(null);
-
 const { data: likeRows, error: likeErr } = await supabase
 .from("post_likes")
 .select("post_id,user_id,reaction")
@@ -407,9 +483,12 @@ void (async () => {
 const uid = await refreshAuth();
 if (!uid) {
 setPosts([]);
+setSuggestedUsers([]);
 return;
 }
+
 await loadPosts();
+await loadSuggestedUsers(uid);
 })();
 // eslint-disable-next-line react-hooks/exhaustive-deps
 }, []);
@@ -1039,7 +1118,7 @@ maxWidth: 260,
 </div>
 
 <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-    {posts.length === 0 && (
+{posts.length === 0 && (
 <div
 style={{
 background: "rgba(0,0,0,0.65)",
@@ -1133,6 +1212,147 @@ fontWeight: 700,
 Browse Groups
 </button>
 </div>
+
+{suggestedUsers.length > 0 ? (
+<div style={{ marginTop: 22 }}>
+<div
+style={{
+fontSize: 13,
+fontWeight: 800,
+letterSpacing: 0.4,
+textTransform: "uppercase",
+color: "rgba(236,72,153,0.9)",
+marginBottom: 12,
+textShadow: "0 0 10px rgba(168,85,247,0.35)",
+}}
+>
+Suggested for you
+</div>
+
+<div
+style={{
+display: "grid",
+gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
+gap: 12,
+textAlign: "left",
+}}
+>
+{suggestedUsers.map((user) => {
+const label = user.display_name || user.username || "Unknown";
+const handle = user.username ? `@${user.username}` : "";
+
+return (
+<div
+key={user.id}
+style={{
+background: "rgba(255,255,255,0.04)",
+border: "1px solid rgba(168,85,247,0.22)",
+borderRadius: 16,
+padding: 12,
+display: "flex",
+alignItems: "center",
+gap: 12,
+boxShadow: "0 0 16px rgba(168,85,247,0.12)",
+}}
+>
+{user.avatar_url ? (
+// eslint-disable-next-line @next/next/no-img-element
+<img
+src={user.avatar_url}
+alt=""
+onClick={() => router.push(`/u/${user.id}`)}
+style={{
+width: 52,
+height: 52,
+borderRadius: 999,
+objectFit: "cover",
+cursor: "pointer",
+border: "1px solid rgba(236,72,153,0.28)",
+flex: "0 0 auto",
+}}
+/>
+) : (
+<div
+onClick={() => router.push(`/u/${user.id}`)}
+style={{
+width: 52,
+height: 52,
+borderRadius: 999,
+display: "grid",
+placeItems: "center",
+cursor: "pointer",
+fontWeight: 800,
+color: "white",
+background: "rgba(168,85,247,0.18)",
+border: "1px solid rgba(236,72,153,0.28)",
+flex: "0 0 auto",
+}}
+>
+{label.trim().charAt(0).toUpperCase()}
+</div>
+)}
+
+<div style={{ flex: 1, minWidth: 0 }}>
+<div
+onClick={() => router.push(`/u/${user.id}`)}
+style={{
+fontWeight: 800,
+color: "white",
+cursor: "pointer",
+whiteSpace: "nowrap",
+overflow: "hidden",
+textOverflow: "ellipsis",
+}}
+>
+{label}
+</div>
+
+<div
+style={{
+fontSize: 12,
+opacity: 0.7,
+marginTop: 2,
+whiteSpace: "nowrap",
+overflow: "hidden",
+textOverflow: "ellipsis",
+}}
+>
+{handle || "New connection"}
+</div>
+</div>
+
+<button
+onClick={() => followUser(user.id)}
+disabled={
+followBusyId === user.id || followingIds.includes(user.id)
+}
+style={{
+padding: "8px 12px",
+borderRadius: 999,
+border: "none",
+cursor: "pointer",
+color: "white",
+fontWeight: 800,
+background: "linear-gradient(90deg,#ec4899,#a855f7)",
+boxShadow: "0 0 14px rgba(168,85,247,0.45)",
+opacity:
+followBusyId === user.id || followingIds.includes(user.id)
+? 0.65
+: 1,
+}}
+>
+{followBusyId === user.id
+? "..."
+: followingIds.includes(user.id)
+? "Following"
+: "Follow"}
+</button>
+</div>
+);
+})}
+</div>
+</div>
+) : null}
 </div>
 )}
 {posts.map((p) => {
