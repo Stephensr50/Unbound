@@ -46,6 +46,10 @@ const [followBusy, setFollowBusy] = useState(false);
 const [friendBusy, setFriendBusy] = useState(false);
 const [friendState, setFriendState] = useState<FriendState>("none");
 
+const [showTipModal, setShowTipModal] = useState(false);
+const [tipMessage, setTipMessage] = useState("");
+const [tipBusy, setTipBusy] = useState(false);
+
 const [hover, setHover] = useState<HoverKey>(null);
 
 async function refreshAuth() {
@@ -445,6 +449,57 @@ setFriendBusy(false);
 }
 }
 
+async function sendTip() {
+try {
+const uid = myUid ?? (await refreshAuth());
+
+if (!uid) {
+setBanner("Please sign in to send a tip.");
+return;
+}
+
+if (uid === targetProfileId) {
+setBanner("That’s you 😄");
+return;
+}
+
+if (tipBusy) return;
+
+setTipBusy(true);
+setBanner(null);
+
+const { data: sessionData } = await supabase.auth.getSession();
+const accessToken = sessionData.session?.access_token ?? "";
+
+const res = await fetch("/api/tip-messages/send", {
+method: "POST",
+headers: {
+"Content-Type": "application/json",
+Authorization: `Bearer ${accessToken}`,
+},
+body: JSON.stringify({
+receiver_id: targetProfileId,
+amount: 5,
+message: tipMessage,
+}),
+});
+
+const json = await res.json().catch(() => ({}));
+
+if (!res.ok) {
+throw new Error(json?.error || "Failed to send tip");
+}
+
+setTipMessage("");
+setShowTipModal(false);
+setBanner("Tip sent 😈");
+} catch (err: any) {
+setBanner(err?.message || "Something went wrong");
+} finally {
+setTipBusy(false);
+}
+}
+
 if (myUid && myUid === targetProfileId) return null;
 
 const friendBtnDisabled =
@@ -528,37 +583,7 @@ onMouseLeave={() => setHover(null)}
 </button>
 
 <button
-onClick={async () => {
-try {
-const message = prompt("Add a message with your tip 😈") || "";
-
-const { data: sessionData } = await supabase.auth.getSession();
-const accessToken = sessionData.session?.access_token ?? "";
-
-const res = await fetch("/api/tip-messages/send", {
-method: "POST",
-headers: {
-"Content-Type": "application/json",
-Authorization: `Bearer ${accessToken}`,
-},
-body: JSON.stringify({
-receiver_id: targetProfileId,
-amount: 5,
-message,
-}),
-});
-
-const json = await res.json();
-
-if (!res.ok) {
-throw new Error(json.error || "Failed to send tip");
-}
-
-alert("Tip sent 😈");
-} catch (err: any) {
-alert(err.message || "Something went wrong");
-}
-}}
+onClick={() => setShowTipModal(true)}
 style={{
 ...applyHover(coffeeBtn, "coffee", false),
 }}
@@ -600,6 +625,126 @@ friendState === "pending_in"
 {friendBtnLabel}
 </button>
 </div>
+
+{showTipModal ? (
+<div
+onClick={() => {
+if (tipBusy) return;
+setShowTipModal(false);
+}}
+style={{
+position: "fixed",
+inset: 0,
+background: "rgba(0,0,0,0.72)",
+display: "flex",
+alignItems: "center",
+justifyContent: "center",
+zIndex: 9999,
+padding: 16,
+}}
+>
+<div
+onClick={(e) => e.stopPropagation()}
+style={{
+width: "min(500px, 92vw)",
+background: "rgba(0,0,0,0.9)",
+border: "1px solid rgba(236,72,153,0.35)",
+borderRadius: 20,
+padding: 20,
+boxShadow:
+"0 0 22px rgba(236,72,153,0.22), 0 0 44px rgba(168,85,247,0.18)",
+backdropFilter: "blur(10px)",
+WebkitBackdropFilter: "blur(10px)",
+}}
+>
+<div
+style={{
+fontSize: 26,
+fontWeight: 900,
+marginBottom: 10,
+color: "rgba(236,72,153,0.95)",
+textShadow: "0 0 12px rgba(168,85,247,0.45)",
+fontFamily: '"Gloock", serif',
+}}
+>
+Send Tip 💸
+</div>
+
+<div
+style={{
+opacity: 0.78,
+marginBottom: 14,
+color: "rgba(255,255,255,0.92)",
+}}
+>
+Add a message with your tip 😈
+</div>
+
+<textarea
+value={tipMessage}
+onChange={(e) => setTipMessage(e.target.value)}
+placeholder="Write something sweet..."
+rows={4}
+style={{
+width: "100%",
+resize: "none",
+background: "rgba(255,255,255,0.04)",
+color: "white",
+border: "1px solid rgba(168,85,247,0.3)",
+borderRadius: 14,
+padding: "12px 14px",
+outline: "none",
+marginBottom: 14,
+}}
+/>
+
+<div
+style={{
+display: "flex",
+justifyContent: "flex-end",
+gap: 10,
+}}
+>
+<button
+onClick={() => {
+if (tipBusy) return;
+setShowTipModal(false);
+}}
+style={{
+padding: "10px 16px",
+borderRadius: 999,
+border: "1px solid rgba(168,85,247,0.35)",
+background: "rgba(0,0,0,0.4)",
+color: "white",
+cursor: tipBusy ? "not-allowed" : "pointer",
+fontWeight: 700,
+opacity: tipBusy ? 0.65 : 1,
+}}
+>
+Cancel
+</button>
+
+<button
+onClick={sendTip}
+disabled={tipBusy}
+style={{
+padding: "10px 18px",
+borderRadius: 999,
+border: "none",
+cursor: tipBusy ? "not-allowed" : "pointer",
+fontWeight: 800,
+color: "white",
+background: "linear-gradient(90deg,#ec4899,#a855f7)",
+boxShadow: "0 0 16px rgba(168,85,247,0.55)",
+opacity: tipBusy ? 0.65 : 1,
+}}
+>
+{tipBusy ? "Sending..." : "Send Tip"}
+</button>
+</div>
+</div>
+</div>
+) : null}
 </div>
 );
 }
