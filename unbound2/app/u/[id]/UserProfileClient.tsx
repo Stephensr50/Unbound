@@ -10,6 +10,7 @@ type ReactionKey = "devil" | "fire" | "eyes" | "purple_heart";
 type ReactionCountsMap = Partial<Record<ReactionKey, number>>;
 type ProfileTab = "posts" | "photos" | "videos";
 type RelationshipTab = "followers" | "following" | "friends";
+type SignalType = "interested" | "curious" | "would" | "crush";
 
 type ProfileRow = {
 id: string;
@@ -143,11 +144,91 @@ items: GalleryItem[];
 index: number;
 } | null>(null);
 
+const [signalLoading, setSignalLoading] = useState(false);
+const [mySignalToProfile, setMySignalToProfile] = useState<SignalType | null>(null);
+const [signalBanner, setSignalBanner] = useState<string | null>(null);
+
 async function refreshAuth() {
 const { data } = await supabase.auth.getSession();
 const uid = data.session?.user?.id ?? null;
 setMyUserId(uid);
 return uid;
+}
+
+async function loadMySignal(targetUserId: string, viewerId: string | null) {
+if (!viewerId || viewerId === targetUserId) {
+setMySignalToProfile(null);
+return;
+}
+
+const { data, error } = await supabase
+.from("user_signals")
+.select("signal_type")
+.eq("sender_id", viewerId)
+.eq("receiver_id", targetUserId)
+.maybeSingle();
+
+if (error) return;
+
+setMySignalToProfile((data?.signal_type as SignalType | undefined) ?? null);
+}
+
+async function sendSignal(type: SignalType) {
+const uid = myUserId ?? (await refreshAuth());
+
+if (!uid) {
+setBanner("You need to be signed in to send a signal.");
+return;
+}
+
+if (uid === profile.id) {
+setBanner("You can't send a signal to yourself.");
+return;
+}
+
+setSignalLoading(true);
+setSignalBanner(null);
+setBanner(null);
+
+const { error: upsertError } = await supabase.from("user_signals").upsert(
+{
+sender_id: uid,
+receiver_id: profile.id,
+signal_type: type,
+},
+{
+onConflict: "sender_id,receiver_id",
+}
+);
+
+if (upsertError) {
+setBanner(upsertError.message);
+setSignalLoading(false);
+return;
+}
+
+setMySignalToProfile(type);
+
+const { data: reverse, error: reverseError } = await supabase
+.from("user_signals")
+.select("id, signal_type")
+.eq("sender_id", profile.id)
+.eq("receiver_id", uid)
+.maybeSingle();
+
+if (reverseError) {
+setBanner(reverseError.message);
+setSignalLoading(false);
+return;
+}
+
+if (reverse) {
+setSignalBanner("🔥 It's mutual!");
+} else {
+setSignalBanner("Signal sent.");
+}
+
+setSignalLoading(false);
 }
 
 async function loadCounts(postIds: number[], uid: string | null) {
@@ -414,6 +495,7 @@ const uid = await refreshAuth();
 await Promise.all([
 loadProfilePosts(profile.id, uid),
 loadRelationshipCounts(profile.id),
+loadMySignal(profile.id, uid),
 ]);
 })();
 // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -971,6 +1053,12 @@ fontSize: 13,
 </div>
 ) : null}
 
+{signalBanner ? (
+<div style={{ marginBottom: 12, color: "hotpink" }}>
+{signalBanner}
+</div>
+) : null}
+
 <div style={profileCard}>
 <div
 style={{
@@ -1067,6 +1155,132 @@ targetProfileId={profile.id}
 buyMeACoffeeUrl={profile.buy_me_a_coffee_url ?? null}
 />
 </div>
+{myUserId !== profile.id ? (
+<div style={{ marginTop: 14 }}>
+<div
+style={{
+fontSize: 12,
+fontWeight: 800,
+opacity: 0.78,
+marginBottom: 8,
+textTransform: "uppercase",
+letterSpacing: 0.4,
+}}
+>
+Send a signal
+</div>
+
+<div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+<button
+onClick={() => sendSignal("interested")}
+disabled={signalLoading}
+style={{
+padding: "10px 14px",
+borderRadius: 999,
+border:
+mySignalToProfile === "interested"
+? "1px solid rgba(236,72,153,0.95)"
+: "1px solid rgba(180,120,255,0.25)",
+background:
+mySignalToProfile === "interested"
+? "linear-gradient(180deg, rgba(240,32,139,0.95), rgba(192,38,211,0.85))"
+: "rgba(0,0,0,0.35)",
+color: "white",
+cursor: signalLoading ? "default" : "pointer",
+fontWeight: 800,
+opacity: signalLoading ? 0.6 : 1,
+boxShadow:
+mySignalToProfile === "interested"
+? "0 0 18px rgba(236,72,153,0.45), 0 0 35px rgba(192,38,211,0.35)"
+: undefined,
+}}
+>
+💜 Interested
+</button>
+
+<button
+onClick={() => sendSignal("curious")}
+disabled={signalLoading}
+style={{
+padding: "10px 14px",
+borderRadius: 999,
+border:
+mySignalToProfile === "curious"
+? "1px solid rgba(236,72,153,0.95)"
+: "1px solid rgba(180,120,255,0.25)",
+background:
+mySignalToProfile === "curious"
+? "linear-gradient(180deg, rgba(240,32,139,0.95), rgba(192,38,211,0.85))"
+: "rgba(0,0,0,0.35)",
+color: "white",
+cursor: signalLoading ? "default" : "pointer",
+fontWeight: 800,
+opacity: signalLoading ? 0.6 : 1,
+boxShadow:
+mySignalToProfile === "curious"
+? "0 0 18px rgba(236,72,153,0.45), 0 0 35px rgba(192,38,211,0.35)"
+: undefined,
+}}
+>
+👀 Curious
+</button>
+
+<button
+onClick={() => sendSignal("would")}
+disabled={signalLoading}
+style={{
+padding: "10px 14px",
+borderRadius: 999,
+border:
+mySignalToProfile === "would"
+? "1px solid rgba(236,72,153,0.95)"
+: "1px solid rgba(180,120,255,0.25)",
+background:
+mySignalToProfile === "would"
+? "linear-gradient(180deg, rgba(240,32,139,0.95), rgba(192,38,211,0.85))"
+: "rgba(0,0,0,0.35)",
+color: "white",
+cursor: signalLoading ? "default" : "pointer",
+fontWeight: 800,
+opacity: signalLoading ? 0.6 : 1,
+boxShadow:
+mySignalToProfile === "would"
+? "0 0 18px rgba(236,72,153,0.45), 0 0 35px rgba(192,38,211,0.35)"
+: undefined,
+}}
+>
+🔥 Would
+</button>
+
+<button
+onClick={() => sendSignal("crush")}
+disabled={signalLoading}
+style={{
+padding: "10px 14px",
+borderRadius: 999,
+border:
+mySignalToProfile === "crush"
+? "1px solid rgba(236,72,153,0.95)"
+: "1px solid rgba(180,120,255,0.25)",
+background:
+mySignalToProfile === "crush"
+? "linear-gradient(180deg, rgba(240,32,139,0.95), rgba(192,38,211,0.85))"
+: "rgba(0,0,0,0.35)",
+color: "white",
+cursor: signalLoading ? "default" : "pointer",
+fontWeight: 800,
+opacity: signalLoading ? 0.6 : 1,
+boxShadow:
+mySignalToProfile === "crush"
+? "0 0 18px rgba(236,72,153,0.45), 0 0 35px rgba(192,38,211,0.35)"
+: undefined,
+}}
+>
+😈 Crush
+</button>
+</div>
+</div>
+) : null}
 </div>
 </div>
 </div>

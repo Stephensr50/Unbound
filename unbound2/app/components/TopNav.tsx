@@ -6,6 +6,7 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { useUnreadCount } from "./useUnreadCount";
 import { useUnreadNotifications } from "./useUnreadNotifications";
+import { useUnreadSignals } from "./useUnreadSignals";
 
 export default function TopNav() {
 const pathname = usePathname();
@@ -21,6 +22,7 @@ setMounted(true);
 
 const { unread, refresh, supabase } = useUnreadCount();
 const { notifUnread, refreshNotifs } = useUnreadNotifications();
+const { signalUnread, refreshSignals } = useUnreadSignals();
 
 const refreshRef = useRef(refresh);
 useEffect(() => {
@@ -31,6 +33,11 @@ const refreshNotifsRef = useRef(refreshNotifs);
 useEffect(() => {
 refreshNotifsRef.current = refreshNotifs;
 }, [refreshNotifs]);
+
+const refreshSignalsRef = useRef(refreshSignals);
+useEffect(() => {
+refreshSignalsRef.current = refreshSignals;
+}, [refreshSignals]);
 
 useEffect(() => {
 const ch = supabase
@@ -50,6 +57,15 @@ supabase.removeChannel(ch);
 useEffect(() => {
 refresh();
 refreshNotifs();
+refreshSignals();
+
+if (pathname === "/signals") {
+const t = window.setTimeout(() => {
+refreshSignals();
+}, 700);
+
+return () => window.clearTimeout(t);
+}
 // eslint-disable-next-line react-hooks/exhaustive-deps
 }, [pathname]);
 
@@ -113,8 +129,8 @@ e.preventDefault();
 const trimmed = q.trim();
 router.push(trimmed ? `/search?q=${encodeURIComponent(trimmed)}` : "/search");
 };
-
 const msgBadgeText = unread > 99 ? "99+" : String(unread);
+const signalBadgeText = signalUnread > 99 ? "99+" : String(signalUnread);
 const notifBadgeText = notifUnread > 99 ? "99+" : String(notifUnread);
 
 return (
@@ -166,6 +182,11 @@ Profile
 <Link href="/messages" style={tabStyle(isActive("/messages"))}>
 Messages
 {unread > 0 && <span style={badgeStyle}>{msgBadgeText}</span>}
+</Link>
+
+<Link href="/signals" style={tabStyle(isActive("/signals"))}>
+Signals
+{signalUnread > 0 && <span style={badgeStyle}>{signalBadgeText}</span>}
 </Link>
 
 <Link href="/notifications" style={tabStyle(isActive("/notifications"))}>
