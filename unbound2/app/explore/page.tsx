@@ -218,7 +218,7 @@ opacity: 0.82,
 fontSize: 15,
 }}
 >
-Real photo and video posts from across Unbound.
+
 </div>
 </div>
 

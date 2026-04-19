@@ -177,6 +177,10 @@ return `/post/${postId}?flash=4000`;
 if (n.href) return n.href;
 if (n.link) return n.link;
 
+if ((n.type === "follow" || n.type === "followed_you") && n.actor_id) {
+return `/u/${n.actor_id}`;
+}
+
 return null;
 }
 
