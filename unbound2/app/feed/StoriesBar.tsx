@@ -77,90 +77,123 @@ export default function StoriesBar() {
     setProfilesById(map);
   }
 
-  async function refreshStories() {
-    try {
-      const { data, error } = await supabase
-        .from("stories")
-        .select("id,user_id,media_url,caption,created_at")
-        .order("created_at", { ascending: false })
-        .limit(30);
+async function refreshStories() {
+try {
+const {
+data: { user },
+} = await supabase.auth.getUser();
 
-      if (error) throw error;
+const me = user?.id;
+if (!me) {
+setStories([]);
+setProfilesById({});
+return;
+}
 
-      const rows = (data ?? []) as StoryRow[];
-      setStories(rows);
-      await loadProfilesForStories(rows);
-    } catch {
-      // keep UI stable
-    }
-  }
+const { data: followingRows, error: followingError } = await supabase
+.from("follows")
+.select("following_id")
+.eq("follower_id", me);
 
-  useEffect(() => {
-    let alive = true;
+if (followingError) throw followingError;
 
-    (async () => {
-      try {
-        const { data, error } = await supabase
-          .from("stories")
-          .select("id,user_id,media_url,caption,created_at")
-          .order("created_at", { ascending: false })
-          .limit(30);
+const { data: friendRows, error: friendError } = await supabase
+.from("friends")
+.select("friend_id")
+.eq("user_id", me);
 
-        if (error) throw error;
-        if (!alive) return;
+if (friendError) throw friendError;
 
-        const rows = (data ?? []) as StoryRow[];
-        setStories(rows);
+const allowedUserIds = Array.from(
+new Set([
+me,
+...(followingRows ?? []).map((r: any) => r.following_id),
+...(friendRows ?? []).map((r: any) => r.friend_id),
+])
+);
 
-        const uids = Array.from(
-          new Set(rows.map((s) => s.user_id).filter(Boolean))
-        );
+const { data: mainData, error: mainError } = await supabase
+.from("stories")
+.select("id,user_id,media_url,caption,created_at")
+.in("user_id", allowedUserIds)
+.order("created_at", { ascending: false })
+.limit(30);
 
-        if (uids.length) {
-          const { data: profs } = await supabase
-            .from("profiles")
-            .select("id,username,display_name,avatar_url")
-            .in("id", uids);
+if (mainError) throw mainError;
 
-          if (!alive) return;
+const excludedUserIds = allowedUserIds;
 
-          const map: Record<string, ProfileRow> = {};
-          for (const p of (profs ?? []) as ProfileRow[]) {
-            map[p.id] = p;
-          }
-          setProfilesById(map);
-        } else {
-          setProfilesById({});
-        }
-      } catch {
-        // ignore
-      }
-    })();
+const { data: discoveryData, error: discoveryError } = await supabase
+.from("stories")
+.select("id,user_id,media_url,caption,created_at")
+.order("created_at", { ascending: false })
+.limit(60);
 
-    return () => {
-      alive = false;
-    };
-  }, [supabase]);
+if (discoveryError) throw discoveryError;
 
-  useEffect(() => {
-    let alive = true;
+const mainRows = (mainData ?? []) as StoryRow[];
 
-    (async () => {
-      try {
-        const { data, error } = await supabase.auth.getUser();
-        if (error) return;
-        if (!alive) return;
-        setMyUserId(data?.user?.id ?? null);
-      } catch {
-        // ignore
-      }
-    })();
+const discoveryPool = ((discoveryData ?? []) as StoryRow[]).filter(
+(s) => !excludedUserIds.includes(s.user_id)
+);
 
-    return () => {
-      alive = false;
-    };
-  }, [supabase]);
+const discoveryByUser = Array.from(
+new Map(discoveryPool.map((s) => [s.user_id, s])).values()
+);
 
+const shuffledDiscovery = [...discoveryByUser].sort(
+() => Math.random() - 0.5
+);
+
+const merged: StoryRow[] = [];
+let discoveryIndex = 0;
+
+for (let i = 0; i < mainRows.length; i++) {
+merged.push(mainRows[i]);
+
+const shouldInject =
+i === 2 || (i + 1) % 6 === 0;
+
+if (shouldInject && discoveryIndex < shuffledDiscovery.length) {
+merged.push(shuffledDiscovery[discoveryIndex]);
+discoveryIndex += 1;
+}
+}
+
+if (!mainRows.length && shuffledDiscovery.length) {
+merged.push(...shuffledDiscovery.slice(0, 5));
+}
+
+setStories(merged);
+await loadProfilesForStories(merged);
+} catch {
+// keep UI stable
+}
+}
+
+useEffect(() => {
+refreshStories();
+// eslint-disable-next-line react-hooks/exhaustive-deps
+}, []);
+
+useEffect(() => {
+let alive = true;
+
+(async () => {
+try {
+const { data, error } = await supabase.auth.getUser();
+if (error) return;
+if (!alive) return;
+setMyUserId(data?.user?.id ?? null);
+} catch {
+// ignore
+}
+})();
+
+return () => {
+alive = false;
+};
+}, [supabase]);
   const dedupedStories = useMemo(() => {
     const map = new Map<string, StoryRow>();
 
