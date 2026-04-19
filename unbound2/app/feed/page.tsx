@@ -248,6 +248,7 @@ follower_id: uid,
 following_id: targetUserId,
 });
 
+
 if (error) {
 const isConflict =
 (error as any)?.status === 409 ||
@@ -646,24 +647,24 @@ return;
 
 setLikedByMe((m) => ({ ...m, [postId]: true }));
 setMyReactionByPost((m) => ({ ...m, [postId]: reaction }));
-setReactionCountsByPost((m) => {
-const current = { ...(m[postId] ?? {}) };
-const prev = currentReaction;
-if (prev) {
-current[prev] = Math.max(0, (current[prev] ?? 0) - 1);
-if ((current[prev] ?? 0) === 0) {
-delete current[prev];
-}
-}
-current[reaction] = (current[reaction] ?? 0) + 1;
-return { ...m, [postId]: current };
-});
+setLikeCounts((m) => ({ ...m, [postId]: (m[postId] ?? 0) + 1 }));
+setReactionCountsByPost((m) => ({
+...m,
+[postId]: {
+...(m[postId] ?? {}),
+[reaction]: ((m[postId] ?? {})[reaction] ?? 0) + 1,
+},
+}));
+
+const postOwnerId =
+posts.find((p) => p.id === postId)?.user_id ?? null;
+
+
+
 triggerSpark(postId);
 closeReactionPicker(postId);
 setBusyPostId(null);
-return;
 }
-
 setBanner(error.message);
 setBusyPostId(null);
 return;

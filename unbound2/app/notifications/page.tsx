@@ -209,30 +209,33 @@ await refreshMe();
 
 useEffect(() => {
 if (!me) return;
-loadNotifications();
-// eslint-disable-next-line react-hooks/exhaustive-deps
-}, [me]);
 
-useEffect(() => {
-if (subscribedRef.current) return;
-subscribedRef.current = true;
+let alive = true;
+
+loadNotifications();
 
 const ch = supabase
-.channel("notifications-page")
+.channel(`notifications-page-${me}`)
 .on(
 "postgres_changes",
-{ event: "INSERT", schema: "public", table: "notifications" },
+{
+event: "*",
+schema: "public",
+table: "notifications",
+filter: `user_id=eq.${me}`,
+},
 () => {
-loadNotifications();
+if (alive) loadNotifications();
 }
 )
 .subscribe();
 
 return () => {
+alive = false;
 supabase.removeChannel(ch);
 };
 // eslint-disable-next-line react-hooks/exhaustive-deps
-}, [supabase, me]);
+}, [me]);
 
 const wrap: React.CSSProperties = {
 minHeight: "100vh",
