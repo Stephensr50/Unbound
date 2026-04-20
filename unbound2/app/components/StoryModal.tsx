@@ -39,6 +39,7 @@ stories,
 startIndex,
 myUserId,
 onDeleteCurrent,
+onStoryChange,
 }: {
 open: boolean;
 onClose: () => void;
@@ -46,6 +47,7 @@ stories: Story[];
 startIndex: number;
 myUserId?: string | null;
 onDeleteCurrent?: (story: Story) => Promise<void>;
+onStoryChange?: (story: Story) => void;
 }) {
 const safeStories = Array.isArray(stories) ? stories : [];
 const maxIndex = Math.max(0, safeStories.length - 1);
@@ -118,7 +120,11 @@ return () => window.removeEventListener("keydown", onKey);
 }, [open, idx, maxIndex]);
 
 const current = safeStories[idx] ?? null;
-
+useEffect(() => {
+if (!open) return;
+if (!current) return;
+onStoryChange?.(current);
+}, [open, current?.id, onStoryChange]);
 const isVideo =
 !!current?.media_url && /\.(mp4|webm|mov)(\?|$)/i.test(current.media_url);
 
