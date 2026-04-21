@@ -96,6 +96,9 @@ label: string;
 
 const [flashOn, setFlashOn] = useState(false);
 const flashTimerRef = useRef<number | null>(null);
+const commentRefs = useRef<Record<number, HTMLDivElement | null>>({});
+const [flashCommentId, setFlashCommentId] = useState<number | null>(null);
+const commentFlashTimerRef = useRef<number | null>(null);
 
 async function refreshAuth() {
 const { data } = await supabase.auth.getSession();
@@ -232,6 +235,40 @@ if (flashTimerRef.current) window.clearTimeout(flashTimerRef.current);
 flashTimerRef.current = null;
 };
 }, [searchParams?.toString()]);
+
+useEffect(() => {
+const raw = searchParams?.get("commentId");
+if (!raw) return;
+
+const id = Number(raw);
+if (!Number.isFinite(id) || id <= 0) return;
+if (comments.length === 0) return;
+
+const el = commentRefs.current[id];
+if (!el) return;
+
+el.scrollIntoView({
+behavior: "smooth",
+block: "center",
+});
+
+setFlashCommentId(id);
+
+if (commentFlashTimerRef.current) {
+window.clearTimeout(commentFlashTimerRef.current);
+}
+
+commentFlashTimerRef.current = window.setTimeout(() => {
+setFlashCommentId(null);
+}, 2200);
+
+return () => {
+if (commentFlashTimerRef.current) {
+window.clearTimeout(commentFlashTimerRef.current);
+}
+commentFlashTimerRef.current = null;
+};
+}, [searchParams?.toString(), comments.length]);
 
 function triggerSpark() {
 setSpark(true);
@@ -533,6 +570,12 @@ return (
 35% { box-shadow: 0 0 34px rgba(192,38,211,0.45); }
 100% { box-shadow: 0 0 0 rgba(192,38,211,0.0); }
 }
+@keyframes commentGlow {
+0% { box-shadow: 0 0 0 rgba(192,38,211,0.0); }
+35% { box-shadow: 0 0 26px rgba(192,38,211,0.40); }
+100% { box-shadow: 0 0 0 rgba(192,38,211,0.0); }
+}
+
 @keyframes unboundPop {
 0% { transform: scale(1); }
 45% { transform: scale(1.22); }
@@ -687,9 +730,21 @@ null;
 return (
 <div
 key={c.id}
+ref={(el) => {
+commentRefs.current[c.id] = el;
+}}
 style={{
 background: "rgba(0,0,0,0.35)",
-border: "1px solid #222",
+border:
+flashCommentId === c.id
+? "1px solid rgba(192,38,211,0.65)"
+: "1px solid #222",
+boxShadow:
+flashCommentId === c.id
+? "0 0 26px rgba(192,38,211,0.30)"
+: undefined,
+animation:
+flashCommentId === c.id ? "commentGlow 1.2s ease" : undefined,
 borderRadius: 14,
 padding: 10,
 }}
@@ -749,9 +804,7 @@ flexWrap: "wrap",
 >
 <div style={{ fontWeight: 800 }}>{cName}</div>
 {cHandle ? (
-<div style={{ opacity: 0.6, fontSize: 12 }}>
-{cHandle}
-</div>
+<div style={{ opacity: 0.6, fontSize: 12 }}>{cHandle}</div>
 ) : null}
 </div>
 

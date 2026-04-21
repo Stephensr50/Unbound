@@ -167,9 +167,22 @@ function computeHref(n: NotifRow) {
 if (n.type === "friend_request") return "/friend-requests";
 if (n.type === "message") return "/messages";
 
-if (n.type === "spank" || n.type === "comment" || n.type === "comment_reply") {
+if (n.type === "comment_reply") {
 const postId = Number(n.entity_id);
 if (Number.isFinite(postId) && postId > 0) {
+if (n.comment_id) {
+return `/post/${postId}?commentId=${n.comment_id}&flash=4000`;
+}
+return `/post/${postId}?flash=4000`;
+}
+}
+
+if (n.type === "spank" || n.type === "comment") {
+const postId = Number(n.entity_id);
+if (Number.isFinite(postId) && postId > 0) {
+if (n.comment_id) {
+return `/post/${postId}?commentId=${n.comment_id}&flash=4000`;
+}
 return `/post/${postId}?flash=4000`;
 }
 }
@@ -368,9 +381,19 @@ return n.title || n.message || n.body || "Notification";
 }
 
 function buildSub(n: NotifRow) {
-if (n.type === "spank" || n.type === "comment") return "Tap to open post";
+if (n.type === "comment_reply") return "Tap to open reply";
+
+if (n.type === "spank" || n.type === "comment") {
+return n.comment_id ? "Tap to open comment" : "Tap to open post";
+}
+
 if (n.type === "friend_request") return "Tap to open friend requests";
 if (n.type === "message") return "Tap to open messages";
+
+if (n.type === "follow" || n.type === "followed_you") {
+return "Tap to open profile";
+}
+
 return n.body || n.message || "";
 }
 
