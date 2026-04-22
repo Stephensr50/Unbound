@@ -71,7 +71,6 @@ const rawRows = ((data ?? []) as ExplorePostRow[]).filter(
 (p) => !!p.media_url
 );
 
-// Dedupe repeated media so Explore feels less repetitive
 const seen = new Set<string>();
 const rows: ExplorePostRow[] = [];
 for (const post of rawRows) {
@@ -83,9 +82,7 @@ rows.push(post);
 
 setPosts(rows);
 
-const userIds = Array.from(
-new Set(rows.map((p) => p.user_id).filter(Boolean))
-);
+const userIds = Array.from(new Set(rows.map((p) => p.user_id).filter(Boolean)));
 
 if (!userIds.length) {
 setProfilesById({});
@@ -141,15 +138,12 @@ backdrop-filter: blur(4px);
 
 .exploreCard:hover {
 transform: translateY(-6px) scale(1.025);
-
 border-color: rgba(192,38,211,0.65);
-
 box-shadow:
-0 22px 50px rgba(0,0,0,0.45), /* depth */
-0 0 18px rgba(168,85,247,0.35), /* inner glow */
-0 0 40px rgba(168,85,247,0.45), /* main glow */
-0 0 70px rgba(168,85,247,0.25); /* outer aura */
-
+0 22px 50px rgba(0,0,0,0.45),
+0 0 18px rgba(168,85,247,0.35),
+0 0 40px rgba(168,85,247,0.45),
+0 0 70px rgba(168,85,247,0.25);
 background: rgba(0,0,0,0.62);
 }
 
@@ -183,6 +177,7 @@ border-radius: 16px;
 background: rgba(0,0,0,0.42);
 border: 1px solid rgba(255,255,255,0.08);
 backdrop-filter: blur(10px);
+z-index: 3;
 }
 
 .explorePill {
@@ -217,9 +212,7 @@ style={{
 opacity: 0.82,
 fontSize: 15,
 }}
->
-
-</div>
+></div>
 </div>
 
 {banner ? (
@@ -280,19 +273,25 @@ gap: 18,
 >
 {posts.map((post) => {
 const profile = profilesById[post.user_id];
-const label =
-profile?.display_name || profile?.username || "Unknown";
+const label = profile?.display_name || profile?.username || "Unknown";
 const handle = profile?.username ? `@${profile.username}` : "";
 const isVideo =
 (post.media_type && post.media_type.startsWith("video/")) ||
 post.kind === "video";
 
 return (
-<button
+<div
 key={post.id}
-type="button"
+role="button"
+tabIndex={0}
 className="exploreCard"
 onClick={() => router.push(`/post/${post.id}`)}
+onKeyDown={(e) => {
+if (e.key === "Enter" || e.key === " ") {
+e.preventDefault();
+router.push(`/post/${post.id}`);
+}
+}}
 title={`Open ${label}'s post`}
 >
 <div
@@ -343,6 +342,11 @@ display: "block",
 <img
 src={profile.avatar_url}
 alt={label}
+onClick={(e) => {
+e.stopPropagation();
+e.preventDefault();
+if (profile?.id) router.push(`/u/${profile.id}`);
+}}
 style={{
 width: 38,
 height: 38,
@@ -350,10 +354,16 @@ borderRadius: 999,
 objectFit: "cover",
 border: "1px solid rgba(180,120,255,0.22)",
 flexShrink: 0,
+cursor: "pointer",
 }}
 />
 ) : (
 <div
+onClick={(e) => {
+e.stopPropagation();
+e.preventDefault();
+if (profile?.id) router.push(`/u/${profile.id}`);
+}}
 style={{
 width: 38,
 height: 38,
@@ -365,6 +375,7 @@ background: "rgba(0,0,0,0.45)",
 color: "rgba(255,255,255,0.92)",
 fontWeight: 800,
 flexShrink: 0,
+cursor: "pointer",
 }}
 >
 {label.trim().charAt(0).toUpperCase()}
@@ -373,6 +384,11 @@ flexShrink: 0,
 
 <div style={{ minWidth: 0, flex: 1 }}>
 <div
+onClick={(e) => {
+e.stopPropagation();
+e.preventDefault();
+if (profile?.id) router.push(`/u/${profile.id}`);
+}}
 style={{
 fontWeight: 850,
 fontSize: 14,
@@ -381,6 +397,7 @@ textShadow: "0 1px 6px rgba(0,0,0,0.8)",
 whiteSpace: "nowrap",
 overflow: "hidden",
 textOverflow: "ellipsis",
+cursor: "pointer",
 }}
 >
 {label}
@@ -404,7 +421,7 @@ fontSize: 12,
 </div>
 </div>
 </div>
-</button>
+</div>
 );
 })}
 </div>

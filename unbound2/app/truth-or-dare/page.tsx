@@ -2,6 +2,7 @@
 
 import { CSSProperties, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { createClient } from "@supabase/supabase-js";
 
 function getSupabase() {
@@ -37,7 +38,19 @@ sender?: RequestActor | RequestActor[] | null;
 receiver?: RequestActor | RequestActor[] | null;
 };
 
+type GameSessionRow = {
+id: number;
+request_id?: number | null;
+user_a: string;
+user_b: string;
+type: "truth" | "dare" | "choice";
+status: string;
+created_at?: string;
+};
+
 function timeAgo(ts: string) {
+if (typeof window === "undefined") return "";
+
 const now = Date.now();
 const then = new Date(ts).getTime();
 const diff = Math.max(1, Math.floor((now - then) / 1000));
@@ -160,6 +173,8 @@ boxShadow:
 
 export default function TruthOrDarePage() {
 const supabase = useMemo(() => getSupabase(), []);
+const router = useRouter();
+
 const [me, setMe] = useState<string | null>(null);
 
 const [players, setPlayers] = useState<ProfileRow[]>([]);
@@ -172,7 +187,9 @@ const [sending, setSending] = useState(false);
 const [actingId, setActingId] = useState<number | null>(null);
 
 const [search, setSearch] = useState("");
-const [filter, setFilter] = useState<"all" | "truth" | "dare" | "both">("all");
+const [filter, setFilter] = useState<"all" | "truth" | "dare" | "both">(
+"all"
+);
 
 const [myEnabled, setMyEnabled] = useState(false);
 const [myMode, setMyMode] = useState<"truth" | "dare" | "both">("both");
@@ -218,11 +235,15 @@ return;
 }
 
 setMyEnabled(!!myProfile.truth_dare_enabled);
-setMyMode((myProfile.truth_dare_mode || "both") as "truth" | "dare" | "both");
+setMyMode(
+(myProfile.truth_dare_mode || "both") as "truth" | "dare" | "both"
+);
 
 const { data: playersData, error: playersError } = await supabase
 .from("profiles")
-.select("id, username, display_name, avatar_url, truth_dare_enabled, truth_dare_mode")
+.select(
+"id, username, display_name, avatar_url, truth_dare_enabled, truth_dare_mode"
+)
 .eq("truth_dare_enabled", true)
 .neq("id", userId)
 .order("display_name", { ascending: true });
@@ -297,7 +318,10 @@ loadEverything();
 // eslint-disable-next-line react-hooks/exhaustive-deps
 }, []);
 
-async function saveMyPrefs(nextEnabled: boolean, nextMode: "truth" | "dare" | "both") {
+async function saveMyPrefs(
+nextEnabled: boolean,
+nextMode: "truth" | "dare" | "both"
+) {
 if (!me) return;
 
 setSavingPrefs(true);
@@ -349,9 +373,9 @@ return;
 }
 
 setNotice(
-`Sent ${type === "choice" ? "a Truth or Dare request" : `a ${type}`} to ${
-selected.display_name || selected.username || "that player"
-}.`
+`Sent ${
+type === "choice" ? "a Truth or Dare request" : `a ${type}`
+} to ${selected.display_name || selected.username || "that player"}.`
 );
 setSelected(null);
 await loadEverything();
@@ -365,20 +389,107 @@ setActingId(requestId);
 setError(null);
 setNotice(null);
 
-const { error: updateError } = await supabase
+const { data: updated, error: updateError } = await supabase
 .from("truth_dare_requests")
 .update({ status })
-.eq("id", requestId);
+.eq("id", requestId)
+.select()
+.single();
 
 setActingId(null);
 
-if (updateError) {
-setError(updateError.message);
+if (updateError || !updated) {
+setError(updateError?.message || "Failed to update request.");
 return;
 }
 
-setNotice(status === "accepted" ? "Request accepted." : "Request declined.");
+if (status === "accepted") {
+const request = updated as RequestRow;
+
+const { data: existingSession, error: existingError } = await supabase
+.from("game_sessions")
+.select("id")
+.eq("request_id", request.id)
+.maybeSingle();
+
+if (existingError) {
+setError(existingError.message);
+return;
+}
+
+if (existingSession?.id) {
+router.push(`/truth-or-dare/${existingSession.id}`);
+return;
+}
+
+const { data: sessionRow, error: sessionErr } = await supabase
+.from("game_sessions")
+.insert({
+request_id: request.id,
+user_a: request.sender_id,
+user_b: request.receiver_id,
+type: request.type,
+status: "active",
+})
+.select()
+.single();
+
+if (sessionErr || !sessionRow) {
+setError(sessionErr?.message || "Failed to start game.");
+return;
+}
+
+router.push(`/truth-or-dare/${(sessionRow as GameSessionRow).id}`);
+return;
+}
+
+setNotice("Request declined.");
 await loadEverything();
+}
+
+async function openAcceptedRequest(request: RequestRow) {
+setActingId(request.id);
+setError(null);
+setNotice(null);
+
+const { data: existingSession, error: findError } = await supabase
+.from("game_sessions")
+.select("id")
+.eq("request_id", request.id)
+.maybeSingle();
+
+if (findError) {
+setActingId(null);
+setError(findError.message);
+return;
+}
+
+if (existingSession?.id) {
+setActingId(null);
+router.push(`/truth-or-dare/${existingSession.id}`);
+return;
+}
+
+const { data: createdSession, error: createError } = await supabase
+.from("game_sessions")
+.insert({
+request_id: request.id,
+user_a: request.sender_id,
+user_b: request.receiver_id,
+type: request.type,
+status: "active",
+})
+.select("id")
+.single();
+
+setActingId(null);
+
+if (createError || !createdSession) {
+setError(createError?.message || "Failed to open game.");
+return;
+}
+
+router.push(`/truth-or-dare/${createdSession.id}`);
 }
 
 const filteredPlayers = useMemo(() => {
@@ -552,7 +663,8 @@ Truth or Dare
 </div>
 
 <div style={{ opacity: 0.9, marginTop: 8, whiteSpace: "pre-wrap" }}>
-Browse the grid, pick your player, and send a Truth, Dare, or let them choose.
+Browse the grid, pick your player, and send a Truth, Dare, or let
+them choose.
 </div>
 </div>
 
@@ -580,7 +692,14 @@ gap: 14,
 }}
 >
 <div style={card}>
-<div style={{ opacity: 0.72, fontSize: 13, marginBottom: 8, fontWeight: 700 }}>
+<div
+style={{
+opacity: 0.72,
+fontSize: 13,
+marginBottom: 8,
+fontWeight: 700,
+}}
+>
 Search players
 </div>
 <input
@@ -592,7 +711,14 @@ style={inputStyle}
 </div>
 
 <div style={card}>
-<div style={{ opacity: 0.72, fontSize: 13, marginBottom: 8, fontWeight: 700 }}>
+<div
+style={{
+opacity: 0.72,
+fontSize: 13,
+marginBottom: 8,
+fontWeight: 700,
+}}
+>
 Filter
 </div>
 
@@ -622,11 +748,20 @@ e.currentTarget.style.transform = "scale(1)";
 </div>
 
 <div style={{ ...card, marginTop: 14 }}>
-<div style={{ opacity: 0.72, fontSize: 13, marginBottom: 10, fontWeight: 700 }}>
+<div
+style={{
+opacity: 0.72,
+fontSize: 13,
+marginBottom: 10,
+fontWeight: 700,
+}}
+>
 Your participation
 </div>
 
-<div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
+<div
+style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}
+>
 <button
 disabled={savingPrefs}
 onClick={() => saveMyPrefs(!myEnabled, myMode)}
@@ -799,7 +934,8 @@ Incoming requests
 ) : (
 incoming.map((r) => {
 const sender = firstActor(r.sender);
-const senderName = sender?.display_name || sender?.username || "Someone";
+const senderName =
+sender?.display_name || sender?.username || "Someone";
 
 return (
 <div
@@ -817,7 +953,9 @@ e.currentTarget.style.boxShadow = "none";
 >
 <div style={{ fontWeight: 800 }}>
 {senderName} sent you{" "}
-{r.type === "choice" ? "a Truth or Dare request" : `a ${r.type}`}
+{r.type === "choice"
+? "a Truth or Dare request"
+: `a ${r.type}`}
 </div>
 
 <div
@@ -830,11 +968,20 @@ marginTop: 8,
 }}
 >
 <div style={statusChipStyle(r.status)}>{r.status}</div>
-<div style={{ opacity: 0.65, fontSize: 12 }}>{timeAgo(r.created_at)}</div>
+<div style={{ opacity: 0.65, fontSize: 12 }}>
+{timeAgo(r.created_at)}
+</div>
 </div>
 
 {r.status === "pending" ? (
-<div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 12 }}>
+<div
+style={{
+display: "flex",
+gap: 10,
+flexWrap: "wrap",
+marginTop: 12,
+}}
+>
 <button
 onClick={() => updateRequestStatus(r.id, "accepted")}
 disabled={actingId === r.id}
@@ -853,6 +1000,24 @@ style={pillBtn}
 {actingId === r.id ? "Working..." : "Decline"}
 </button>
 </div>
+) : r.status === "accepted" ? (
+<div
+style={{
+display: "flex",
+gap: 10,
+flexWrap: "wrap",
+marginTop: 12,
+}}
+>
+<button
+onClick={() => openAcceptedRequest(r)}
+disabled={actingId === r.id}
+type="button"
+style={actionBtn}
+>
+{actingId === r.id ? "Opening..." : "Open game"}
+</button>
+</div>
 ) : null}
 </div>
 );
@@ -868,7 +1033,9 @@ Outgoing requests
 
 <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
 {outgoing.length === 0 ? (
-<div style={{ opacity: 0.72 }}>You have not sent any requests yet.</div>
+<div style={{ opacity: 0.72 }}>
+You have not sent any requests yet.
+</div>
 ) : (
 outgoing.map((r) => {
 const receiver = firstActor(r.receiver);
@@ -891,7 +1058,9 @@ e.currentTarget.style.boxShadow = "none";
 >
 <div style={{ fontWeight: 800 }}>
 You sent {receiverName}{" "}
-{r.type === "choice" ? "a Truth or Dare request" : `a ${r.type}`}
+{r.type === "choice"
+? "a Truth or Dare request"
+: `a ${r.type}`}
 </div>
 
 <div
@@ -904,8 +1073,30 @@ marginTop: 8,
 }}
 >
 <div style={statusChipStyle(r.status)}>{r.status}</div>
-<div style={{ opacity: 0.65, fontSize: 12 }}>{timeAgo(r.created_at)}</div>
+<div style={{ opacity: 0.65, fontSize: 12 }}>
+{timeAgo(r.created_at)}
 </div>
+</div>
+
+{r.status === "accepted" ? (
+<div
+style={{
+display: "flex",
+gap: 10,
+flexWrap: "wrap",
+marginTop: 12,
+}}
+>
+<button
+onClick={() => openAcceptedRequest(r)}
+disabled={actingId === r.id}
+type="button"
+style={actionBtn}
+>
+{actingId === r.id ? "Opening..." : "Open game"}
+</button>
+</div>
+) : null}
 </div>
 );
 })
@@ -980,7 +1171,11 @@ style={countPill}
 {sending ? "Sending..." : "Let them choose"}
 </button>
 
-<button onClick={() => setSelected(null)} type="button" style={pillBtn}>
+<button
+onClick={() => setSelected(null)}
+type="button"
+style={pillBtn}
+>
 Cancel
 </button>
 </div>

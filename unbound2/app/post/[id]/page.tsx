@@ -752,16 +752,18 @@ padding: 10,
 <div style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>
 {cAuthor?.avatar_url ? (
 // eslint-disable-next-line @next/next/no-img-element
+
 <img
-src={cAuthor.avatar_url}
+src={author.avatar_url}
 alt=""
+onClick={() => author?.id && router.push(`/u/${author.id}`)}
 style={{
 width: 38,
 height: 38,
 borderRadius: 999,
 objectFit: "cover",
 border: "1px solid rgba(255,255,255,0.16)",
-flex: "0 0 auto",
+cursor: "pointer",
 }}
 />
 ) : (
