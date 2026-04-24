@@ -12,6 +12,7 @@ return createClient(url, key);
 
 type SessionRow = {
 id: number;
+request_id: number | null;
 user_a: string;
 user_b: string;
 type: "truth" | "dare" | "choice";
@@ -32,6 +33,8 @@ session_id: number;
 sender_id: string;
 type: "choice" | "prompt" | "answer" | "system";
 body: string;
+media_url?: string | null;
+media_type?: string | null;
 created_at: string;
 };
 
@@ -40,6 +43,8 @@ return p?.display_name || p?.username || "Unknown";
 }
 
 function timeAgo(ts: string) {
+if (typeof window === "undefined") return "";
+
 const now = Date.now();
 const then = new Date(ts).getTime();
 const diff = Math.max(1, Math.floor((now - then) / 1000));
@@ -73,6 +78,9 @@ const [moves, setMoves] = useState<MoveRow[]>([]);
 const [loading, setLoading] = useState(true);
 const [saving, setSaving] = useState(false);
 const [draft, setDraft] = useState("");
+const [mediaFile, setMediaFile] = useState<File | null>(null);
+const [deleteOpen, setDeleteOpen] = useState(false);
+
 const [error, setError] = useState<string | null>(null);
 const [notice, setNotice] = useState<string | null>(null);
 
@@ -108,7 +116,7 @@ return;
 
 const { data: sessionData, error: sessionError } = await supabase
 .from("game_sessions")
-.select("id,user_a,user_b,type,status,created_at")
+.select("id,request_id,user_a,user_b,type,status,created_at")
 .eq("id", sessionId)
 .single();
 
@@ -145,7 +153,7 @@ setUserB(allProfiles.find((p) => p.id === s.user_b) ?? null);
 
 const { data: moveRows, error: moveError } = await supabase
 .from("game_moves")
-.select("id,session_id,sender_id,type,body,created_at")
+.select("id,session_id,sender_id,type,body,media_url,media_type,created_at")
 .eq("session_id", s.id)
 .order("created_at", { ascending: true });
 
@@ -169,7 +177,7 @@ if (!session) return;
 
 const { data, error } = await supabase
 .from("game_moves")
-.select("id,session_id,sender_id,type,body,created_at")
+.select("id,session_id,sender_id,type,body,media_url,media_type,created_at")
 .eq("session_id", session.id)
 .order("created_at", { ascending: true });
 
@@ -181,9 +189,51 @@ return;
 setMoves((data ?? []) as MoveRow[]);
 }
 
+async function uploadSelectedMedia() {
+if (!mediaFile || !me || !session) return null;
+
+const isImage = mediaFile.type.startsWith("image/");
+const isVideo = mediaFile.type.startsWith("video/");
+
+if (!isImage && !isVideo) {
+setError("Please choose an image or video.");
+return false;
+}
+
+const maxSize = isVideo ? 60 * 1024 * 1024 : 15 * 1024 * 1024;
+
+if (mediaFile.size > maxSize) {
+setError(isVideo ? "Video is too large. Max 60MB." : "Image is too large. Max 15MB.");
+return false;
+}
+
+const ext = mediaFile.name.split(".").pop() || "upload";
+const path = `truth-or-dare/${session.id}/${me}/${Date.now()}-${crypto.randomUUID()}.${ext}`;
+
+const { error: uploadError } = await supabase.storage
+.from("media")
+.upload(path, mediaFile, {
+contentType: mediaFile.type,
+upsert: false,
+});
+
+if (uploadError) {
+setError(uploadError.message);
+return false;
+}
+
+const { data } = supabase.storage.from("media").getPublicUrl(path);
+
+return {
+url: data.publicUrl,
+type: mediaFile.type,
+};
+}
+
 async function insertMove(
 type: "choice" | "prompt" | "answer" | "system",
-body: string
+body: string,
+media?: { url: string; type: string } | null
 ) {
 if (!session || !me) return false;
 
@@ -192,6 +242,8 @@ session_id: session.id,
 sender_id: me,
 type,
 body,
+media_url: media?.url ?? null,
+media_type: media?.type ?? null,
 });
 
 if (error) {
@@ -212,36 +264,47 @@ const ok = await insertMove("choice", choice);
 
 setSaving(false);
 
-if (ok) {
-setNotice(`Choice locked in: ${choice}.`);
-}
+if (ok) setNotice(`Choice locked in: ${choice}.`);
 }
 
 async function submitPrompt() {
-if (!draft.trim()) return;
+if (!draft.trim() && !mediaFile) return;
 
 setSaving(true);
 setError(null);
 setNotice(null);
 
-const ok = await insertMove("prompt", draft.trim());
+const media = await uploadSelectedMedia();
+if (media === false) {
+setSaving(false);
+return;
+}
+
+const ok = await insertMove("prompt", draft.trim(), media);
 
 setSaving(false);
 
 if (ok) {
 setDraft("");
+setMediaFile(null);
 setNotice("Prompt sent.");
 }
 }
 
 async function submitAnswer() {
-if (!draft.trim()) return;
+if (!draft.trim() && !mediaFile) return;
 
 setSaving(true);
 setError(null);
 setNotice(null);
 
-const ok = await insertMove("answer", draft.trim());
+const media = await uploadSelectedMedia();
+if (media === false) {
+setSaving(false);
+return;
+}
+
+const ok = await insertMove("answer", draft.trim(), media);
 
 if (ok && session) {
 await supabase
@@ -251,10 +314,68 @@ await supabase
 
 setSession({ ...session, status: "completed" });
 setDraft("");
+setMediaFile(null);
 setNotice("Answer sent. Session completed.");
 }
 
 setSaving(false);
+}
+
+async function playAgain() {
+if (!session || !me) return;
+
+setSaving(true);
+setError(null);
+setNotice(null);
+
+const otherUser = session.user_a === me ? session.user_b : session.user_a;
+
+const { data: newSession, error } = await supabase
+.from("game_sessions")
+.insert({
+user_a: me,
+user_b: otherUser,
+type: session.type,
+status: "active",
+})
+.select("id")
+.single();
+
+setSaving(false);
+
+if (error || !newSession) {
+setError(error?.message || "Could not start a new round.");
+return;
+}
+
+router.push(`/truth-or-dare/${newSession.id}`);
+}
+
+async function deleteFinishedGame() {
+if (!session) return;
+
+setSaving(true);
+setError(null);
+setNotice(null);
+
+if (session.request_id) {
+await supabase.from("truth_dare_requests").delete().eq("id", session.request_id);
+}
+
+const { error: sessionDeleteError } = await supabase
+.from("game_sessions")
+.delete()
+.eq("id", session.id);
+
+setSaving(false);
+
+if (sessionDeleteError) {
+setError(sessionDeleteError.message);
+return;
+}
+
+setDeleteOpen(false);
+router.push("/truth-or-dare");
 }
 
 async function exitSession() {
@@ -281,6 +402,7 @@ router.push("/truth-or-dare");
 
 async function blockOther() {
 if (!session || !me) return;
+
 const otherId = me === session.user_a ? session.user_b : session.user_a;
 
 setSaving(true);
@@ -309,6 +431,7 @@ router.push("/truth-or-dare");
 
 async function reportOther() {
 if (!session || !me) return;
+
 const otherId = me === session.user_a ? session.user_b : session.user_a;
 
 setSaving(true);
@@ -343,13 +466,16 @@ session?.type === "choice"
 const isRequester = !!session && me === session.user_a;
 const isReceiver = !!session && me === session.user_b;
 
-const canChoose = !!session && session.type === "choice" && isReceiver && !choiceMove;
+const canChoose =
+!!session && session.type === "choice" && isReceiver && !choiceMove;
+
 const canSendPrompt =
 !!session &&
 !!chosenType &&
 isRequester &&
 !promptMove &&
 session.status === "active";
+
 const canAnswer =
 !!session &&
 !!chosenType &&
@@ -359,19 +485,15 @@ isReceiver &&
 session.status === "active";
 
 const otherProfile =
-session && me
-? me === session.user_a
-? userB
-: userA
-: null;
+session && me ? (me === session.user_a ? userB : userA) : null;
 
-const wrapper: React.CSSProperties = {
+const wrapper: CSSProperties = {
 width: "min(920px, 94vw)",
 margin: "16px auto 0",
 color: "white",
 };
 
-const card: React.CSSProperties = {
+const card: CSSProperties = {
 background: "rgba(0,0,0,0.55)",
 border: "2px solid rgba(180,120,255,0.16)",
 borderRadius: 16,
@@ -380,7 +502,7 @@ boxShadow:
 "0 0 18px rgba(236,72,153,0.14), 0 0 32px rgba(192,38,211,0.10)",
 };
 
-const titleCard: React.CSSProperties = {
+const titleCard: CSSProperties = {
 background: "rgba(0,0,0,0.50)",
 border: "1px solid rgba(236,72,153,0.95)",
 borderRadius: 18,
@@ -390,7 +512,7 @@ boxShadow:
 "0 0 18px rgba(236,72,153,0.25), 0 0 40px rgba(192,38,211,0.15)",
 };
 
-const pillBtn: React.CSSProperties = {
+const pillBtn: CSSProperties = {
 padding: "10px 14px",
 borderRadius: 999,
 border: "1px solid rgba(180,120,255,0.25)",
@@ -400,7 +522,14 @@ cursor: "pointer",
 fontWeight: 700,
 };
 
-const actionBtn: React.CSSProperties = {
+const dangerBtn: CSSProperties = {
+...pillBtn,
+border: "1px solid rgba(239,68,68,0.45)",
+background: "rgba(127,29,29,0.35)",
+boxShadow: "0 0 14px rgba(239,68,68,0.18)",
+};
+
+const actionBtn: CSSProperties = {
 padding: "12px 18px",
 borderRadius: 12,
 border: "none",
@@ -411,7 +540,13 @@ background: "linear-gradient(90deg,#7c3aed,#c026d3)",
 boxShadow: "0 0 14px rgba(168,85,247,0.6)",
 };
 
-const inputStyle: React.CSSProperties = {
+const pinkBtn: CSSProperties = {
+...actionBtn,
+background: "linear-gradient(180deg,#ec4899,#9d174d)",
+boxShadow: "0 0 16px rgba(236,72,153,0.35)",
+};
+
+const inputStyle: CSSProperties = {
 background: "rgba(0,0,0,0.6)",
 color: "white",
 border: "1px solid rgba(180,120,255,0.22)",
@@ -421,6 +556,17 @@ outline: "none",
 width: "100%",
 minHeight: 110,
 resize: "vertical",
+};
+
+const fileInputStyle: CSSProperties = {
+marginTop: 12,
+display: "block",
+width: "100%",
+color: "white",
+border: "1px solid rgba(180,120,255,0.22)",
+borderRadius: 12,
+padding: 10,
+background: "rgba(0,0,0,0.35)",
 };
 
 if (loading) {
@@ -484,7 +630,10 @@ alignItems: "flex-start",
 }}
 >
 <div>
-<div style={{ fontSize: 26, fontWeight: 900 }}>Truth or Dare Session</div>
+<div style={{ fontSize: 26, fontWeight: 900 }}>
+Truth or Dare Session
+</div>
+
 <div style={{ opacity: 0.86, marginTop: 8 }}>
 You’re playing with{" "}
 <span style={{ fontWeight: 800 }}>
@@ -492,22 +641,45 @@ You’re playing with{" "}
 </span>
 .
 </div>
+
 <div style={{ opacity: 0.7, marginTop: 8, fontSize: 13 }}>
 Status: <span style={{ fontWeight: 800 }}>{session.status}</span>
 </div>
 </div>
 
 <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-<button onClick={() => router.push("/truth-or-dare")} type="button" style={pillBtn}>
+<button
+onClick={() => router.push("/truth-or-dare")}
+type="button"
+style={pillBtn}
+>
 Back
 </button>
-<button onClick={reportOther} disabled={saving} type="button" style={pillBtn}>
+
+<button
+onClick={reportOther}
+disabled={saving}
+type="button"
+style={pillBtn}
+>
 Report
 </button>
-<button onClick={blockOther} disabled={saving} type="button" style={pillBtn}>
+
+<button
+onClick={blockOther}
+disabled={saving}
+type="button"
+style={pillBtn}
+>
 Block
 </button>
-<button onClick={exitSession} disabled={saving} type="button" style={pillBtn}>
+
+<button
+onClick={exitSession}
+disabled={saving}
+type="button"
+style={pillBtn}
+>
 Exit
 </button>
 </div>
@@ -519,15 +691,12 @@ Exit
 Current stage
 </div>
 
-{session.status !== "active" ? (
-<div style={{ opacity: 0.82 }}>
-This session is no longer active.
-</div>
-) : canChoose ? (
+{canChoose ? (
 <>
 <div style={{ opacity: 0.9, marginBottom: 14 }}>
 They let you choose. Pick Truth or Dare to continue.
 </div>
+
 <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
 <button
 onClick={() => chooseTruthOrDare("truth")}
@@ -567,10 +736,23 @@ chosenType === "truth"
 style={inputStyle}
 />
 
+<input
+type="file"
+accept="image/*,video/*"
+onChange={(e) => setMediaFile(e.target.files?.[0] ?? null)}
+style={fileInputStyle}
+/>
+
+{mediaFile ? (
+<div style={{ opacity: 0.75, fontSize: 13, marginTop: 8 }}>
+Attached: {mediaFile.name}
+</div>
+) : null}
+
 <div style={{ marginTop: 12 }}>
 <button
 onClick={submitPrompt}
-disabled={saving || !draft.trim()}
+disabled={saving || (!draft.trim() && !mediaFile)}
 type="button"
 style={actionBtn}
 >
@@ -604,10 +786,23 @@ placeholder="Type your answer..."
 style={inputStyle}
 />
 
+<input
+type="file"
+accept="image/*,video/*"
+onChange={(e) => setMediaFile(e.target.files?.[0] ?? null)}
+style={fileInputStyle}
+/>
+
+{mediaFile ? (
+<div style={{ opacity: 0.75, fontSize: 13, marginTop: 8 }}>
+Attached: {mediaFile.name}
+</div>
+) : null}
+
 <div style={{ marginTop: 12 }}>
 <button
 onClick={submitAnswer}
-disabled={saving || !draft.trim()}
+disabled={saving || (!draft.trim() && !mediaFile)}
 type="button"
 style={actionBtn}
 >
@@ -617,15 +812,48 @@ style={actionBtn}
 </>
 ) : (
 <div style={{ opacity: 0.82 }}>
-{session.type === "choice" && !choiceMove
+<div>
+{answerMove
+? "This round is complete."
+: session.status !== "active"
+? "This session is no longer active."
+: session.type === "choice" && !choiceMove
 ? "Waiting for the receiver to choose Truth or Dare..."
 : promptMove && !answerMove
 ? isRequester
 ? "Waiting for them to answer..."
 : "Waiting for your turn..."
-: answerMove
-? "This round is complete."
 : "Waiting for the next action..."}
+</div>
+
+{answerMove ? (
+<div
+style={{
+display: "flex",
+gap: 10,
+flexWrap: "wrap",
+marginTop: 16,
+}}
+>
+<button
+onClick={playAgain}
+disabled={saving}
+type="button"
+style={pinkBtn}
+>
+{saving ? "Starting..." : "Play Again 🔁"}
+</button>
+
+<button
+onClick={() => setDeleteOpen(true)}
+disabled={saving}
+type="button"
+style={dangerBtn}
+>
+Delete Game
+</button>
+</div>
+) : null}
 </div>
 )}
 </div>
@@ -656,6 +884,14 @@ move.type === "choice"
 ? "answered"
 : move.body;
 
+const isImage =
+move.media_type?.startsWith("image/") ||
+(!!move.media_url && move.media_type === "image");
+
+const isVideo =
+move.media_type?.startsWith("video/") ||
+(!!move.media_url && move.media_type === "video");
+
 return (
 <div
 key={move.id}
@@ -676,8 +912,9 @@ flexWrap: "wrap",
 }}
 >
 <div style={{ fontWeight: 800 }}>
-{move.type === "choice" ? `${who} ${label}` : `${who} ${label}`}
+{who} {label}
 </div>
+
 <div style={{ opacity: 0.6, fontSize: 12 }}>
 {timeAgo(move.created_at)}
 </div>
@@ -688,12 +925,100 @@ flexWrap: "wrap",
 {move.body}
 </div>
 ) : null}
+
+{move.media_url && isImage ? (
+<img
+src={move.media_url}
+alt=""
+style={{
+marginTop: 10,
+width: "100%",
+maxHeight: 420,
+objectFit: "cover",
+borderRadius: 14,
+border: "1px solid rgba(255,255,255,0.12)",
+}}
+/>
+) : null}
+
+{move.media_url && isVideo ? (
+<video
+src={move.media_url}
+controls
+style={{
+marginTop: 10,
+width: "100%",
+maxHeight: 420,
+borderRadius: 14,
+border: "1px solid rgba(255,255,255,0.12)",
+background: "rgba(0,0,0,0.45)",
+}}
+/>
+) : null}
 </div>
 );
 })
 )}
 </div>
 </div>
+
+{deleteOpen ? (
+<div
+style={{
+position: "fixed",
+inset: 0,
+zIndex: 9999,
+background: "rgba(0,0,0,0.72)",
+backdropFilter: "blur(8px)",
+display: "flex",
+alignItems: "center",
+justifyContent: "center",
+padding: 18,
+}}
+>
+<div
+style={{
+width: "min(440px, 94vw)",
+borderRadius: 22,
+padding: 20,
+background:
+"linear-gradient(180deg, rgba(20,0,28,0.96), rgba(0,0,0,0.94))",
+border: "1px solid rgba(236,72,153,0.55)",
+boxShadow:
+"0 0 25px rgba(236,72,153,0.26), 0 0 55px rgba(168,85,247,0.18)",
+color: "white",
+}}
+>
+<div style={{ fontSize: 22, fontWeight: 900, marginBottom: 8 }}>
+Delete finished game?
+</div>
+
+<div style={{ opacity: 0.82, lineHeight: 1.4, marginBottom: 18 }}>
+This will remove this finished Truth or Dare session from your list.
+</div>
+
+<div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
+<button
+onClick={() => setDeleteOpen(false)}
+disabled={saving}
+type="button"
+style={pillBtn}
+>
+Cancel
+</button>
+
+<button
+onClick={deleteFinishedGame}
+disabled={saving}
+type="button"
+style={dangerBtn}
+>
+{saving ? "Deleting..." : "Delete Game"}
+</button>
+</div>
+</div>
+</div>
+) : null}
 </div>
 );
 }
