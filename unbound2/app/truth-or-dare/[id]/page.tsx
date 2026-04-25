@@ -83,6 +83,7 @@ const [deleteOpen, setDeleteOpen] = useState(false);
 
 const [error, setError] = useState<string | null>(null);
 const [notice, setNotice] = useState<string | null>(null);
+const [nextSessionId, setNextSessionId] = useState<number | null>(null);
 
 async function loadSession() {
 if (!Number.isFinite(sessionId) || sessionId <= 0) {
@@ -135,6 +136,19 @@ return;
 }
 
 setSession(s);
+
+const { data: newerSessions } = await supabase
+.from("game_sessions")
+.select("id")
+.eq("status", "active")
+.neq("id", s.id)
+.or(
+`and(user_a.eq.${s.user_a},user_b.eq.${s.user_b}),and(user_a.eq.${s.user_b},user_b.eq.${s.user_a})`
+)
+.order("id", { ascending: false })
+.limit(1);
+
+setNextSessionId(newerSessions?.[0]?.id ?? null);
 
 const { data: profileRows, error: profileError } = await supabase
 .from("profiles")
@@ -330,6 +344,43 @@ setNotice(null);
 
 const otherUser = session.user_a === me ? session.user_b : session.user_a;
 
+await supabase
+.from("game_sessions")
+.update({ status: "completed" })
+.eq("id", session.id);
+
+const { data: activeSessions, error: activeError } = await supabase
+.from("game_sessions")
+.select("id")
+.eq("status", "active")
+.neq("id", session.id)
+.or(
+`and(user_a.eq.${me},user_b.eq.${otherUser}),and(user_a.eq.${otherUser},user_b.eq.${me})`
+)
+.order("id", { ascending: false })
+.limit(10);
+
+if (activeError) {
+setSaving(false);
+setError(activeError.message);
+return;
+}
+
+for (const s of activeSessions ?? []) {
+const { data: existingAnswer } = await supabase
+.from("game_moves")
+.select("id")
+.eq("session_id", s.id)
+.eq("type", "answer")
+.limit(1);
+
+if (!existingAnswer?.length) {
+setSaving(false);
+router.push(`/truth-or-dare/${s.id}`);
+return;
+}
+}
+
 const { data: newSession, error } = await supabase
 .from("game_sessions")
 .insert({
@@ -358,24 +409,30 @@ setSaving(true);
 setError(null);
 setNotice(null);
 
+try {
 if (session.request_id) {
-await supabase.from("truth_dare_requests").delete().eq("id", session.request_id);
+const { error: requestError } = await supabase
+.from("truth_dare_requests")
+.delete()
+.eq("id", session.request_id);
+
+if (requestError) throw requestError;
 }
 
-const { error: sessionDeleteError } = await supabase
+const { error: sessionError } = await supabase
 .from("game_sessions")
 .delete()
 .eq("id", session.id);
 
-setSaving(false);
-
-if (sessionDeleteError) {
-setError(sessionDeleteError.message);
-return;
-}
+if (sessionError) throw sessionError;
 
 setDeleteOpen(false);
 router.push("/truth-or-dare");
+} catch (err: any) {
+setError(err.message || "Delete failed");
+}
+
+setSaving(false);
 }
 
 async function exitSession() {
@@ -522,11 +579,16 @@ cursor: "pointer",
 fontWeight: 700,
 };
 
-const dangerBtn: CSSProperties = {
+const ghostBtn: CSSProperties = {
 ...pillBtn,
-border: "1px solid rgba(239,68,68,0.45)",
-background: "rgba(127,29,29,0.35)",
-boxShadow: "0 0 14px rgba(239,68,68,0.18)",
+backdropFilter: "blur(6px)",
+WebkitBackdropFilter: "blur(6px)",
+};
+
+const dangerBtn: CSSProperties = {
+...ghostBtn,
+border: "1px solid rgba(239,68,68,0.35)",
+boxShadow: "0 0 10px rgba(239,68,68,0.18)",
 };
 
 const actionBtn: CSSProperties = {
@@ -538,12 +600,6 @@ color: "white",
 fontWeight: 800,
 background: "linear-gradient(90deg,#7c3aed,#c026d3)",
 boxShadow: "0 0 14px rgba(168,85,247,0.6)",
-};
-
-const pinkBtn: CSSProperties = {
-...actionBtn,
-background: "linear-gradient(180deg,#ec4899,#9d174d)",
-boxShadow: "0 0 16px rgba(236,72,153,0.35)",
 };
 
 const inputStyle: CSSProperties = {
@@ -648,38 +704,19 @@ Status: <span style={{ fontWeight: 800 }}>{session.status}</span>
 </div>
 
 <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-<button
-onClick={() => router.push("/truth-or-dare")}
-type="button"
-style={pillBtn}
->
+<button onClick={() => router.push("/truth-or-dare")} type="button" style={pillBtn}>
 Back
 </button>
 
-<button
-onClick={reportOther}
-disabled={saving}
-type="button"
-style={pillBtn}
->
+<button onClick={reportOther} disabled={saving} type="button" style={pillBtn}>
 Report
 </button>
 
-<button
-onClick={blockOther}
-disabled={saving}
-type="button"
-style={pillBtn}
->
+<button onClick={blockOther} disabled={saving} type="button" style={pillBtn}>
 Block
 </button>
 
-<button
-onClick={exitSession}
-disabled={saving}
-type="button"
-style={pillBtn}
->
+<button onClick={exitSession} disabled={saving} type="button" style={pillBtn}>
 Exit
 </button>
 </div>
@@ -720,9 +757,7 @@ style={pillBtn}
 ) : canSendPrompt ? (
 <>
 <div style={{ opacity: 0.9, marginBottom: 14 }}>
-{chosenType === "truth"
-? "Ask your truth question."
-: "Send your dare."}
+{chosenType === "truth" ? "Ask your truth question." : "Send your dare."}
 </div>
 
 <textarea
@@ -736,12 +771,10 @@ chosenType === "truth"
 style={inputStyle}
 />
 
-<input
-type="file"
-accept="image/*,video/*"
-onChange={(e) => setMediaFile(e.target.files?.[0] ?? null)}
-style={fileInputStyle}
-/>
+<label style={pillBtn}>
+📎 Attach photo/video
+
+</label>
 
 {mediaFile ? (
 <div style={{ opacity: 0.75, fontSize: 13, marginTop: 8 }}>
@@ -786,12 +819,10 @@ placeholder="Type your answer..."
 style={inputStyle}
 />
 
-<input
-type="file"
-accept="image/*,video/*"
-onChange={(e) => setMediaFile(e.target.files?.[0] ?? null)}
-style={fileInputStyle}
-/>
+<label style={pillBtn}>
+📎 Attach photo/video
+
+</label>
 
 {mediaFile ? (
 <div style={{ opacity: 0.75, fontSize: 13, marginTop: 8 }}>
@@ -827,19 +858,46 @@ style={actionBtn}
 </div>
 
 {answerMove ? (
+<div style={{ marginTop: 16 }}>
+{nextSessionId ? (
 <div
 style={{
-display: "flex",
-gap: 10,
-flexWrap: "wrap",
-marginTop: 16,
+marginBottom: 14,
+padding: 14,
+borderRadius: 14,
+background: "rgba(124,58,237,0.18)",
+border: "1px solid rgba(168,85,247,0.45)",
+boxShadow: "0 0 18px rgba(168,85,247,0.25)",
 }}
 >
+<div style={{ fontWeight: 800, marginBottom: 6 }}>
+{displayName(otherProfile)} wants to play again 🔥
+</div>
+
+<div style={{ opacity: 0.85, fontSize: 14, marginBottom: 10 }}>
+A new round has already started.
+</div>
+
+<button
+onClick={() => router.push(`/truth-or-dare/${nextSessionId}`)}
+disabled={saving}
+type="button"
+style={actionBtn}
+>
+Jump into the new round →
+</button>
+</div>
+) : null}
+
+<div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
 <button
 onClick={playAgain}
 disabled={saving}
 type="button"
-style={pinkBtn}
+style={{
+...ghostBtn,
+boxShadow: "0 0 10px rgba(168,85,247,0.25)",
+}}
 >
 {saving ? "Starting..." : "Play Again 🔁"}
 </button>
@@ -852,6 +910,7 @@ style={dangerBtn}
 >
 Delete Game
 </button>
+</div>
 </div>
 ) : null}
 </div>
