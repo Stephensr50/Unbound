@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { createClient } from "@supabase/supabase-js";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import PublicProfileActions from "./PublicProfileActions";
 import ReactionBar from "@/app/components/ReactionBar";
 
@@ -109,6 +110,9 @@ return (
 
 export default function UserProfileClient({ profile }: { profile: ProfileRow }) {
 const supabase = useMemo(() => getSupabase(), []);
+const router = useRouter();
+
+
 
 const [myUserId, setMyUserId] = useState<string | null>(null);
 const [posts, setPosts] = useState<PostRow[]>([]);
@@ -256,6 +260,51 @@ setSignalBanner("Signal sent.");
 }
 
 setSignalLoading(false);
+}
+
+async function openMessageWithProfile() {
+const uid = myUserId ?? (await refreshAuth());
+
+if (!uid) {
+setBanner("You need to be signed in to message.");
+return;
+}
+
+const { data: sessionData } = await supabase.auth.getSession();
+const token = sessionData.session?.access_token;
+
+if (!token) {
+setBanner("You need to be signed in to message.");
+return;
+}
+
+const res = await fetch("/api/conversations/get-or-create", {
+method: "POST",
+headers: {
+"Content-Type": "application/json",
+Authorization: `Bearer ${token}`,
+},
+body: JSON.stringify({
+to: profile.id,
+}),
+});
+
+const json = await res.json();
+
+if (!res.ok) {
+setBanner(json?.error || "Could not open messages.");
+return;
+}
+
+const conversationId = json.conversationId ?? json.conversation_id ?? json.id;
+
+if (!conversationId) {
+console.log("get-or-create response:", json);
+setBanner("Could not open messages: missing conversation id.");
+return;
+}
+
+router.push(`/messages/${conversationId}`);
 }
 
 async function loadCounts(postIds: number[], uid: string | null) {
@@ -517,15 +566,70 @@ viewerId
 }
 
 useEffect(() => {
+let channel: ReturnType<typeof supabase.channel> | null = null;
+
 (async () => {
 const uid = await refreshAuth();
+
 await Promise.all([
 loadProfilePosts(profile.id, uid),
 loadRelationshipCounts(profile.id),
 loadMySignal(profile.id, uid),
 loadProfileKinks(profile.id),
 ]);
+
+if (!uid) return;
+
+channel = supabase
+.channel(`user-signals-profile-${profile.id}-${uid}`)
+.on(
+"postgres_changes",
+{
+event: "*",
+schema: "public",
+table: "user_signals",
+},
+async (payload) => {
+const row = payload.new as any;
+
+const affectsThisProfile =
+row?.sender_id === profile.id ||
+row?.receiver_id === profile.id ||
+row?.sender_id === uid ||
+row?.receiver_id === uid;
+
+if (!affectsThisProfile) return;
+
+await loadMySignal(profile.id, uid);
+
+const { data: reverse } = await supabase
+.from("user_signals")
+.select("id, signal_type")
+.eq("sender_id", profile.id)
+.eq("receiver_id", uid)
+.maybeSingle();
+
+const { data: mine } = await supabase
+.from("user_signals")
+.select("id, signal_type")
+.eq("sender_id", uid)
+.eq("receiver_id", profile.id)
+.maybeSingle();
+
+if (reverse && mine) {
+setSignalBanner("🔥 It's mutual!");
+}
+}
+)
+.subscribe();
 })();
+
+return () => {
+if (channel) {
+supabase.removeChannel(channel);
+}
+};
+
 // eslint-disable-next-line react-hooks/exhaustive-deps
 }, [profile.id]);
 
@@ -1081,8 +1185,25 @@ fontSize: 13,
 </div>
 ) : null}
 
+
 {signalBanner ? (
-<div style={{ marginBottom: 12, color: "hotpink" }}>
+<div
+onClick={openMessageWithProfile}
+title="Open messages"
+style={{
+marginBottom: 16,
+padding: "12px 18px",
+borderRadius: 14,
+background: "linear-gradient(90deg,#ec4899,#c026d3)",
+color: "white",
+fontWeight: 900,
+textAlign: "center",
+cursor: "pointer",
+boxShadow:
+"0 0 18px rgba(236,72,153,0.45), 0 0 40px rgba(192,38,211,0.35)",
+animation: "unboundPop 0.35s ease",
+}}
+>
 {signalBanner}
 </div>
 ) : null}
