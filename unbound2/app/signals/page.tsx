@@ -2,9 +2,11 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { createClient } from "@supabase/supabase-js";
 
 type SignalType = "interested" | "curious" | "would" | "crush";
+type TabType = "received" | "sent" | "mutual";
 
 type SignalRow = {
 id: number;
@@ -21,9 +23,10 @@ display_name: string | null;
 avatar_url: string | null;
 };
 
-type SignalWithProfile = SignalRow & {
-senderProfile: ProfileMini | null;
+type SignalItem = SignalRow & {
+profile: ProfileMini | null;
 isMutual: boolean;
+direction: "received" | "sent";
 };
 
 function getSupabase() {
@@ -52,11 +55,51 @@ return "😈 Crush";
 
 export default function SignalsPage() {
 const supabase = useMemo(() => getSupabase(), []);
+const router = useRouter();
 
 const [myUserId, setMyUserId] = useState<string | null>(null);
+const [activeTab, setActiveTab] = useState<TabType>("received");
 const [loading, setLoading] = useState(true);
 const [banner, setBanner] = useState<string | null>(null);
-const [signals, setSignals] = useState<SignalWithProfile[]>([]);
+const [received, setReceived] = useState<SignalItem[]>([]);
+const [sent, setSent] = useState<SignalItem[]>([]);
+
+async function openMessageWithProfile(otherUserId: string) {
+const { data: sessionData } = await supabase.auth.getSession();
+const token = sessionData.session?.access_token;
+
+if (!token) {
+setBanner("You need to be signed in to message.");
+return;
+}
+
+const res = await fetch("/api/conversations/get-or-create", {
+method: "POST",
+headers: {
+"Content-Type": "application/json",
+Authorization: `Bearer ${token}`,
+},
+body: JSON.stringify({
+to: otherUserId,
+}),
+});
+
+const json = await res.json();
+
+if (!res.ok) {
+setBanner(json?.error || "Could not open messages.");
+return;
+}
+
+const conversationId = json.conversationId ?? json.conversation_id ?? json.id;
+
+if (!conversationId) {
+setBanner("Could not open messages.");
+return;
+}
+
+router.push(`/messages/${conversationId}`);
+}
 
 useEffect(() => {
 (async () => {
@@ -66,101 +109,104 @@ setBanner(null);
 const { data: authData } = await supabase.auth.getSession();
 const uid = authData.session?.user?.id ?? null;
 setMyUserId(uid);
-if (uid) {
+
+if (!uid) {
+setBanner("You need to be signed in to view signals.");
+setReceived([]);
+setSent([]);
+setLoading(false);
+return;
+}
+
 await supabase
 .from("user_signals")
 .update({ read_at: new Date().toISOString() })
 .eq("receiver_id", uid)
 .is("read_at", null);
-}
 
-if (!uid) {
-setBanner("You need to be signed in to view signals.");
-setSignals([]);
-setLoading(false);
-return;
-}
-
-const { data: incomingRows, error: incomingError } = await supabase
+const [incomingRes, outgoingRes] = await Promise.all([
+supabase
 .from("user_signals")
 .select("id,sender_id,receiver_id,signal_type,created_at")
 .eq("receiver_id", uid)
-.order("created_at", { ascending: false });
+.order("created_at", { ascending: false }),
+supabase
+.from("user_signals")
+.select("id,sender_id,receiver_id,signal_type,created_at")
+.eq("sender_id", uid)
+.order("created_at", { ascending: false }),
+]);
 
-if (incomingError) {
-setBanner(incomingError.message);
-setSignals([]);
+if (incomingRes.error) {
+setBanner(incomingRes.error.message);
 setLoading(false);
 return;
 }
 
-const incoming = (incomingRows ?? []) as SignalRow[];
-
-if (!incoming.length) {
-setSignals([]);
+if (outgoingRes.error) {
+setBanner(outgoingRes.error.message);
 setLoading(false);
 return;
 }
 
-const senderIds = Array.from(new Set(incoming.map((r) => r.sender_id)));
+const incoming = (incomingRes.data ?? []) as SignalRow[];
+const outgoing = (outgoingRes.data ?? []) as SignalRow[];
 
+const profileIds = Array.from(
+new Set([
+...incoming.map((r) => r.sender_id),
+...outgoing.map((r) => r.receiver_id),
+])
+);
+
+let profilesById: Record<string, ProfileMini> = {};
+
+if (profileIds.length) {
 const { data: profileRows, error: profileError } = await supabase
 .from("profiles")
 .select("id,username,display_name,avatar_url")
-.in("id", senderIds);
+.in("id", profileIds);
 
 if (profileError) {
 setBanner(profileError.message);
-setSignals([]);
 setLoading(false);
 return;
 }
 
-const { data: myOutgoingRows, error: outgoingError } = await supabase
-.from("user_signals")
-.select("receiver_id")
-.eq("sender_id", uid)
-.in("receiver_id", senderIds);
-
-if (outgoingError) {
-setBanner(outgoingError.message);
-setSignals([]);
-setLoading(false);
-return;
-}
-
-const profilesById: Record<string, ProfileMini> = {};
 for (const p of (profileRows ?? []) as ProfileMini[]) {
 profilesById[p.id] = p;
 }
+}
 
-const outgoingSet = new Set(
-(myOutgoingRows ?? []).map((r: any) => String(r.receiver_id))
+const outgoingReceiverSet = new Set(outgoing.map((r) => r.receiver_id));
+const incomingSenderSet = new Set(incoming.map((r) => r.sender_id));
+
+setReceived(
+incoming.map((row) => ({
+...row,
+profile: profilesById[row.sender_id] ?? null,
+isMutual: outgoingReceiverSet.has(row.sender_id),
+direction: "received",
+}))
 );
 
-const merged: SignalWithProfile[] = incoming.map((row) => ({
+setSent(
+outgoing.map((row) => ({
 ...row,
-senderProfile: profilesById[row.sender_id] ?? null,
-isMutual: outgoingSet.has(row.sender_id),
-}));
+profile: profilesById[row.receiver_id] ?? null,
+isMutual: incomingSenderSet.has(row.receiver_id),
+direction: "sent",
+}))
+);
 
-setSignals(merged);
 setLoading(false);
 })();
 }, [supabase]);
 
-const sectionOrder: SignalType[] = ["crush", "would", "curious", "interested"];
+const mutual = received.filter((item) => item.isMutual);
 
-const grouped: Record<SignalType, SignalWithProfile[]> = {
-crush: [],
-would: [],
-curious: [],
-interested: [],
-};
-
-for (const signal of signals) {
-grouped[signal.signal_type].push(signal);
-}
+const visibleItems =
+activeTab === "received" ? received : activeTab === "sent" ? sent : mutual;
 
 const pageWrap: React.CSSProperties = {
 width: "min(920px, 94vw)",
@@ -184,7 +230,6 @@ padding: 12,
 borderRadius: 16,
 border: "1px solid rgba(180,120,255,0.14)",
 background: "rgba(0,0,0,0.28)",
-textDecoration: "none",
 color: "white",
 };
 
@@ -199,12 +244,31 @@ fontWeight: 800,
 boxShadow: "0 0 14px rgba(236,72,153,0.18)",
 };
 
+const tabBtn = (active: boolean): React.CSSProperties => ({
+padding: "9px 16px",
+borderRadius: 999,
+border: active
+? "1px solid rgba(236,72,153,0.95)"
+: "1px solid rgba(180,120,255,0.25)",
+background: active
+? "linear-gradient(180deg, rgba(240,32,139,0.95), rgba(192,38,211,0.85))"
+: "rgba(0,0,0,0.35)",
+color: "white",
+cursor: "pointer",
+fontWeight: 850,
+boxShadow: active
+? "0 0 18px rgba(236,72,153,0.45), 0 0 35px rgba(192,38,211,0.35)"
+: undefined,
+});
+
 return (
 <div style={pageWrap}>
 <div style={{ marginBottom: 18 }}>
-<div style={{ fontSize: 34, fontWeight: 900, marginBottom: 6 }}>Signals</div>
+<div style={{ fontSize: 34, fontWeight: 900, marginBottom: 6 }}>
+Signals
+</div>
 <div style={{ opacity: 0.78 }}>
-Quietly collected signals live here. Mutuals are where the magic happens.
+Track who signaled you, who you signaled, and who matched back.
 </div>
 </div>
 
@@ -224,48 +288,53 @@ fontSize: 13,
 </div>
 ) : null}
 
+<div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 16 }}>
+<button onClick={() => setActiveTab("received")} style={tabBtn(activeTab === "received")}>
+Received · {received.length}
+</button>
+<button onClick={() => setActiveTab("sent")} style={tabBtn(activeTab === "sent")}>
+Sent · {sent.length}
+</button>
+<button onClick={() => setActiveTab("mutual")} style={tabBtn(activeTab === "mutual")}>
+Mutual · {mutual.length}
+</button>
+</div>
+
 {loading ? (
 <div style={card}>Loading signals…</div>
-) : signals.length === 0 ? (
+) : visibleItems.length === 0 ? (
 <div style={card}>
 <div style={{ fontSize: 20, fontWeight: 850, marginBottom: 8 }}>
-No signals yet
+No signals here yet
 </div>
 <div style={{ opacity: 0.76 }}>
-When people send you Interested, Curious, Would, or Crush, they’ll show up
-here.
+Signals will show up here once people start tapping Interested,
+Curious, Would, or Crush.
 </div>
 </div>
 ) : (
-sectionOrder.map((type) => {
-const items = grouped[type];
-if (!items.length) return null;
-
-return (
-<div key={type} style={card}>
-<div
-style={{
-display: "flex",
-alignItems: "center",
-justifyContent: "space-between",
-gap: 12,
-marginBottom: 12,
-flexWrap: "wrap",
-}}
->
-<div style={{ fontSize: 22, fontWeight: 850 }}>
-{signalLabel(type)}
-</div>
-<div style={badge}>{items.length}</div>
-</div>
-
+<div style={card}>
 <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-{items.map((item) => {
-const p = item.senderProfile;
+{visibleItems.map((item) => {
+const p = item.profile;
+const otherUserId =
+item.direction === "received" ? item.sender_id : item.receiver_id;
 const name = p?.display_name || p?.username || "Unknown";
 
 return (
-<Link key={item.id} href={`/u/${item.sender_id}`} style={rowCard}>
+<div key={`${item.direction}-${item.id}`} style={rowCard}>
+<Link
+href={`/u/${otherUserId}`}
+style={{
+display: "flex",
+alignItems: "center",
+gap: 12,
+minWidth: 0,
+flex: 1,
+color: "white",
+textDecoration: "none",
+}}
+>
 {p?.avatar_url ? (
 // eslint-disable-next-line @next/next/no-img-element
 <img
@@ -307,21 +376,52 @@ flex: "0 0 auto",
 </div>
 ) : null}
 <div style={{ opacity: 0.8, fontSize: 13 }}>
-Sent {signalLabel(item.signal_type)} · {timeAgo(item.created_at)}
+{item.direction === "received" ? "Sent you" : "You sent"}{" "}
+{signalLabel(item.signal_type)} · {timeAgo(item.created_at)}
 </div>
 </div>
+</Link>
 
 <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
 {item.isMutual ? <div style={badge}>🔥 Mutual</div> : null}
-<div style={{ opacity: 0.62, fontSize: 13 }}>View →</div>
-</div>
+
+{item.isMutual ? (
+<button
+type="button"
+onClick={(e) => {
+e.preventDefault();
+e.stopPropagation();
+void openMessageWithProfile(otherUserId);
+}}
+style={{
+position: "relative",
+zIndex: 999,
+pointerEvents: "auto",
+padding: "8px 12px",
+borderRadius: 999,
+border: "1px solid rgba(180,120,255,0.35)",
+background: "rgba(168,85,247,0.18)",
+color: "white",
+cursor: "pointer",
+fontWeight: 800,
+}}
+>
+Message
+</button>
+) : (
+<Link
+href={`/u/${otherUserId}`}
+style={{ opacity: 0.62, fontSize: 13, color: "white" }}
+>
+View →
 </Link>
+)}
+</div>
+</div>
 );
 })}
 </div>
 </div>
-);
-})
 )}
 </div>
 );
