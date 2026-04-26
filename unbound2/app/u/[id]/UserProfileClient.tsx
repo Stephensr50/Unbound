@@ -58,6 +58,15 @@ caption: string | null;
 createdAt: string;
 };
 
+type UserKinkRow = {
+id: string;
+user_id: string;
+kink: string;
+interest: "into" | "curious" | "limit";
+role: "giving" | "receiving" | "both" | "watching";
+created_at: string;
+};
+
 function getSupabase() {
 const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
@@ -147,12 +156,30 @@ index: number;
 const [signalLoading, setSignalLoading] = useState(false);
 const [mySignalToProfile, setMySignalToProfile] = useState<SignalType | null>(null);
 const [signalBanner, setSignalBanner] = useState<string | null>(null);
+const [profileKinks, setProfileKinks] = useState<UserKinkRow[]>([]);
 
+const [kinksModalOpen, setKinksModalOpen] = useState(false);
 async function refreshAuth() {
 const { data } = await supabase.auth.getSession();
 const uid = data.session?.user?.id ?? null;
 setMyUserId(uid);
 return uid;
+}
+
+async function loadProfileKinks(targetUserId: string) {
+const { data, error } = await supabase
+.from("user_kinks")
+.select("id,user_id,kink,interest,role,created_at")
+.eq("user_id", targetUserId)
+.order("created_at", { ascending: false });
+
+if (error) {
+console.error("loadProfileKinks error:", error.message);
+setProfileKinks([]);
+return;
+}
+
+setProfileKinks((data ?? []) as UserKinkRow[]);
 }
 
 async function loadMySignal(targetUserId: string, viewerId: string | null) {
@@ -496,6 +523,7 @@ await Promise.all([
 loadProfilePosts(profile.id, uid),
 loadRelationshipCounts(profile.id),
 loadMySignal(profile.id, uid),
+loadProfileKinks(profile.id),
 ]);
 })();
 // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1285,12 +1313,44 @@ mySignalToProfile === "crush"
 </div>
 </div>
 
+{profileKinks.length > 0 ? (
+<div
+style={{
+marginTop: 16,
+padding: 14,
+borderRadius: 14,
+border: "1px solid rgba(236,72,153,0.35)",
+background: "rgba(0,0,0,0.35)",
+boxShadow: "0 0 14px rgba(236,72,153,0.12)",
+display: "flex",
+justifyContent: "space-between",
+alignItems: "center",
+}}
+>
+<div>
+<div style={{ fontWeight: 900, fontSize: 18 }}>
+Kinks & Interests
+</div>
+<div style={{ opacity: 0.7, fontSize: 13 }}>
+{profileKinks.length} saved
+</div>
+</div>
+
+<button
+onClick={() => setKinksModalOpen(true)}
+style={pillBtn}
+>
+View
+</button>
+</div>
+) : null}
 <div
 style={{
 display: "flex",
 gap: 10,
 flexWrap: "wrap",
-marginBottom: 16,
+marginTop: 12,
+marginBottom: 18,
 }}
 >
 <button onClick={() => setActiveTab("posts")} style={tabBtn(activeTab === "posts")}>
@@ -1478,6 +1538,99 @@ renderMediaGrid(photoPosts, "photos")
 ) : (
 renderMediaGrid(videoPosts, "videos")
 )}
+
+
+{kinksModalOpen ? (
+<div
+onClick={() => setKinksModalOpen(false)}
+style={{
+position: "fixed",
+inset: 0,
+background: "rgba(0,0,0,0.74)",
+backdropFilter: "blur(14px)",
+WebkitBackdropFilter: "blur(14px)",
+display: "flex",
+alignItems: "center",
+justifyContent: "center",
+zIndex: 9999,
+padding: 16,
+}}
+>
+<div
+onClick={(e) => e.stopPropagation()}
+style={{
+width: "min(620px, 96vw)",
+maxHeight: "82vh",
+overflowY: "auto",
+borderRadius: 22,
+padding: 18,
+background:
+"linear-gradient(180deg, rgba(20,0,28,0.96), rgba(0,0,0,0.94))",
+border: "1px solid rgba(236,72,153,0.55)",
+boxShadow:
+"0 0 25px rgba(236,72,153,0.26), 0 0 55px rgba(168,85,247,0.18)",
+color: "white",
+}}
+>
+<div style={{ display: "flex", justifyContent: "space-between", gap: 10 }}>
+<div>
+<div style={{ fontSize: 24, fontWeight: 900 }}>
+Kinks & Interests
+</div>
+<div style={{ opacity: 0.72, fontSize: 13, marginTop: 4 }}>
+Private view — profile content is blurred behind this.
+</div>
+</div>
+
+<button
+type="button"
+onClick={() => setKinksModalOpen(false)}
+style={pillBtn}
+>
+Close
+</button>
+</div>
+
+<div style={{ marginTop: 18 }}>
+{(["into", "curious", "limit"] as const).map((section) => {
+const rows = profileKinks.filter((k) => k.interest === section);
+if (rows.length === 0) return null;
+
+return (
+<div key={section} style={{ marginBottom: 18 }}>
+<div style={{ fontWeight: 900, marginBottom: 8 }}>
+{section === "into"
+? "Into"
+: section === "curious"
+? "Curious About"
+: "Limits"}
+</div>
+
+<div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+{rows.map((k) => (
+<div
+key={k.id}
+style={{
+padding: "8px 10px",
+borderRadius: 999,
+border: "1px solid rgba(168,85,247,0.35)",
+background: "rgba(168,85,247,0.12)",
+boxShadow: "0 0 10px rgba(168,85,247,0.16)",
+fontSize: 13,
+fontWeight: 750,
+}}
+>
+{k.kink} <span style={{ opacity: 0.62 }}>({k.role})</span>
+</div>
+))}
+</div>
+</div>
+);
+})}
+</div>
+</div>
+</div>
+) : null}
 
 {relationshipModalOpen ? (
 <div

@@ -17,7 +17,16 @@ state: string | null;
 country: string | null;
 };
 
-type ModalType = "followers" | "following";
+type ModalType = "followers" | "following" | "friends";
+
+type UserKinkRow = {
+id: string;
+user_id: string;
+kink: string;
+interest: "into" | "curious" | "limit";
+role: "giving" | "receiving" | "both" | "watching";
+created_at: string;
+};
 
 export default function ProfilePage() {
 const router = useRouter();
@@ -40,7 +49,71 @@ const [modalType, setModalType] = useState<ModalType>("followers");
 const [modalLoading, setModalLoading] = useState(false);
 const [modalUsers, setModalUsers] = useState<ProfileRow[]>([]);
 
+const [kinksOpen, setKinksOpen] = useState(false);
+const [kinks, setKinks] = useState<UserKinkRow[]>([]);
+const [newKink, setNewKink] = useState("");
+const [newInterest, setNewInterest] =
+useState<"into" | "curious" | "limit">("into");
+const [newRole, setNewRole] =
+useState<"giving" | "receiving" | "both" | "watching">("both");
+const [savingKink, setSavingKink] = useState(false);
+
 const [status, setStatus] = useState<string>("");
+
+async function loadKinks(userId: string) {
+const { data, error } = await supabase
+.from("user_kinks")
+.select("id,user_id,kink,interest,role,created_at")
+.eq("user_id", userId)
+.order("created_at", { ascending: false });
+
+if (error) {
+console.error("loadKinks error:", error.message);
+return;
+}
+
+setKinks((data ?? []) as UserKinkRow[]);
+}
+
+async function addKink() {
+if (!myUserId) return;
+
+const clean = newKink.trim();
+if (!clean) return;
+
+setSavingKink(true);
+setStatus("");
+
+const { error } = await supabase.from("user_kinks").insert({
+user_id: myUserId,
+kink: clean,
+interest: newInterest,
+role: newRole,
+});
+
+setSavingKink(false);
+
+if (error) {
+setStatus(error.message);
+return;
+}
+
+setNewKink("");
+await loadKinks(myUserId);
+}
+
+async function deleteKink(id: string) {
+if (!myUserId) return;
+
+const { error } = await supabase.from("user_kinks").delete().eq("id", id);
+
+if (error) {
+setStatus(error.message);
+return;
+}
+
+await loadKinks(myUserId);
+}
 
 // 1) Session -> myUserId
 useEffect(() => {
@@ -49,6 +122,10 @@ try {
 const { data } = await supabase.auth.getSession();
 const uid = data.session?.user?.id ?? null;
 setMyUserId(uid);
+
+if (uid) {
+await loadKinks(uid);
+}
 
 if (!uid) {
 setMyProfile(null);
@@ -63,6 +140,7 @@ setMyProfile(null);
 setStatus("Not signed in.");
 }
 })();
+// eslint-disable-next-line react-hooks/exhaustive-deps
 }, [supabase]);
 
 // 2) Load profile + counts
@@ -70,7 +148,6 @@ useEffect(() => {
 if (!myUserId) return;
 
 (async () => {
-// profile
 const { data: p, error: pErr } = await supabase
 .from("profiles")
 .select("id, username, display_name, bio, avatar_url, city, state, country")
@@ -80,7 +157,6 @@ const { data: p, error: pErr } = await supabase
 if (pErr) console.error(pErr);
 setMyProfile((p as ProfileRow) ?? null);
 
-// followers
 const { count: followers, error: fErr } = await supabase
 .from("follows")
 .select("*", { count: "exact", head: true })
@@ -89,7 +165,6 @@ const { count: followers, error: fErr } = await supabase
 if (fErr) console.error(fErr);
 setFollowersCount(followers ?? 0);
 
-// friends
 const { count: friends, error: frErr } = await supabase
 .from("friends")
 .select("*", { count: "exact", head: true })
@@ -98,7 +173,6 @@ const { count: friends, error: frErr } = await supabase
 if (frErr) console.error(frErr);
 setFriendsCount(friends ?? 0);
 
-// following
 const { count: following, error: foErr } = await supabase
 .from("follows")
 .select("*", { count: "exact", head: true })
@@ -114,7 +188,7 @@ setModalType(type);
 setModalOpen(true);
 }
 
-// 3) Load users for Followers/Following modal
+// 3) Load users for Followers/Following/Friends modal
 useEffect(() => {
 if (!modalOpen) return;
 if (!myUserId) return;
@@ -124,6 +198,40 @@ setModalLoading(true);
 setModalUsers([]);
 
 try {
+if (modalType === "friends") {
+const { data: rows, error: rowsErr } = await supabase
+.from("friends")
+.select("friend_id")
+.eq("user_id", myUserId);
+
+if (rowsErr) {
+console.error(rowsErr);
+setModalUsers([]);
+return;
+}
+
+const ids = (rows ?? []).map((r: any) => r.friend_id).filter(Boolean);
+
+if (ids.length === 0) {
+setModalUsers([]);
+return;
+}
+
+const { data: profiles, error: profErr } = await supabase
+.from("profiles")
+.select("id, username, display_name, bio, avatar_url, city, state, country")
+.in("id", ids);
+
+if (profErr) {
+console.error(profErr);
+setModalUsers([]);
+return;
+}
+
+setModalUsers((profiles ?? []) as ProfileRow[]);
+return;
+}
+
 const isFollowers = modalType === "followers";
 
 const { data: rows, error: rowsErr } = await supabase
@@ -460,13 +568,7 @@ Sign Out
 ) : null}
 
 <div style={S.statsWrap}>
-<div
-style={S.stat}
-onClick={() => {
-setModalType("friends" as any);
-setModalOpen(true);
-}}
->
+<div style={S.stat} onClick={() => openModal("friends")}>
 <div style={S.statNum}>{friendsCount}</div>
 <div style={S.statLabel}>Friends</div>
 </div>
@@ -482,6 +584,40 @@ onClick={() => openModal("followers")}
 <div style={S.stat} onClick={() => openModal("following")}>
 <div style={S.statNum}>{followingCount}</div>
 <div style={S.statLabel}>Following</div>
+</div>
+</div>
+
+<div
+style={{
+marginTop: 16,
+padding: 14,
+borderRadius: 14,
+border: "1px solid rgba(236,72,153,0.35)",
+background: "rgba(0,0,0,0.35)",
+boxShadow: "0 0 14px rgba(236,72,153,0.12)",
+}}
+>
+<div
+style={{
+display: "flex",
+justifyContent: "space-between",
+alignItems: "center",
+gap: 10,
+}}
+>
+<div style={{ fontWeight: 900, fontSize: 18 }}>Kinks & Interests</div>
+
+<button
+type="button"
+style={{ ...S.btn, flex: "0 0 auto", padding: "0 14px" }}
+onClick={() => setKinksOpen(true)}
+>
+Edit
+</button>
+</div>
+
+<div style={{ marginTop: 10, color: "rgba(255,255,255,0.68)" }}>
+{kinks.length === 0 ? "No kinks added yet." : `${kinks.length} saved`}
 </div>
 </div>
 </div>
@@ -582,6 +718,219 @@ fontSize: 12,
 </div>
 </div>
 )}
+
+{kinksOpen ? (
+<div
+style={{
+position: "fixed",
+inset: 0,
+zIndex: 9999,
+background: "rgba(0,0,0,0.74)",
+backdropFilter: "blur(14px)",
+WebkitBackdropFilter: "blur(14px)",
+display: "flex",
+alignItems: "center",
+justifyContent: "center",
+padding: 16,
+}}
+onClick={() => setKinksOpen(false)}
+>
+<div
+onClick={(e) => e.stopPropagation()}
+style={{
+width: "min(620px, 96vw)",
+maxHeight: "82vh",
+overflowY: "auto",
+borderRadius: 22,
+padding: 18,
+background:
+"linear-gradient(180deg, rgba(20,0,28,0.96), rgba(0,0,0,0.94))",
+border: "1px solid rgba(236,72,153,0.55)",
+boxShadow:
+"0 0 25px rgba(236,72,153,0.26), 0 0 55px rgba(168,85,247,0.18)",
+color: "white",
+}}
+>
+<div
+style={{
+display: "flex",
+justifyContent: "space-between",
+alignItems: "center",
+gap: 10,
+marginBottom: 14,
+}}
+>
+<div>
+<div style={{ fontSize: 24, fontWeight: 900 }}>
+Kinks & Interests
+</div>
+<div style={{ opacity: 0.72, fontSize: 13, marginTop: 4 }}>
+This opens in a privacy blur so your face and list are not visible together.
+</div>
+</div>
+
+<button type="button" style={S.closeBtn} onClick={() => setKinksOpen(false)}>
+Close
+</button>
+</div>
+
+<div
+style={{
+display: "grid",
+gridTemplateColumns: "1fr",
+gap: 10,
+padding: 12,
+borderRadius: 16,
+border: "1px solid rgba(255,255,255,0.10)",
+background: "rgba(255,255,255,0.05)",
+marginBottom: 14,
+}}
+>
+<input
+value={newKink}
+onChange={(e) => setNewKink(e.target.value)}
+placeholder="Type a kink or interest..."
+style={{
+height: 42,
+borderRadius: 12,
+border: "1px solid rgba(255,255,255,0.14)",
+background: "rgba(0,0,0,0.45)",
+color: "white",
+padding: "0 12px",
+outline: "none",
+}}
+/>
+
+<div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+<select
+value={newInterest}
+onChange={(e) =>
+setNewInterest(e.target.value as "into" | "curious" | "limit")
+}
+style={{
+flex: "1 1 160px",
+height: 42,
+borderRadius: 12,
+border: "1px solid rgba(255,255,255,0.14)",
+background: "rgba(0,0,0,0.45)",
+color: "white",
+padding: "0 12px",
+}}
+>
+<option value="into">Into</option>
+<option value="curious">Curious about</option>
+<option value="limit">Limit</option>
+</select>
+
+<select
+value={newRole}
+onChange={(e) =>
+setNewRole(
+e.target.value as "giving" | "receiving" | "both" | "watching"
+)
+}
+style={{
+flex: "1 1 160px",
+height: 42,
+borderRadius: 12,
+border: "1px solid rgba(255,255,255,0.14)",
+background: "rgba(0,0,0,0.45)",
+color: "white",
+padding: "0 12px",
+}}
+>
+<option value="both">Both</option>
+<option value="giving">Giving</option>
+<option value="receiving">Receiving</option>
+<option value="watching">Watching</option>
+</select>
+</div>
+
+<button
+type="button"
+style={{
+...S.btn,
+flex: "none",
+border: "1px solid rgba(236,72,153,0.45)",
+boxShadow: "0 0 12px rgba(236,72,153,0.25)",
+}}
+disabled={savingKink || !newKink.trim()}
+onClick={addKink}
+>
+{savingKink ? "Saving..." : "Add"}
+</button>
+</div>
+
+{(["into", "curious", "limit"] as const).map((section) => {
+const rows = kinks.filter((k) => k.interest === section);
+if (rows.length === 0) return null;
+
+return (
+<div key={section} style={{ marginBottom: 16 }}>
+<div
+style={{
+fontWeight: 900,
+marginBottom: 8,
+color:
+section === "limit"
+? "rgba(255,150,150,0.95)"
+: "rgba(255,235,250,0.95)",
+}}
+>
+{section === "into"
+? "Into"
+: section === "curious"
+? "Curious About"
+: "Limits"}
+</div>
+
+<div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+{rows.map((k) => (
+<div
+key={k.id}
+style={{
+display: "inline-flex",
+alignItems: "center",
+gap: 8,
+padding: "8px 10px",
+borderRadius: 999,
+border: "1px solid rgba(168,85,247,0.35)",
+background: "rgba(168,85,247,0.12)",
+boxShadow: "0 0 10px rgba(168,85,247,0.16)",
+fontSize: 13,
+fontWeight: 750,
+}}
+>
+<span>{k.kink}</span>
+<span style={{ opacity: 0.62 }}>({k.role})</span>
+<button
+type="button"
+onClick={() => deleteKink(k.id)}
+style={{
+border: "none",
+background: "transparent",
+color: "rgba(255,255,255,0.65)",
+cursor: "pointer",
+fontWeight: 900,
+}}
+>
+×
+</button>
+</div>
+))}
+</div>
+</div>
+);
+})}
+
+{kinks.length === 0 ? (
+<div style={{ opacity: 0.68, textAlign: "center", padding: 18 }}>
+No kinks added yet.
+</div>
+) : null}
+</div>
+</div>
+) : null}
 </div>
 );
 }
