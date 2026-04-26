@@ -367,6 +367,7 @@ throw new Error("Could not get public URL for uploaded file.");
 const { error: insErr } = await supabase.from("stories").insert({
 user_id: user.id,
 media_url: mediaUrl,
+media_path: path, // 👈 ADD THIS LINE
 caption: caption.trim() || null,
 });
 
