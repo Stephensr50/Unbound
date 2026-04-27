@@ -15,6 +15,7 @@ id: string;
 username: string | null;
 display_name: string | null;
 avatar_url: string | null;
+gender?: string | null;
 };
 
 const QUESTIONS = [
@@ -38,7 +39,9 @@ const [current, setCurrent] = useState<Profile | null>(null);
 const [question, setQuestion] = useState("");
 const [loading, setLoading] = useState(false);
 const [matchProfile, setMatchProfile] = useState<Profile | null>(null);
-
+const [genderFilter, setGenderFilter] = useState<
+"Female" | "Male" | "Other" | "all">
+("all");
 function getRandomQuestion() {
 return QUESTIONS[Math.floor(Math.random() * QUESTIONS.length)];
 }
@@ -57,15 +60,55 @@ setQuestion(getRandomQuestion());
 async function loadProfiles() {
 setLoading(true);
 
-const { data, error } = await supabase
-.from("profiles")
-.select("id, username, display_name, avatar_url")
-.not("id", "is", null)
-.limit(50);
+try {
+const { data: authData } = await supabase.auth.getUser();
+const me = authData.user?.id;
 
-if (!error && data) {
-setProfiles(data);
-pickNext(data);
+if (!me) {
+alert("You need to be logged in to play.");
+setLoading(false);
+return;
+}
+
+const { data: meProfile, error: meProfileError } = await supabase
+.from("profiles")
+.select("interested_in")
+.eq("id", me)
+.maybeSingle();
+
+
+
+let query = supabase
+.from("profiles")
+.select("id, username, display_name, avatar_url, gender")
+.neq("id", me)
+.limit(50);
+if (genderFilter !== "all") {
+query = query.eq("gender", genderFilter);
+}
+
+
+
+const { data, error } = await query;
+
+if (error) {
+console.error("LOAD PROFILES ERROR:", error.message);
+alert(error.message);
+setProfiles([]);
+setCurrent(null);
+setLoading(false);
+return;
+}
+
+const rows = (data ?? []) as Profile[];
+
+setProfiles(rows);
+pickNext(rows);
+} catch (err) {
+console.error("LOAD PROFILES CRASH:", err);
+alert("Could not load game profiles. Check console.");
+setProfiles([]);
+setCurrent(null);
 }
 
 setLoading(false);
@@ -192,6 +235,28 @@ opacity: 0.82,
 Pick a game and play.
 </div>
 
+<div style={{ marginTop: 12 }}>
+<select
+value={genderFilter}
+onChange={(e) => setGenderFilter(e.target.value as any)}
+style={{
+padding: "10px 12px",
+borderRadius: 10,
+background: "rgba(255,255,255,0.08)",
+color: "#fff",
+border: "1px solid rgba(255,255,255,0.15)",
+fontWeight: 700,
+}}
+>
+<option value="all" style={{ color: "#000", background: "#fff" }}>Everyone</option>
+<option value="Female" style={{ color: "#000", background: "#fff" }}>Women</option>
+<option value="Male" style={{ color: "#000", background: "#fff" }}>Men</option>
+<option value="Other" style={{ color: "#000", background: "#fff" }}>Other</option>
+</select>
+
+
+</div>
+
 <div
 style={{
 display: "grid",
@@ -200,7 +265,18 @@ gap: 16,
 marginTop: 20,
 }}
 >
-<button onClick={() => setMode("wouldyou")} style={cardStyle} type="button">
+
+
+
+<button
+onClick={() => {
+setProfiles([]);
+setCurrent(null);
+setMode("wouldyou");
+}}
+style={cardStyle}
+type="button"
+>
 <div style={{ fontSize: 22, fontWeight: 900, marginBottom: 8 }}>
 Would You 😈
 </div>
@@ -224,7 +300,40 @@ Browse the player grid and send a truth, dare, or let them choose.
 );
 }
 
-if (loading || !current) {
+if (loading) {
+return (
+<main
+style={{
+minHeight: "100vh",
+padding: 20,
+color: "#ffffff",
+background:
+"radial-gradient(circle at top, rgba(168,85,247,0.14), transparent 28%), rgba(6,6,8,1)",
+}}
+>
+<button
+onClick={() => setMode("menu")}
+type="button"
+style={{
+marginBottom: 16,
+padding: "10px 14px",
+borderRadius: 12,
+border: "1px solid rgba(255,255,255,0.10)",
+background: "rgba(255,255,255,0.06)",
+color: "#fff",
+cursor: "pointer",
+fontWeight: 700,
+}}
+>
+← Back to Kinky Games
+</button>
+
+Loading game…
+</main>
+);
+}
+
+if (!current) {
 return (
 <main
 style={{
@@ -252,7 +361,7 @@ fontWeight: 700,
 ← Back to Kinky Games
 </button>
 
-Loading game…
+No profiles matched your preferences yet.
 </main>
 );
 }
