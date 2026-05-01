@@ -721,7 +721,7 @@ marginTop: 12,
 border: "1px solid rgba(180,120,255,0.16)",
 display: "block",
 maxHeight: 560,
-objectFit: "cover",
+objectFit: "contain",
 };
 
 const pillBtn: React.CSSProperties = {
@@ -869,7 +869,7 @@ alt=""
 style={{
 width: "100%",
 height: "100%",
-objectFit: "cover",
+objectFit: "contain",
 display: "block",
 }}
 />
@@ -982,7 +982,7 @@ style={{
 width: 104,
 height: 104,
 borderRadius: 18,
-objectFit: "cover",
+objectFit: "contain",
 border: "1px solid rgba(255,255,255,0.16)",
 flex: "0 0 auto",
 }}

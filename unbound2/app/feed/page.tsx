@@ -976,7 +976,7 @@ width: "100%",
 borderRadius: 14,
 border: "1px solid rgba(180,120,255,0.14)",
 marginBottom: 10,
-objectFit: "cover",
+objectFit: "contain",
 maxHeight: 520,
 cursor: "pointer",
 }}

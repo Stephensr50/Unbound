@@ -331,6 +331,15 @@ aria-label="Next story"
 </div>
 
 <div style={mediaWrap}>
+
+{current?.media_url && !isVideo ? (
+<img
+src={current.media_url}
+alt=""
+style={mediaBlurBg}
+/>
+) : null}
+
 {current?.media_url ? (
 isVideo ? (
 <video
@@ -522,17 +531,40 @@ fontWeight: 800,
 const mediaWrap: React.CSSProperties = {
 position: "absolute",
 inset: 0,
-display: "grid",
-placeItems: "center",
 paddingTop: 70,
 paddingBottom: 44,
+display: "flex",
+alignItems: "center",
+justifyContent: "center",
+boxSizing: "border-box",
+overflow: "hidden",
 };
 
+
+
 const media: React.CSSProperties = {
+position: "relative",
+zIndex: 1,
+maxWidth: "100%",
+maxHeight: "100%",
+width: "auto",
+height: "auto",
+objectFit: "contain",
+backgroundColor: "#000",
+};
+
+const mediaBlurBg: React.CSSProperties = {
+position: "absolute",
+inset: 0,
 width: "100%",
 height: "100%",
 objectFit: "cover",
+filter: "blur(40px) brightness(0.6)",
+transform: "scale(1.2)",
+zIndex: 0,
 };
+
+
 
 const caption: React.CSSProperties = {
 position: "absolute",
