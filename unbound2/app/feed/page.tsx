@@ -974,10 +974,11 @@ alt=""
 style={{
 width: "100%",
 borderRadius: 14,
+height: "auto",
 border: "1px solid rgba(180,120,255,0.14)",
 marginBottom: 10,
 objectFit: "contain",
-maxHeight: 520,
+maxHeight: "none",
 cursor: "pointer",
 }}
 onClick={() => setViewer({ url: p.media_url!, type: "image" })}

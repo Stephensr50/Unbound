@@ -548,7 +548,7 @@ width: "100%",
 borderRadius: 14,
 border: "1px solid rgba(180,120,255,0.14)",
 marginBottom: 10,
-objectFit: "cover",
+objectFit: "contain",
 maxHeight: 520,
 }}
 />
@@ -754,9 +754,9 @@ padding: 10,
 // eslint-disable-next-line @next/next/no-img-element
 
 <img
-src={author.avatar_url}
+src={cAuthor.avatar_url}
 alt=""
-onClick={() => author?.id && router.push(`/u/${author.id}`)}
+onClick={() => cAuthor?.id && router.push(`/u/${cAuthor.id}`)}
 style={{
 width: 38,
 height: 38,
