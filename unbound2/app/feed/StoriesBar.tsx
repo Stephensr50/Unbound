@@ -12,6 +12,7 @@ user_id: string;
 media_url: string;
 caption: string | null;
 created_at?: string;
+isDiscovery?: boolean;
 };
 
 type ProfileRow = {
@@ -222,13 +223,20 @@ merged.push(mainRows[i]);
 const shouldInject = i === 2 || (i + 1) % 6 === 0;
 
 if (shouldInject && discoveryIndex < shuffledDiscovery.length) {
-merged.push(shuffledDiscovery[discoveryIndex]);
-discoveryIndex += 1;
+merged.push({
+...shuffledDiscovery[discoveryIndex],
+isDiscovery: true,
+});
 }
 }
 
 if (!mainRows.length && shuffledDiscovery.length) {
-merged.push(...shuffledDiscovery.slice(0, 5));
+merged.push(
+...shuffledDiscovery.slice(0, 5).map((story) => ({
+...story,
+isDiscovery: true,
+}))
+);
 }
 
 setStories(merged);
@@ -428,18 +436,14 @@ className={styles.storyBubble}
 title={storyLabel}
 aria-label={`Open ${storyLabel}'s story`}
 onClick={() => openStoryViewer(s)}
-style={
-isSeen
-? {
-opacity: 0.58,
-filter: "grayscale(0.2)",
-boxShadow:
-"0 0 0 1px rgba(255,255,255,0.10), 0 0 10px rgba(180,120,255,0.10)",
-}
-: {
-opacity: 1,
-}
-}
+style={{
+opacity: isSeen ? 0.58 : 1,
+filter: isSeen ? "grayscale(0.2)" : undefined,
+
+boxShadow: s.isDiscovery
+? "0 0 0 2px rgba(255,215,0,1), 0 0 18px rgba(255,215,0,0.9), 0 0 30px rgba(255,215,0,0.6)"
+: "0 0 0 1px rgba(255,255,255,0.10), 0 0 12px rgba(168,85,247,0.8), 0 0 22px rgba(168,85,247,0.5)",
+}}
 >
 <img
 className={styles.storyAvatar}
