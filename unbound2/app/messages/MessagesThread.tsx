@@ -42,7 +42,11 @@ const params = useParams();
 
 const threadId =
 props.threadId ??
-(typeof (params as any)?.threadId === "string"
+(typeof (params as any)?.id === "string"
+? (params as any).id
+: Array.isArray((params as any)?.id)
+? (params as any).id[0]
+: typeof (params as any)?.threadId === "string"
 ? (params as any).threadId
 : Array.isArray((params as any)?.threadId)
 ? (params as any).threadId[0]
@@ -136,6 +140,58 @@ async function send() {
 const body = text.trim();
 if (!body) return;
 
+if (supabase) {
+try {
+const { data: otherMessages, error: membersError } = await supabase
+.from("messages")
+.select("sender_id")
+.eq("thread_id", threadId)
+.neq("sender_id", me);
+
+if (membersError) throw membersError;
+
+const otherUserIds = Array.from(
+new Set(
+(otherMessages ?? [])
+.map((m: any) => m.sender_id)
+.filter(Boolean)
+)
+);
+
+console.log("BLOCK DEBUG", {
+threadId,
+me,
+otherMessages,
+otherUserIds,
+});
+
+if (otherUserIds.length > 0) {
+const blockFilters = otherUserIds
+.flatMap((otherId: string) => [
+`and(blocker_id.eq.${me},blocked_id.eq.${otherId})`,
+`and(blocker_id.eq.${otherId},blocked_id.eq.${me})`,
+])
+.join(",");
+
+const { data: blockedRows, error: blockedError } = await supabase
+.from("blocked_users")
+.select("id")
+.or(blockFilters)
+.limit(1);
+
+if (blockedError) throw blockedError;
+console.log("BLOCK ROWS", blockedRows);
+if ((blockedRows ?? []).length > 0) {
+alert("Messaging unavailable.");
+return;
+}
+}
+} catch {
+alert("Could not verify block status.");
+return;
+}
+}
+
 const newRow: MessageRow = {
 id: safeId(),
 thread_id: threadId,
@@ -146,14 +202,12 @@ created_at: new Date().toISOString(),
 
 setText("");
 
-// optimistic UI
 setMessages((prev) => {
 const next = [...prev, newRow];
 saveToLocalStorage(next);
 return next;
 });
 
-// Try Supabase insert, but never break UI if it fails
 if (supabase) {
 try {
 await supabase.from("messages").insert({
@@ -163,7 +217,7 @@ sender_id: newRow.sender_id,
 body: newRow.body,
 });
 } catch {
-// ignore (localStorage already has it)
+// ignore
 }
 }
 }

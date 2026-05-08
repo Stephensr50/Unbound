@@ -25,7 +25,15 @@ throw lastErr ?? new Error("Operation failed");
 }
 
 type FriendState = "none" | "pending_out" | "pending_in" | "friends";
-type HoverKey = "message" | "follow" | "friend" | "coffee" | null;
+type HoverKey = "message" | "follow" | "friend" | "coffee" | "safety" | null;
+type ReportReason =
+| "Harassment"
+| "Spam"
+| "Fake account"
+| "Underage user"
+| "Threatening behavior"
+| "Non-consensual content"
+| "Other";
 
 export default function PublicProfileActions({
 targetProfileId,
@@ -51,6 +59,14 @@ const [tipMessage, setTipMessage] = useState("");
 const [tipBusy, setTipBusy] = useState(false);
 
 const [hover, setHover] = useState<HoverKey>(null);
+const [safetyOpen, setSafetyOpen] = useState(false);
+const [blockBusy, setBlockBusy] = useState(false);
+const [isBlocked, setIsBlocked] = useState(false);
+
+const [showReportModal, setShowReportModal] = useState(false);
+const [reportReason, setReportReason] = useState<ReportReason>("Harassment");
+const [reportDetails, setReportDetails] = useState("");
+const [reportBusy, setReportBusy] = useState(false);
 
 async function refreshAuth() {
 const { data } = await supabase.auth.getSession();
@@ -189,9 +205,124 @@ setFollowing(isFollowing);
 // ignore
 }
 
+
+try {
+const { data, error } = await supabase
+.from("blocked_users")
+.select("id")
+.eq("blocker_id", uid)
+.eq("blocked_id", targetProfileId)
+.maybeSingle();
+
+if (error) throw error;
+setIsBlocked(!!data);
+} catch {
+setIsBlocked(false);
+}
 await refreshFriendState(uid);
 })();
 }, [supabase, targetProfileId]);
+
+async function toggleBlock() {
+const uid = myUid ?? (await refreshAuth());
+
+if (!uid) {
+setBanner("Please sign in to block users.");
+return;
+}
+
+if (uid === targetProfileId) {
+setBanner("You can’t block yourself 😄");
+return;
+}
+
+if (blockBusy) return;
+
+const action = isBlocked ? "unblock" : "block";
+const confirmed = window.confirm(
+isBlocked
+? "Unblock this user?"
+: "Block this user? They won’t be able to interact with you."
+);
+
+if (!confirmed) return;
+
+setBlockBusy(true);
+setBanner(null);
+
+try {
+if (action === "block") {
+const { error } = await supabase.from("blocked_users").insert({
+blocker_id: uid,
+blocked_id: targetProfileId,
+});
+
+if (error) throw error;
+
+setIsBlocked(true);
+setSafetyOpen(false);
+setBanner("User blocked.");
+} else {
+const { error } = await supabase
+.from("blocked_users")
+.delete()
+.eq("blocker_id", uid)
+.eq("blocked_id", targetProfileId);
+
+if (error) throw error;
+
+setIsBlocked(false);
+setSafetyOpen(false);
+setBanner("User unblocked.");
+}
+} catch (e: any) {
+setBanner(String(e?.message || e || "Could not update block."));
+} finally {
+setBlockBusy(false);
+}
+}
+
+async function submitReport() {
+const uid = myUid ?? (await refreshAuth());
+
+if (!uid) {
+setBanner("Please sign in to report users.");
+return;
+}
+
+if (uid === targetProfileId) {
+setBanner("You can’t report yourself.");
+return;
+}
+
+if (reportBusy) return;
+
+setReportBusy(true);
+setBanner(null);
+
+try {
+const { error } = await supabase.from("reports").insert({
+reporter_id: uid,
+reported_user_id: targetProfileId,
+reason: reportReason,
+details: reportDetails.trim() || null,
+status: "open",
+});
+
+if (error) throw error;
+
+setShowReportModal(false);
+setSafetyOpen(false);
+setReportReason("Harassment");
+setReportDetails("");
+setBanner("Report submitted. Thank you for helping keep Unbound safe.");
+} catch (e: any) {
+setBanner(String(e?.message || e || "Could not submit report."));
+} finally {
+setReportBusy(false);
+}
+}
+
 
 const btnBase: CSSProperties = {
 padding: "10px 14px",
@@ -295,7 +426,25 @@ if (uid === targetProfileId) {
 setBanner("That’s you 😄");
 return;
 }
+try {
+const { data: blocked, error: blockedError } = await supabase
+.from("blocked_users")
+.select("id")
+.or(
+`and(blocker_id.eq.${uid},blocked_id.eq.${targetProfileId}),and(blocker_id.eq.${targetProfileId},blocked_id.eq.${uid})`
+)
+.limit(1);
 
+if (blockedError) throw blockedError;
+
+if ((blocked ?? []).length > 0) {
+setBanner("Messaging unavailable.");
+return;
+}
+} catch {
+setBanner("Could not verify block status.");
+return;
+}
 setBanner(null);
 
 const { data: sessionData } = await supabase.auth.getSession();
@@ -624,6 +773,85 @@ friendState === "pending_in"
 >
 {friendBtnLabel}
 </button>
+<div style={{ position: "relative" }}>
+<button
+onClick={() => setSafetyOpen((v) => !v)}
+style={{
+...applyHover(btnBase, "safety", false),
+minWidth: 52,
+fontSize: 22,
+lineHeight: 1,
+paddingTop: 6,
+paddingBottom: 10,
+}}
+onMouseEnter={() => setHover("safety")}
+onMouseLeave={() => setHover(null)}
+title="Safety options"
+>
+⋯
+</button>
+
+{safetyOpen ? (
+<div
+style={{
+position: "absolute",
+top: "calc(100% + 8px)",
+right: 0,
+width: 220,
+borderRadius: 16,
+overflow: "hidden",
+background: "rgba(15,15,20,0.96)",
+border: "1px solid rgba(168,85,247,0.35)",
+boxShadow:
+"0 0 24px rgba(168,85,247,0.28), 0 0 44px rgba(0,0,0,0.45)",
+zIndex: 200,
+backdropFilter: "blur(14px)",
+WebkitBackdropFilter: "blur(14px)",
+}}
+>
+<button
+onClick={toggleBlock}
+disabled={blockBusy}
+style={{
+width: "100%",
+textAlign: "left",
+padding: "14px 16px",
+background: "transparent",
+border: "none",
+color: "white",
+cursor: blockBusy ? "not-allowed" : "pointer",
+fontWeight: 700,
+borderBottom: "1px solid rgba(255,255,255,0.06)",
+}}
+>
+{blockBusy
+? "Working..."
+: isBlocked
+? "Unblock User"
+: "Block User"}
+</button>
+
+<button
+onClick={() => {
+setSafetyOpen(false);
+setShowReportModal(true);
+}}
+style={{
+width: "100%",
+textAlign: "left",
+padding: "14px 16px",
+background: "transparent",
+border: "none",
+color: "rgba(255,120,120,0.95)",
+cursor: "pointer",
+fontWeight: 700,
+}}
+>
+Report User
+</button>
+</div>
+) : null}
+</div>
 </div>
 
 {showTipModal ? (
@@ -740,6 +968,148 @@ opacity: tipBusy ? 0.65 : 1,
 }}
 >
 {tipBusy ? "Sending..." : "Send Tip"}
+</button>
+</div>
+</div>
+</div>
+) : null}
+{showReportModal ? (
+<div
+onClick={() => {
+if (reportBusy) return;
+setShowReportModal(false);
+}}
+style={{
+position: "fixed",
+inset: 0,
+background: "rgba(0,0,0,0.72)",
+display: "flex",
+alignItems: "center",
+justifyContent: "center",
+zIndex: 9999,
+padding: 16,
+}}
+>
+<div
+onClick={(e) => e.stopPropagation()}
+style={{
+width: "min(500px, 92vw)",
+background: "rgba(0,0,0,0.92)",
+border: "1px solid rgba(255,80,80,0.28)",
+borderRadius: 20,
+padding: 20,
+boxShadow:
+"0 0 22px rgba(255,80,80,0.18), 0 0 44px rgba(168,85,247,0.18)",
+backdropFilter: "blur(10px)",
+WebkitBackdropFilter: "blur(10px)",
+}}
+>
+<div
+style={{
+fontSize: 26,
+fontWeight: 900,
+marginBottom: 10,
+color: "rgba(255,120,120,0.96)",
+fontFamily: '"Gloock", serif',
+}}
+>
+Report User
+</div>
+
+<div
+style={{
+opacity: 0.78,
+marginBottom: 14,
+color: "rgba(255,255,255,0.92)",
+}}
+>
+Help us keep Unbound safe.
+</div>
+
+<select
+value={reportReason}
+onChange={(e) =>
+setReportReason(e.target.value as ReportReason)
+}
+style={{
+width: "100%",
+marginBottom: 14,
+background: "rgba(255,255,255,0.05)",
+color: "white",
+border: "1px solid rgba(168,85,247,0.25)",
+borderRadius: 12,
+padding: "12px 14px",
+}}
+>
+<option>Harassment</option>
+<option>Spam</option>
+<option>Fake account</option>
+<option>Underage user</option>
+<option>Threatening behavior</option>
+<option>Non-consensual content</option>
+<option>Other</option>
+</select>
+
+<textarea
+value={reportDetails}
+onChange={(e) => setReportDetails(e.target.value)}
+placeholder="Additional details..."
+rows={4}
+style={{
+width: "100%",
+resize: "none",
+background: "rgba(255,255,255,0.04)",
+color: "white",
+border: "1px solid rgba(168,85,247,0.3)",
+borderRadius: 14,
+padding: "12px 14px",
+outline: "none",
+marginBottom: 14,
+}}
+/>
+
+<div
+style={{
+display: "flex",
+justifyContent: "flex-end",
+gap: 10,
+}}
+>
+<button
+onClick={() => {
+if (reportBusy) return;
+setShowReportModal(false);
+}}
+style={{
+padding: "10px 16px",
+borderRadius: 999,
+border: "1px solid rgba(168,85,247,0.35)",
+background: "rgba(0,0,0,0.4)",
+color: "white",
+cursor: reportBusy ? "not-allowed" : "pointer",
+fontWeight: 700,
+opacity: reportBusy ? 0.65 : 1,
+}}
+>
+Cancel
+</button>
+
+<button
+onClick={submitReport}
+disabled={reportBusy}
+style={{
+padding: "10px 18px",
+borderRadius: 999,
+border: "none",
+cursor: reportBusy ? "not-allowed" : "pointer",
+fontWeight: 800,
+color: "white",
+background: "linear-gradient(90deg,#ff4d6d,#a855f7)",
+boxShadow: "0 0 16px rgba(255,80,80,0.4)",
+opacity: reportBusy ? 0.65 : 1,
+}}
+>
+{reportBusy ? "Submitting..." : "Submit Report"}
 </button>
 </div>
 </div>

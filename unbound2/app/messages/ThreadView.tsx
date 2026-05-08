@@ -444,10 +444,57 @@ setSending(true);
 setErr(null);
 
 try {
-// stop typing immediately when we send
 const ch = supabase.channel(`thread-${conversationId}`);
 await sendTyping(ch, false);
 setOtherTyping(false);
+
+const { data: memberRows, error: memberError } = await supabase
+.from("conversation_members")
+.select("user_id")
+.eq("conversation_id", conversationId);
+
+if (memberError) {
+setErr("Could not verify conversation members.");
+return;
+}
+
+const otherUserIds = (memberRows ?? [])
+.map((r: any) => r.user_id)
+.filter((id: string) => id && id !== me);
+console.log("THREAD BLOCK DEBUG", {
+conversationId,
+me,
+memberRows,
+otherUserIds,
+});
+
+if (otherUserIds.length > 0) {
+const blockFilters = otherUserIds
+.flatMap((otherId: string) => [
+`and(blocker_id.eq.${me},blocked_id.eq.${otherId})`,
+`and(blocker_id.eq.${otherId},blocked_id.eq.${me})`,
+])
+.join(",");
+
+const { data: blockedRows, error: blockedError } = await supabase
+.from("blocked_users")
+.select("id")
+.or(blockFilters)
+.limit(1);
+
+if (blockedError) {
+setErr("Could not verify block status.");
+return;
+}
+console.log("THREAD BLOCK ROWS", {
+blockFilters,
+blockedRows,
+});
+if ((blockedRows ?? []).length > 0) {
+setErr("Messaging unavailable.");
+return;
+}
+}
 
 const { error } = await supabase.from("messages").insert({
 conversation_id: conversationId,
@@ -464,7 +511,6 @@ setErr(e?.message ?? "Send failed.");
 setSending(false);
 }
 }
-
 // typing: send broadcasts based on local input
 useEffect(() => {
 if (!conversationId || !me) return;
