@@ -292,7 +292,32 @@ setLoading(false);
 return;
 }
 
-let rows = ((data as ProfileRow[]) ?? []).map((p) => ({
+const {
+data: {
+user,
+},
+} = await supabase.auth.getUser();
+
+let blockedIds = new Set<string>();
+
+if (user?.id) {
+const { data: blockRows } = await supabase
+.from("blocked_users")
+.select("blocker_id,blocked_id")
+.or(`blocker_id.eq.${user.id},blocked_id.eq.${user.id}`);
+
+for (const row of blockRows ?? []) {
+const blockerId = (row as any).blocker_id as string | null;
+const blockedId = (row as any).blocked_id as string | null;
+
+if (blockerId === user.id && blockedId) blockedIds.add(blockedId);
+if (blockedId === user.id && blockerId) blockedIds.add(blockerId);
+}
+}
+
+let rows = ((data as ProfileRow[]) ?? [])
+.filter((p) => !blockedIds.has(p.id))
+.map((p) => ({
 ...p,
 distanceMiles: null,
 })) as ProfileWithDistance[];

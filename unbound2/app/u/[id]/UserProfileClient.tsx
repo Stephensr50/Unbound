@@ -117,6 +117,8 @@ const router = useRouter();
 const [myUserId, setMyUserId] = useState<string | null>(null);
 const [posts, setPosts] = useState<PostRow[]>([]);
 const [banner, setBanner] = useState<string | null>(null);
+const [profileUnavailable, setProfileUnavailable] = useState(false);
+const [checkingBlock, setCheckingBlock] = useState(true);
 const [groupsById, setGroupsById] = useState<Record<number, GroupRow>>({});
 const [activeTab, setActiveTab] = useState<ProfileTab>("posts");
 
@@ -169,6 +171,42 @@ const uid = data.session?.user?.id ?? null;
 setMyUserId(uid);
 return uid;
 }
+
+async function checkProfileBlockStatus(viewerId: string | null) {
+if (!viewerId || viewerId === profile.id) {
+setProfileUnavailable(false);
+setCheckingBlock(false);
+return;
+}
+
+setCheckingBlock(true);
+
+try {
+const { data, error } = await supabase
+.from("blocked_users")
+.select("id")
+.or(
+`and(blocker_id.eq.${viewerId},blocked_id.eq.${profile.id}),and(blocker_id.eq.${profile.id},blocked_id.eq.${viewerId})`
+)
+.limit(1);
+
+if (error) throw error;
+
+setProfileUnavailable((data ?? []).length > 0);
+} catch {
+setProfileUnavailable(false);
+} finally {
+setCheckingBlock(false);
+}
+}
+
+useEffect(() => {
+void (async () => {
+const uid = await refreshAuth();
+await checkProfileBlockStatus(uid);
+})();
+// eslint-disable-next-line react-hooks/exhaustive-deps
+}, [profile.id]);
 
 async function loadProfileKinks(targetUserId: string) {
 const { data, error } = await supabase
@@ -1031,6 +1069,25 @@ index: (prev.index + 1) % prev.items.length,
 });
 }
 
+
+if (checkingBlock) {
+return (
+<div style={{ width: "min(920px, 94vw)", margin: "30px auto", color: "white" }}>
+<h1 style={{ fontSize: 34, marginBottom: 10 }}>Loading profile…</h1>
+</div>
+);
+}
+
+if (profileUnavailable) {
+return (
+<div style={{ width: "min(920px, 94vw)", margin: "30px auto", color: "white" }}>
+<h1 style={{ fontSize: 34, marginBottom: 10 }}>Profile unavailable.</h1>
+<div style={{ opacity: 0.85 }}>
+This profile is not available.
+</div>
+</div>
+);
+}
 const renderMediaGrid = (items: PostRow[], mode: "photos" | "videos") => {
 if (items.length === 0) {
 return (

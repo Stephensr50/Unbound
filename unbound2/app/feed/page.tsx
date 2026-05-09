@@ -217,6 +217,26 @@ setFollowingIds(alreadyFollowing);
 
 const excludeIds = new Set<string>([uid, ...alreadyFollowing]);
 
+const { data: blockRows, error: blockErr } = await supabase
+.from("blocked_users")
+.select("blocker_id,blocked_id")
+.or(`blocker_id.eq.${uid},blocked_id.eq.${uid}`);
+
+if (blockErr) {
+setBanner(blockErr.message);
+return;
+}
+
+for (const row of blockRows ?? []) {
+const blockerId = (row as any).blocker_id as string | null;
+const blockedId = (row as any).blocked_id as string | null;
+
+if (blockerId === uid && blockedId) excludeIds.add(blockedId);
+if (blockedId === uid && blockerId) excludeIds.add(blockerId);
+}
+
+
+
 const { data, error } = await supabase
 .from("profiles")
 .select("id,username,display_name,avatar_url,last_active_at")
@@ -433,10 +453,40 @@ await loadCounts([]);
 return;
 }
 
+const { data: blockRows, error: blockErr } = await supabase
+.from("blocked_users")
+.select("blocker_id,blocked_id")
+.or(`blocker_id.eq.${uid},blocked_id.eq.${uid}`);
+
+if (blockErr) {
+setBanner(blockErr.message);
+return;
+}
+
+const blockedUserIds = new Set<string>();
+
+for (const row of blockRows ?? []) {
+const blockerId = (row as any).blocker_id as string | null;
+const blockedId = (row as any).blocked_id as string | null;
+
+if (blockerId === uid && blockedId) blockedUserIds.add(blockedId);
+if (blockedId === uid && blockerId) blockedUserIds.add(blockerId);
+}
+
+const visibleAllowedIds = allowedIds.filter((id) => !blockedUserIds.has(id));
+
+if (!visibleAllowedIds.length) {
+setPosts([]);
+setProfilesById({});
+setGroupsById({});
+await loadCounts([]);
+return;
+}
+
 const { data, error } = await supabase
 .from("posts")
 .select("id,user_id,body,kind,created_at,media_url,media_type,group_id")
-.in("user_id", allowedIds)
+.in("user_id", visibleAllowedIds)
 .order("created_at", { ascending: false })
 .limit(200);
 
