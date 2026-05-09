@@ -128,7 +128,29 @@ setRows([]);
 return;
 }
 
-const base = (data ?? []) as NotifRow[];
+const { data: blockRows, error: blockErr } = await supabase
+.from("blocked_users")
+.select("blocker_id,blocked_id")
+.or(`blocker_id.eq.${uid},blocked_id.eq.${uid}`);
+
+if (blockErr) {
+console.error(blockErr);
+}
+
+const blockedUserIds = new Set<string>();
+
+for (const row of blockRows ?? []) {
+const blockerId = (row as any).blocker_id as string | null;
+const blockedId = (row as any).blocked_id as string | null;
+
+if (blockerId === uid && blockedId) blockedUserIds.add(blockedId);
+if (blockedId === uid && blockerId) blockedUserIds.add(blockerId);
+}
+
+const base = ((data ?? []) as NotifRow[]).filter(
+(n) => !n.actor_id || !blockedUserIds.has(n.actor_id)
+);
+
 const withActors = await hydrateActors(base);
 setRows(withActors);
 } finally {

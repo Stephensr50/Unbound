@@ -89,6 +89,7 @@ const router = useRouter();
 const searchParams = useSearchParams();
 
 const [myUserId, setMyUserId] = useState<string | null>(null);
+const [reportBusyPostId, setReportBusyPostId] = useState<number | null>(null);
 const [allowedAuthorIds, setAllowedAuthorIds] = useState<string[]>([]);
 const [posts, setPosts] = useState<PostRow[]>([]);
 const [text, setText] = useState("");
@@ -1009,6 +1010,43 @@ setPosting(false);
 }
 }
 
+async function reportPost(post: PostRow) {
+const uid = myUserId ?? (await refreshAuth());
+if (!uid) {
+setBanner("You need to be signed in to report posts.");
+return;
+}
+
+if (post.user_id === uid) {
+setBanner("You can’t report your own post.");
+return;
+}
+
+const details = window.prompt("What should moderators know about this post?");
+if (details === null) return;
+
+setReportBusyPostId(post.id);
+setBanner(null);
+
+const { error } = await supabase.from("reports").insert({
+reporter_id: uid,
+reported_user_id: post.user_id,
+entity_type: "post",
+entity_id: String(post.id),
+reason: "Post report",
+details: details.trim() || null,
+status: "open",
+});
+
+if (error) {
+setBanner(error.message);
+setReportBusyPostId(null);
+return;
+}
+
+setBanner("Post reported. Thank you for helping keep Unbound safe.");
+setReportBusyPostId(null);
+}
 async function deletePost(post: PostRow) {
 try {
 const uid = myUserId ?? (await refreshAuth());
@@ -1611,7 +1649,29 @@ G
 ) : null}
 </div>
 
+
 <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+{!isMine ? (
+<button
+onClick={() => reportPost(p)}
+disabled={reportBusyPostId === p.id}
+style={{
+border: "1px solid rgba(255,120,120,0.35)",
+background: "rgba(255,80,80,0.10)",
+color: "rgba(255,220,220,0.95)",
+borderRadius: 999,
+padding: "6px 10px",
+cursor: reportBusyPostId === p.id ? "not-allowed" : "pointer",
+fontWeight: 800,
+fontSize: 12,
+opacity: reportBusyPostId === p.id ? 0.65 : 1,
+}}
+title="Report post"
+>
+{reportBusyPostId === p.id ? "..." : "Report"}
+</button>
+) : null}
+
 {isMine ? (
 <button
 onClick={() => deletePost(p)}

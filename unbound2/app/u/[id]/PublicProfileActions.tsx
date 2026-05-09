@@ -283,6 +283,7 @@ setBlockBusy(false);
 }
 
 async function submitReport() {
+   
 const uid = myUid ?? (await refreshAuth());
 
 if (!uid) {
@@ -291,7 +292,7 @@ return;
 }
 
 if (uid === targetProfileId) {
-setBanner("You can’t report yourself.");
+setBanner("You can't report yourself.");
 return;
 }
 
