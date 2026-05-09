@@ -588,6 +588,33 @@ async function setReaction(postId: number, reaction: ReactionKey = "devil") {
 const uid = myUserId ?? (await refreshAuth());
 if (!uid) return;
 
+const postOwnerId = posts.find((p) => p.id === postId)?.user_id ?? null;
+
+if (!postOwnerId) {
+setBanner("Post unavailable.");
+return;
+}
+
+if (postOwnerId !== uid) {
+const { data: blockRows, error: blockErr } = await supabase
+.from("blocked_users")
+.select("id")
+.or(
+`and(blocker_id.eq.${uid},blocked_id.eq.${postOwnerId}),and(blocker_id.eq.${postOwnerId},blocked_id.eq.${uid})`
+)
+.limit(1);
+
+if (blockErr) {
+setBanner("Could not verify block status.");
+return;
+}
+
+if ((blockRows ?? []).length > 0) {
+setBanner("You can’t interact with this post.");
+return;
+}
+}
+
 if (busyPostId) return;
 setBusyPostId(postId);
 setBanner(null);
@@ -706,8 +733,7 @@ setReactionCountsByPost((m) => ({
 },
 }));
 
-const postOwnerId =
-posts.find((p) => p.id === postId)?.user_id ?? null;
+
 
 
 
@@ -766,6 +792,33 @@ setCommentsByPost((m) => ({
 async function addComment(postId: number) {
 const uid = myUserId ?? (await refreshAuth());
 if (!uid) return;
+
+async function addComment(postId: number) {
+const uid = myUserId ?? (await refreshAuth());
+if (!uid) return;
+
+const body = (commentDraft[postId] ?? "").trim();
+if (!body) return;
+
+const { data, error } = await supabase
+.from("post_comments")
+.insert({ post_id: postId, user_id: uid, body })
+.select("id,post_id,user_id,body,created_at")
+.single();
+
+if (error) {
+setBanner(error.message);
+return;
+}
+
+setCommentsByPost((m) => ({
+...m,
+[postId]: [...(m[postId] ?? []), data as CommentRow],
+}));
+
+setCommentDraft((m) => ({ ...m, [postId]: "" }));
+setCommentCounts((m) => ({ ...m, [postId]: (m[postId] ?? 0) + 1 }));
+}
 
 const body = (commentDraft[postId] ?? "").trim();
 if (!body) return;

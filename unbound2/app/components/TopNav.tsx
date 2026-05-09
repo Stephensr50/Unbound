@@ -193,6 +193,9 @@ Signals
 Notifications
 {notifUnread > 0 && <span style={badgeStyle}>{notifBadgeText}</span>}
 </Link>
+<Link href="/settings/blocked" style={tabStyle(isActive("/settings/blocked"))}>
+Blocked
+</Link>
 
 
 

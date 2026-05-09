@@ -182,11 +182,31 @@ me,
 ...((friendRows ?? []) as FriendRow[]).map((r) => r.friend_id),
 ])
 );
+const { data: blockRows, error: blockErr } = await supabase
+.from("blocked_users")
+.select("blocker_id,blocked_id")
+.or(`blocker_id.eq.${me},blocked_id.eq.${me}`);
+
+if (blockErr) throw blockErr;
+
+const blockedUserIds = new Set<string>();
+
+for (const row of blockRows ?? []) {
+const blockerId = (row as any).blocker_id as string | null;
+const blockedId = (row as any).blocked_id as string | null;
+
+if (blockerId === me && blockedId) blockedUserIds.add(blockedId);
+if (blockedId === me && blockerId) blockedUserIds.add(blockerId);
+}
+
+const visibleAllowedUserIds = allowedUserIds.filter(
+(id) => !blockedUserIds.has(id)
+);
 
 const { data: mainData, error: mainError } = await supabase
 .from("stories")
 .select("id,user_id,media_url,caption,created_at")
-.in("user_id", allowedUserIds)
+.in("user_id", visibleAllowedUserIds)
 .order("created_at", { ascending: false })
 .limit(30);
 

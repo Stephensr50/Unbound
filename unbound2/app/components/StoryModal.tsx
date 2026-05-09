@@ -249,7 +249,32 @@ setStoryViewers([]);
 return;
 }
 
+const { data: blockRows, error: blockErr } = await supabase
+.from("blocked_users")
+.select("blocker_id,blocked_id")
+.or(`blocker_id.eq.${myUserId},blocked_id.eq.${myUserId}`);
+
+if (blockErr) {
+console.error("loadStoryViewers block filter error:", blockErr);
 setStoryViewers((data as StoryViewerRow[]) || []);
+return;
+}
+
+const blockedUserIds = new Set<string>();
+
+for (const row of blockRows ?? []) {
+const blockerId = (row as any).blocker_id as string | null;
+const blockedId = (row as any).blocked_id as string | null;
+
+if (blockerId === myUserId && blockedId) blockedUserIds.add(blockedId);
+if (blockedId === myUserId && blockerId) blockedUserIds.add(blockerId);
+}
+
+const filteredViewers = ((data as StoryViewerRow[]) || []).filter(
+(viewer) => !blockedUserIds.has(viewer.viewer_id)
+);
+
+setStoryViewers(filteredViewers);
 }
 
 loadStoryViewers();
