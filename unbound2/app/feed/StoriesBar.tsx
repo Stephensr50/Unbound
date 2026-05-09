@@ -223,7 +223,9 @@ if (discoveryError) throw discoveryError;
 const mainRows = (mainData ?? []) as StoryRow[];
 
 const discoveryPool = ((discoveryData ?? []) as StoryRow[]).filter(
-(s) => !allowedUserIds.includes(s.user_id)
+(s) =>
+!allowedUserIds.includes(s.user_id) &&
+!blockedUserIds.has(s.user_id)
 );
 
 const discoveryByUser = Array.from(

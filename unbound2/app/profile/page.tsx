@@ -10,6 +10,7 @@ type ProfileRow = {
 id: string;
 username: string | null;
 display_name: string | null;
+is_admin?: boolean | null;
 bio: string | null;
 avatar_url: string | null;
 city: string | null;
@@ -150,7 +151,7 @@ if (!myUserId) return;
 (async () => {
 const { data: p, error: pErr } = await supabase
 .from("profiles")
-.select("id, username, display_name, bio, avatar_url, city, state, country")
+.select("id, username, display_name, bio, avatar_url, city, state, country, is_admin")
 .eq("id", myUserId)
 .maybeSingle();
 
@@ -219,7 +220,7 @@ return;
 
 const { data: profiles, error: profErr } = await supabase
 .from("profiles")
-.select("id, username, display_name, bio, avatar_url, city, state, country")
+.select("id, username, display_name, bio, avatar_url, city, state, country, is_admin")
 .in("id", ids);
 
 if (profErr) {
@@ -257,7 +258,7 @@ return;
 
 const { data: profiles, error: profErr } = await supabase
 .from("profiles")
-.select("id, username, display_name, bio, avatar_url, city, state, country")
+.select("id, username, display_name, bio, avatar_url, city, state, country, is_admin")
 .in("id", ids);
 
 if (profErr) {
@@ -509,6 +510,8 @@ setMyProfile(null);
 router.push("/login");
 }
 
+const isAdmin = myProfile?.is_admin === true;
+
 return (
 <div style={{ ...S.page, marginTop: "80px" }}>
 <div style={S.card}>
@@ -551,6 +554,14 @@ fontSize: 18,
 <Link href="/edit-profile" style={S.btn}>
 Edit Profile
 </Link>
+
+{isAdmin ? (
+<Link href="/admin/reports" style={S.btn}>
+Admin Dashboard
+</Link>
+) : null}
+
+
 
 <button type="button" style={S.btn} onClick={shareProfile}>
 Share Profile

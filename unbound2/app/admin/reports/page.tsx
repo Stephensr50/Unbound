@@ -30,6 +30,35 @@ const router = useRouter();
 const [reports, setReports] = useState<ReportRow[]>([]);
 const [loading, setLoading] = useState(true);
 const [banner, setBanner] = useState<string | null>(null);
+const [isAdmin, setIsAdmin] = useState(false);
+const [checkingAdmin, setCheckingAdmin] = useState(true);
+
+async function checkAdminAccess() {
+setCheckingAdmin(true);
+
+const { data: sessionData } = await supabase.auth.getSession();
+const uid = sessionData.session?.user?.id ?? null;
+
+if (!uid) {
+router.replace("/feed");
+return false;
+}
+
+const { data: profile, error } = await supabase
+.from("profiles")
+.select("is_admin")
+.eq("id", uid)
+.maybeSingle();
+
+if (error || !profile?.is_admin) {
+router.replace("/feed");
+return false;
+}
+
+setIsAdmin(true);
+setCheckingAdmin(false);
+return true;
+}
 
 async function loadReports() {
 setLoading(true);
@@ -70,9 +99,24 @@ await loadReports();
 }
 
 useEffect(() => {
-void loadReports();
+void (async () => {
+const ok = await checkAdminAccess();
+if (ok) await loadReports();
+})();
 // eslint-disable-next-line react-hooks/exhaustive-deps
 }, []);
+
+if (checkingAdmin) {
+return (
+<div style={{ width: "min(920px, 94vw)", margin: "30px auto", color: "white" }}>
+Checking admin access…
+</div>
+);
+}
+
+if (!isAdmin) {
+return null;
+}
 
 return (
 <div
