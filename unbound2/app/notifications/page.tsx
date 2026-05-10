@@ -55,6 +55,7 @@ const supabase = useMemo(() => getSupabase(), []);
 const [me, setMe] = useState<string | null>(null);
 const [rows, setRows] = useState<NotifRow[]>([]);
 const [loading, setLoading] = useState(true);
+const [moderationModal, setModerationModal] = useState<NotifRow | null>(null);
 
 const loadingRef = useRef(false);
 const subscribedRef = useRef(false);
@@ -220,6 +221,13 @@ return null;
 }
 
 async function onClickNotif(n: NotifRow) {
+
+    if (n.type === "moderation") {
+await markOneRead(n.id);
+setModerationModal(n);
+return;
+}
+
 const href = computeHref(n);
 console.log("CLICK NOTIF:", {
 type: n.type,
@@ -403,6 +411,7 @@ return n.title || n.message || n.body || "Notification";
 }
 
 function buildSub(n: NotifRow) {
+    if (n.type === "moderation") return "Tap to read moderator message";
 if (n.type === "comment_reply") return "Tap to open reply";
 
 if (n.type === "spank" || n.type === "comment") {
@@ -473,6 +482,78 @@ role="button"
 </div>
 )}
 </div>
+{moderationModal ? (
+<div
+onClick={() => setModerationModal(null)}
+style={{
+position: "fixed",
+inset: 0,
+zIndex: 9999,
+background: "rgba(0,0,0,0.72)",
+backdropFilter: "blur(12px)",
+display: "flex",
+alignItems: "center",
+justifyContent: "center",
+padding: 18,
+}}
+>
+<div
+onClick={(e) => e.stopPropagation()}
+style={{
+width: "min(620px, 94vw)",
+borderRadius: 22,
+padding: 22,
+background:
+"linear-gradient(180deg, rgba(25,0,35,0.96), rgba(0,0,0,0.94))",
+border: "1px solid rgba(236,72,153,0.55)",
+boxShadow:
+"0 0 25px rgba(236,72,153,0.26), 0 0 55px rgba(168,85,247,0.18)",
+color: "white",
+}}
+>
+<div
+style={{
+fontFamily: '"Gloock", serif',
+fontSize: 28,
+fontWeight: 900,
+color: "rgba(255,170,220,0.98)",
+marginBottom: 10,
+}}
+>
+{moderationModal.title || "Moderator message"}
+</div>
+
+<div
+style={{
+whiteSpace: "pre-wrap",
+lineHeight: 1.55,
+opacity: 0.92,
+marginBottom: 18,
+}}
+>
+{moderationModal.body ||
+moderationModal.message ||
+"No message was included."}
+</div>
+
+<button
+type="button"
+onClick={() => setModerationModal(null)}
+style={{
+padding: "10px 16px",
+borderRadius: 999,
+border: "1px solid rgba(236,72,153,0.45)",
+background: "linear-gradient(90deg,#ec4899,#a855f7)",
+color: "white",
+cursor: "pointer",
+fontWeight: 900,
+}}
+>
+Close
+</button>
+</div>
+</div>
+) : null}
 </div>
 );
 }
