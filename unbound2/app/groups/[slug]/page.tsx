@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { createClient } from "@supabase/supabase-js";
 import Link from "next/link";
 import ReactionBar from "@/app/components/ReactionBar";
+import ReportPostButton from "@/app/components/ReportPostButton";
 
 function getSupabase() {
 const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -1080,13 +1081,43 @@ return (
 key={post.id}
 style={{
 padding: 14,
+position: "relative",
 borderRadius: 14,
 border: "1px solid rgba(180,120,255,0.12)",
 background: "rgba(0,0,0,0.22)",
 marginTop: 12,
 }}
 >
-<div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+    {myUserId !== post.user_id ? (
+<ReportPostButton
+postId={post.id}
+reportedUserId={post.user_id}
+myUserId={myUserId}
+onReported={() => {}}
+style={{
+position: "absolute",
+top: 14,
+right: 14,
+border: "1px solid rgba(255,120,120,0.35)",
+background: "rgba(255,80,80,0.10)",
+color: "rgba(255,220,220,0.95)",
+borderRadius: 999,
+padding: "6px 10px",
+cursor: "pointer",
+fontWeight: 800,
+fontSize: 12,
+}}
+/>
+) : null}
+<div
+style={{
+display: "flex",
+gap: 10,
+alignItems: "center",
+marginLeft: "auto",
+}}
+>
+   
 {author?.avatar_url ? (
 // eslint-disable-next-line @next/next/no-img-element
 <img
@@ -1124,6 +1155,8 @@ opacity: 0.7,
 </div>
 </div>
 </div>
+
+
 
 {post.body ? (
 <div style={{ marginTop: 12, lineHeight: 1.5 }}>

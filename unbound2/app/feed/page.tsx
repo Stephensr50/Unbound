@@ -1619,13 +1619,30 @@ G
 </div>
 
 
-<div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+<div
+style={{
+display: "flex",
+gap: 10,
+alignItems: "center",
+marginLeft: "auto",
+}}
+>
 {!isMine ? (
 <ReportPostButton
 postId={p.id}
 reportedUserId={p.user_id}
 myUserId={myUserId}
 onReported={setBanner}
+style={{
+border: "1px solid rgba(255,120,120,0.35)",
+background: "rgba(255,80,80,0.10)",
+color: "rgba(255,220,220,0.95)",
+borderRadius: 999,
+padding: "6px 10px",
+cursor: "pointer",
+fontWeight: 800,
+fontSize: 12,
+}}
 />
 ) : null}
 
