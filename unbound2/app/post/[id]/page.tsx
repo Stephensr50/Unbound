@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { createClient } from "@supabase/supabase-js";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import ReactionBar from "@/app/components/ReactionBar";
+import ReportCommentButton from "@/app/components/ReportCommentButton";
 
 function getSupabase() {
 const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
@@ -822,6 +823,13 @@ Replying to {replyLabel}
 ) : null}
 
 <div style={{ whiteSpace: "pre-wrap" }}>{c.body}</div>
+<ReportCommentButton
+commentId={c.id}
+commentBody={c.body}
+commentUserId={c.user_id}
+myUserId={myUserId}
+onReported={setBanner}
+/>
 
 <div style={{ marginTop: 8 }}>
 <button onClick={() => startReply(c)} style={pillBtn}>

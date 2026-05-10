@@ -108,24 +108,22 @@ if (ok) await loadReports();
 
 if (checkingAdmin) {
 return (
-<div style={{ width: "min(920px, 94vw)", margin: "30px auto", color: "white" }}>
+<div
+style={{
+width: "min(920px, 94vw)",
+margin: "30px auto",
+color: "white",
+}}
+>
 Checking admin access…
 </div>
 );
 }
 
-if (!isAdmin) {
-return null;
-}
+if (!isAdmin) return null;
 
 return (
-<div
-style={{
-width: "min(1100px, 94vw)",
-margin: "30px auto",
-color: "white",
-}}
->
+<div style={{ width: "min(1100px, 94vw)", margin: "30px auto", color: "white" }}>
 <button
 onClick={() => router.back()}
 style={{
@@ -187,13 +185,7 @@ boxShadow: "0 0 24px rgba(168,85,247,0.18)",
 ) : reports.length === 0 ? (
 <div style={{ opacity: 0.75 }}>No reports yet.</div>
 ) : (
-<div
-style={{
-display: "flex",
-flexDirection: "column",
-gap: 12,
-}}
->
+<div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
 {reports.map((r) => (
 <div
 key={r.id}
@@ -219,49 +211,62 @@ Report #{r.id}
 {r.entity_id ? ` · ${r.entity_id}` : ""}
 </div>
 
-<div
-style={{
-fontSize: 12,
-opacity: 0.75,
-}}
->
-{r.created_at
-? new Date(r.created_at).toLocaleString()
-: "No date"}
+<div style={{ fontSize: 12, opacity: 0.75 }}>
+{r.created_at ? new Date(r.created_at).toLocaleString() : "No date"}
 </div>
 </div>
 
-<div
-style={{
-fontSize: 13,
-opacity: 0.75,
-marginBottom: 6,
-}}
->
+<div style={{ fontSize: 13, opacity: 0.75, marginBottom: 6 }}>
 Reporter: {r.reporter_id ?? "Unknown"}
-</div>
-
-<div
+{r.reporter_id ? (
+<button
+type="button"
+onClick={() => router.push(`/u/${r.reporter_id}`)}
 style={{
-fontSize: 13,
-opacity: 0.75,
-marginBottom: 10,
+marginLeft: 10,
+padding: "4px 9px",
+borderRadius: 999,
+border: "1px solid rgba(168,85,247,0.35)",
+background: "rgba(0,0,0,0.35)",
+color: "white",
+cursor: "pointer",
+fontWeight: 800,
+fontSize: 11,
 }}
 >
+View Reporter
+</button>
+) : null}
+</div>
+
+<div style={{ fontSize: 13, opacity: 0.75, marginBottom: 10 }}>
 Reported user: {r.reported_user_id ?? "Unknown"}
+{r.reported_user_id ? (
+<button
+type="button"
+onClick={() => router.push(`/u/${r.reported_user_id}`)}
+style={{
+marginLeft: 10,
+padding: "4px 9px",
+borderRadius: 999,
+border: "1px solid rgba(236,72,153,0.35)",
+background: "rgba(0,0,0,0.35)",
+color: "white",
+cursor: "pointer",
+fontWeight: 800,
+fontSize: 11,
+}}
+>
+View Reported
+</button>
+) : null}
 </div>
 
 <div style={{ marginBottom: 8 }}>
-<strong>Reason:</strong>{" "}
-{r.reason ?? "No reason"}
+<strong>Reason:</strong> {r.reason ?? "No reason"}
 </div>
 
-<div
-style={{
-marginBottom: 8,
-whiteSpace: "pre-wrap",
-}}
->
+<div style={{ marginBottom: 8, whiteSpace: "pre-wrap" }}>
 <strong>Details:</strong>{" "}
 {r.details ?? r.context ?? "No details provided."}
 </div>
@@ -280,18 +285,10 @@ fontWeight: 900,
 Status: {r.status ?? "open"}
 </div>
 
-<div
-style={{
-display: "flex",
-gap: 10,
-marginTop: 14,
-flexWrap: "wrap",
-}}
->
+<div style={{ display: "flex", gap: 10, marginTop: 14, flexWrap: "wrap" }}>
 <button
-onClick={() =>
-updateStatus(r.id, "resolved")
-}
+type="button"
+onClick={() => updateStatus(r.id, "resolved")}
 style={{
 padding: "8px 14px",
 borderRadius: 999,
@@ -307,9 +304,8 @@ Resolve
 </button>
 
 <button
-onClick={() =>
-updateStatus(r.id, "dismissed")
-}
+type="button"
+onClick={() => updateStatus(r.id, "dismissed")}
 style={{
 padding: "8px 14px",
 borderRadius: 999,

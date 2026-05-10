@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { createClient } from "@supabase/supabase-js";
 import Link from "next/link";
 import ReactionBar from "@/app/components/ReactionBar";
+import ReportCommentButton from "@/app/components/ReportCommentButton";
 
 function getSupabase() {
 const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
@@ -1247,6 +1248,13 @@ padding: 10,
 {timeAgo(c.created_at)}
 </div>
 <div style={{ whiteSpace: "pre-wrap" }}>{c.body}</div>
+<ReportCommentButton
+commentId={c.id}
+commentBody={c.body}
+commentUserId={c.user_id}
+myUserId={myUserId}
+onReported={setBanner}
+/>
 </div>
 ))}
 

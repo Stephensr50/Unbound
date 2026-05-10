@@ -6,6 +6,8 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import PublicProfileActions from "./PublicProfileActions";
 import ReactionBar from "@/app/components/ReactionBar";
+import ReportCommentButton from "@/app/components/ReportCommentButton";
+import ReportPostButton from "@/app/components/ReportPostButton";
 
 type ReactionKey = "devil" | "fire" | "eyes" | "purple_heart";
 type ReactionCountsMap = Partial<Record<ReactionKey, number>>;
@@ -1565,7 +1567,7 @@ const groupInfo =
 typeof p.group_id === "number" ? groupsById[p.group_id] : null;
 
 return (
-<div key={p.id} style={card}>
+<div key={p.id} style={{ ...card, position: "relative" }}>
 <div
 style={{
 display: "flex",
@@ -1631,6 +1633,26 @@ onClick={() => openGalleryForPost(p.id, "photos")}
 )
 ) : null}
 
+<ReportPostButton
+postId={p.id}
+reportedUserId={p.user_id}
+myUserId={myUserId}
+onReported={setBanner}
+style={{
+position: "absolute",
+top: 12,
+right: 120,
+padding: "4px 9px",
+borderRadius: 999,
+border: "1px solid rgba(255,120,120,0.28)",
+background: "rgba(255,80,80,0.06)",
+color: "rgba(255,220,220,0.82)",
+cursor: "pointer",
+fontWeight: 800,
+fontSize: 11,
+zIndex: 2,
+}}
+/>
 <ReactionBar
 postId={p.id}
 spanks={likeCounts[p.id] ?? 0}
@@ -1691,6 +1713,13 @@ padding: 10,
 {timeAgo(c.created_at)}
 </div>
 <div style={{ whiteSpace: "pre-wrap" }}>{c.body}</div>
+<ReportCommentButton
+commentId={c.id}
+commentBody={c.body}
+commentUserId={c.user_id}
+myUserId={myUserId}
+onReported={setBanner}
+/>
 </div>
 ))}
 
