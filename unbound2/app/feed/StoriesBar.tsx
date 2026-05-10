@@ -252,9 +252,18 @@ isDiscovery: true,
 }
 }
 
+const hasDiscoveryStory = merged.some((story) => story.isDiscovery);
+
+if (!hasDiscoveryStory && shuffledDiscovery.length) {
+merged.push({
+...shuffledDiscovery[0],
+isDiscovery: true,
+});
+}
+
 if (!mainRows.length && shuffledDiscovery.length) {
 merged.push(
-...shuffledDiscovery.slice(0, 5).map((story) => ({
+...shuffledDiscovery.slice(1, 5).map((story) => ({
 ...story,
 isDiscovery: true,
 }))
@@ -277,14 +286,17 @@ refreshStories();
 const dedupedStories = useMemo(() => {
 const map = new Map<string, StoryRow>();
 
-const sorted = [...stories].sort((a, b) => {
-const aT = a.created_at ? +new Date(a.created_at) : 0;
-const bT = b.created_at ? +new Date(b.created_at) : 0;
-return bT - aT;
-});
+for (const s of stories) {
+if (!map.has(s.user_id)) {
+map.set(s.user_id, s);
+continue;
+}
 
-for (const s of sorted) {
-if (!map.has(s.user_id)) map.set(s.user_id, s);
+const existing = map.get(s.user_id);
+
+if (s.isDiscovery && !existing?.isDiscovery) {
+map.set(s.user_id, s);
+}
 }
 
 return Array.from(map.values());
@@ -376,6 +388,29 @@ if (authErr) throw authErr;
 const user = authData?.user;
 if (!user) {
 setMsg("You are not logged in.");
+return;
+}
+const { data: meProfile } = await supabase
+.from("profiles")
+.select("moderation_status,suspended_until")
+.eq("id", user.id)
+.maybeSingle();
+
+const suspended =
+meProfile?.moderation_status === "suspended" &&
+meProfile?.suspended_until &&
+new Date(meProfile.suspended_until).getTime() > Date.now();
+
+const banned = meProfile?.moderation_status === "banned";
+
+if (suspended || banned) {
+setMsg(
+suspended
+? `Your account is suspended until ${new Date(
+meProfile.suspended_until
+).toLocaleString()}.`
+: "Your account has been banned."
+);
 return;
 }
 

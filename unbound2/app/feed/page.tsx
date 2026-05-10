@@ -261,6 +261,29 @@ setSuggestedUsers(filtered.slice(0, 12));
 async function followUser(targetUserId: string) {
 const uid = myUserId ?? (await refreshAuth());
 if (!uid) return;
+const { data: meProfile } = await supabase
+.from("profiles")
+.select("moderation_status,suspended_until")
+.eq("id", uid)
+.maybeSingle();
+
+const suspended =
+meProfile?.moderation_status === "suspended" &&
+meProfile?.suspended_until &&
+new Date(meProfile.suspended_until).getTime() > Date.now();
+
+const banned = meProfile?.moderation_status === "banned";
+
+if (suspended || banned) {
+setBanner(
+suspended
+? `Your account is suspended until ${new Date(
+meProfile.suspended_until
+).toLocaleString()}.`
+: "Your account has been banned."
+);
+return;
+}
 if (targetUserId === uid) return;
 
 setFollowBusyId(targetUserId);
@@ -591,6 +614,30 @@ async function setReaction(postId: number, reaction: ReactionKey = "devil") {
 const uid = myUserId ?? (await refreshAuth());
 if (!uid) return;
 
+const { data: meProfile } = await supabase
+.from("profiles")
+.select("moderation_status,suspended_until")
+.eq("id", uid)
+.maybeSingle();
+
+const suspended =
+meProfile?.moderation_status === "suspended" &&
+meProfile?.suspended_until &&
+new Date(meProfile.suspended_until).getTime() > Date.now();
+
+const banned = meProfile?.moderation_status === "banned";
+
+if (suspended || banned) {
+setBanner(
+suspended
+? `Your account is suspended until ${new Date(
+meProfile.suspended_until
+).toLocaleString()}.`
+: "Your account has been banned."
+);
+return;
+}
+
 const postOwnerId = posts.find((p) => p.id === postId)?.user_id ?? null;
 
 if (!postOwnerId) {
@@ -793,12 +840,8 @@ setCommentsByPost((m) => ({
 }
 
 async function addComment(postId: number) {
-const uid = myUserId ?? (await refreshAuth());
-if (!uid) return;
-
-async function addComment(postId: number) {
-const uid = myUserId ?? (await refreshAuth());
-if (!uid) return;
+try {
+const uid = await ensureCanInteract();
 
 const body = (commentDraft[postId] ?? "").trim();
 if (!body) return;
@@ -821,29 +864,9 @@ setCommentsByPost((m) => ({
 
 setCommentDraft((m) => ({ ...m, [postId]: "" }));
 setCommentCounts((m) => ({ ...m, [postId]: (m[postId] ?? 0) + 1 }));
+} catch (e: any) {
+setBanner(String(e?.message || e));
 }
-
-const body = (commentDraft[postId] ?? "").trim();
-if (!body) return;
-
-const { data, error } = await supabase
-.from("post_comments")
-.insert({ post_id: postId, user_id: uid, body })
-.select("id,post_id,user_id,body,created_at")
-.single();
-
-if (error) {
-setBanner(error.message);
-return;
-}
-
-setCommentsByPost((m) => ({
-...m,
-[postId]: [...(m[postId] ?? []), data as CommentRow],
-}));
-
-setCommentDraft((m) => ({ ...m, [postId]: "" }));
-setCommentCounts((m) => ({ ...m, [postId]: (m[postId] ?? 0) + 1 }));
 }
 
 const postBtn: CSSProperties = {
@@ -966,6 +989,43 @@ const { data } = supabase.storage.from("media").getPublicUrl(path);
 return { publicUrl: data.publicUrl, mediaType: f.type };
 }
 
+async function ensureCanInteract() {
+const uid = myUserId ?? (await refreshAuth());
+if (!uid) throw new Error("Not signed in.");
+
+const { data: profile, error } = await supabase
+.from("profiles")
+.select("moderation_status,suspended_until,moderation_note")
+.eq("id", uid)
+.maybeSingle();
+
+if (error) throw new Error(error.message);
+
+const status = profile?.moderation_status ?? "active";
+const suspendedUntil = profile?.suspended_until
+? new Date(profile.suspended_until)
+: null;
+
+if (status === "banned") {
+throw new Error(
+profile?.moderation_note ||
+"Your account has been banned. You cannot post or comment."
+);
+}
+
+if (
+status === "suspended" &&
+suspendedUntil &&
+suspendedUntil.getTime() > Date.now()
+) {
+throw new Error(
+`Your account is suspended until ${suspendedUntil.toLocaleString()}.`
+);
+}
+
+return uid;
+}
+
 async function submitPost() {
 const trimmed = text.trim();
 if (!trimmed && !file) return;
@@ -974,8 +1034,7 @@ setPosting(true);
 setBanner(null);
 
 try {
-const uid = myUserId ?? (await refreshAuth());
-if (!uid) throw new Error("Not signed in.");
+const uid = await ensureCanInteract();
 
 let media_url: string | null = null;
 let media_type: string | null = null;
@@ -1020,6 +1079,30 @@ async function deletePost(post: PostRow) {
 try {
 const uid = myUserId ?? (await refreshAuth());
 if (!uid) return;
+
+const { data: meProfile } = await supabase
+.from("profiles")
+.select("moderation_status,suspended_until")
+.eq("id", uid)
+.maybeSingle();
+
+const suspended =
+meProfile?.moderation_status === "suspended" &&
+meProfile?.suspended_until &&
+new Date(meProfile.suspended_until).getTime() > Date.now();
+
+const banned = meProfile?.moderation_status === "banned";
+
+if (suspended || banned) {
+setBanner(
+suspended
+? `Your account is suspended until ${new Date(
+meProfile.suspended_until
+).toLocaleString()}.`
+: "Your account has been banned."
+);
+return;
+}
 
 if (post.user_id !== uid) {
 setBanner("You can only delete your own posts.");
