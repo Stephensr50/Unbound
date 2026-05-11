@@ -16,13 +16,45 @@ const searchParams = useSearchParams();
 const [q, setQ] = useState("");
 const [mounted, setMounted] = useState(false);
 
+const [restrictedNav, setRestrictedNav] = useState(false);
+
 useEffect(() => {
 setMounted(true);
 }, []);
 
+
+
 const { unread, refresh, supabase } = useUnreadCount();
 const { notifUnread, refreshNotifs } = useUnreadNotifications();
 const { signalUnread, refreshSignals } = useUnreadSignals();
+
+useEffect(() => {
+async function checkModerationStatus() {
+const { data: authData } = await supabase.auth.getUser();
+const user = authData?.user;
+if (!user) return;
+
+const { data: profile } = await supabase
+.from("profiles")
+.select("moderation_status,suspended_until")
+.eq("id", user.id)
+.maybeSingle();
+
+const suspendedUntil = profile?.suspended_until
+? new Date(profile.suspended_until)
+: null;
+
+const isBanned = profile?.moderation_status === "banned";
+const isSuspended =
+profile?.moderation_status === "suspended" &&
+suspendedUntil &&
+suspendedUntil.getTime() > Date.now();
+
+setRestrictedNav(!!isBanned || !!isSuspended);
+}
+
+void checkModerationStatus();
+}, [supabase, pathname]);
 
 const refreshRef = useRef(refresh);
 useEffect(() => {
@@ -80,7 +112,7 @@ const hideOn = new Set([
 "/reset-password",
 ]);
 const shouldHide = !!pathname && hideOn.has(pathname);
-if (shouldHide) return null;
+if (shouldHide || restrictedNav) return null;
 
 const isActive = (href: string) => {
 if (!pathname) return false;

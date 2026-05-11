@@ -363,7 +363,7 @@ Reporter: {r.reporter_id ?? "Unknown"}
 {r.reporter_id ? (
 <button
 type="button"
-onClick={() => router.push(`/u/${r.reporter_id}`)}
+onClick={() => router.push(`/admin/users/${r.reporter_id}`)}
 style={{
 marginLeft: 10,
 padding: "4px 9px",
@@ -376,7 +376,7 @@ fontWeight: 800,
 fontSize: 11,
 }}
 >
-View Reporter
+View Reporter Profile
 </button>
 ) : null}
 </div>
@@ -386,7 +386,7 @@ Reported user: {r.reported_user_id ?? "Unknown"}
 {r.reported_user_id ? (
 <button
 type="button"
-onClick={() => router.push(`/u/${r.reported_user_id}`)}
+onClick={() => router.push(`/admin/users/${r.reported_user_id}`)}
 style={{
 marginLeft: 10,
 padding: "4px 9px",
@@ -399,7 +399,7 @@ fontWeight: 800,
 fontSize: 11,
 }}
 >
-View Reported
+Moderate User
 </button>
 ) : null}
 </div>

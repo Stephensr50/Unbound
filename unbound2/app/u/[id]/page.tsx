@@ -10,6 +10,7 @@ display_name: string | null;
 bio: string | null;
 avatar_url: string | null;
 buy_me_a_coffee_url: string | null;
+moderation_status?: string | null;
 };
 
 function getSupabase() {
@@ -23,6 +24,21 @@ throw new Error(
 }
 
 return createClient(url, key);
+}
+
+function UnavailableProfile() {
+return (
+<div
+style={{
+width: "min(920px, 94vw)",
+margin: "30px auto",
+color: "white",
+}}
+>
+<h1 style={{ fontSize: 34, marginBottom: 10 }}>Profile unavailable.</h1>
+<div style={{ opacity: 0.85 }}>This profile is not available.</div>
+</div>
+);
 }
 
 export default async function PublicProfilePage({
@@ -42,7 +58,9 @@ routeId
 
 const base = supabase
 .from("profiles")
-.select("id, username, display_name, bio, avatar_url, buy_me_a_coffee_url")
+.select(
+"id, username, display_name, bio, avatar_url, buy_me_a_coffee_url, moderation_status"
+)
 .limit(1);
 
 const { data, error } = isUuid
@@ -64,6 +82,10 @@ color: "white",
 </div>
 </div>
 );
+}
+
+if ((data as ProfileRow).moderation_status === "banned") {
+return <UnavailableProfile />;
 }
 
 return <UserProfileClient profile={data as ProfileRow} />;
