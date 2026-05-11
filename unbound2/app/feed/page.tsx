@@ -48,6 +48,7 @@ username: string | null;
 display_name: string | null;
 avatar_url: string | null;
 last_active_at?: string | null;
+moderation_status?: string | null;
 };
 
 type ReactionCountsMap = Partial<Record<ReactionKey, number>>;
@@ -242,7 +243,8 @@ if (blockedId === uid && blockerId) excludeIds.add(blockerId);
 
 const { data, error } = await supabase
 .from("profiles")
-.select("id,username,display_name,avatar_url,last_active_at")
+
+.select("id,username,display_name,avatar_url,last_active_at,moderation_status")
 .order("last_active_at", { ascending: false })
 .limit(30);
 
@@ -252,7 +254,9 @@ return;
 }
 
 const filtered = ((data ?? []) as ProfileRow[]).filter(
-(profile) => !excludeIds.has(profile.id)
+(profile) =>
+!excludeIds.has(profile.id) &&
+(profile.moderation_status ?? "active") === "active"
 );
 
 setSuggestedUsers(filtered.slice(0, 12));
@@ -433,6 +437,17 @@ if (error || !data) return;
 
 const p = data as PostRow;
 
+const { data: authorProfile } = await supabase
+.from("profiles")
+.select("moderation_status")
+.eq("id", p.user_id)
+.maybeSingle();
+
+if ((authorProfile?.moderation_status ?? "active") !== "active") {
+setBanner("That post is not available.");
+return;
+}
+
 if (!allowedIds.includes(p.user_id)) {
 setBanner("That post is not available in your feed.");
 return;
@@ -523,18 +538,26 @@ return;
 
 const rows = (data ?? []) as PostRow[];
 
-setPosts(rows);
+
 
 const uids = Array.from(new Set(rows.map((r) => r.user_id).filter(Boolean)));
 if (uids.length) {
 const { data: profs } = await supabase
 .from("profiles")
-.select("id,username,display_name,avatar_url")
+.select("id,username,display_name,avatar_url,moderation_status")
 .in("id", uids);
 
+const activeProfiles = ((profs ?? []) as ProfileRow[]).filter(
+(p) => (p.moderation_status ?? "active") === "active"
+);
+
+const activeUserIds = new Set(activeProfiles.map((p) => p.id));
+
 const map: Record<string, ProfileRow> = {};
-for (const p of (profs ?? []) as ProfileRow[]) map[p.id] = p;
+for (const p of activeProfiles) map[p.id] = p;
+
 setProfilesById(map);
+setPosts(rows.filter((post) => activeUserIds.has(post.user_id)));
 } else {
 setProfilesById({});
 }
