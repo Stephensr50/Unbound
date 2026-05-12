@@ -18,7 +18,7 @@ const [uploading, setUploading] = useState(false);
 const [displayName, setDisplayName] = useState("");
 const [bio, setBio] = useState("");
 const [avatarUrl, setAvatarUrl] = useState<string>("");
-
+const [designation, setDesignation] = useState("");
 const [city, setCity] = useState("");
 const [stateName, setStateName] = useState("");
 const [country, setCountry] = useState("");
@@ -41,12 +41,13 @@ const userId = authData.user.id;
 
 const { data: profile } = await supabase
 .from("profiles")
-.select("display_name, bio, avatar_url, city, state, country")
+.select("display_name, designation, bio, avatar_url, city, state, country")
 .eq("id", userId)
 .single();
 
 if (profile) {
 setDisplayName(profile.display_name ?? "");
+setDesignation(profile.designation || "");
 setBio(profile.bio ?? "");
 setCity(profile.city ?? "");
 setStateName(profile.state ?? "");
@@ -180,6 +181,7 @@ const { error } = await supabase
 .from("profiles")
 .update({
 display_name: displayName.trim(),
+designation: designation.trim() || null,
 bio,
 city: cleanCity || null,
 state: cleanState || null,
@@ -297,7 +299,25 @@ marginBottom: 12,
 }}
 />
 </label>
+<div style={{ fontSize: 12, opacity: 0.8, marginBottom: 6 }}>
+Designation
+</div>
 
+<input
+value={designation}
+onChange={(e) => setDesignation(e.target.value)}
+disabled={loading}
+placeholder="Dom, Sub, Switch, Brat, etc."
+style={{
+width: "100%",
+padding: "10px 12px",
+borderRadius: 10,
+border: "1px solid rgba(255,255,255,0.15)",
+background: "rgba(0,0,0,0.35)",
+color: "white",
+marginBottom: 12,
+}}
+/>
 <label>
 <div style={{ fontSize: 12, opacity: 0.8, marginBottom: 6 }}>City</div>
 <input

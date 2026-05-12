@@ -1754,7 +1754,11 @@ fontSize: 12,
 
 {isMine ? (
 <button
-onClick={() => deletePost(p)}
+onClick={(e) => {
+e.preventDefault();
+e.stopPropagation();
+deletePost(p);
+}}
 style={{
 border: "1px solid rgba(255,120,120,0.35)",
 background: "rgba(255,80,80,0.10)",

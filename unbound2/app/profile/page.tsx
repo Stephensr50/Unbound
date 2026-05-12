@@ -10,6 +10,7 @@ type ProfileRow = {
 id: string;
 username: string | null;
 display_name: string | null;
+designation?: string | null;
 is_admin?: boolean | null;
 bio: string | null;
 avatar_url: string | null;
@@ -151,7 +152,7 @@ if (!myUserId) return;
 (async () => {
 const { data: p, error: pErr } = await supabase
 .from("profiles")
-.select("id, username, display_name, bio, avatar_url, city, state, country, is_admin")
+.select("id, username, display_name, designation, bio, avatar_url, city, state, country, is_admin")
 .eq("id", myUserId)
 .maybeSingle();
 
@@ -220,7 +221,7 @@ return;
 
 const { data: profiles, error: profErr } = await supabase
 .from("profiles")
-.select("id, username, display_name, bio, avatar_url, city, state, country, is_admin")
+.select("id, username, display_name, designation, bio, avatar_url, city, state, country, is_admin")
 .in("id", ids);
 
 if (profErr) {
@@ -258,7 +259,7 @@ return;
 
 const { data: profiles, error: profErr } = await supabase
 .from("profiles")
-.select("id, username, display_name, bio, avatar_url, city, state, country, is_admin")
+.select("id, username, display_name, designation, bio, avatar_url, city, state, country, is_admin")
 .in("id", ids);
 
 if (profErr) {
@@ -542,11 +543,12 @@ fontSize: 18,
 )}
 </div>
 
-<div style={{ minWidth: 0 }}>
+<div style={{ minWidth: 0, flex: 1 }}>
 <h1 style={S.name}>{title}</h1>
-{subtitle ? <div style={S.sub}>{subtitle}</div> : null}
+{myProfile?.designation ? (
+<div style={S.sub}>{myProfile.designation}</div>
+) : null}
 {locationLine ? <div style={S.sub}>{locationLine}</div> : null}
-<div style={S.bio}>{myProfile?.bio ? myProfile.bio : "No bio yet."}</div>
 </div>
 </div>
 
@@ -595,6 +597,43 @@ onClick={() => openModal("followers")}
 <div style={S.stat} onClick={() => openModal("following")}>
 <div style={S.statNum}>{followingCount}</div>
 <div style={S.statLabel}>Following</div>
+</div>
+</div>
+
+<div
+style={{
+width: "100%",
+maxWidth: 520,
+margin: "16px auto 0",
+borderRadius: 18,
+border: "1px solid rgba(236,72,153,0.35)",
+background: "rgba(0,0,0,0.45)",
+backdropFilter: "blur(14px)",
+padding: 18,
+boxShadow: "0 0 18px rgba(236,72,153,0.12)",
+}}
+>
+<div
+style={{
+fontSize: 22,
+fontWeight: 900,
+marginBottom: 12,
+color: "rgba(255,235,250,0.96)",
+textShadow: "0 0 12px rgba(236,72,153,0.45)",
+}}
+>
+About Me
+</div>
+
+<div
+style={{
+fontSize: 15,
+lineHeight: 1.55,
+color: "rgba(255,255,255,0.78)",
+whiteSpace: "pre-wrap",
+}}
+>
+{myProfile?.bio ? myProfile.bio : "No about me added yet."}
 </div>
 </div>
 

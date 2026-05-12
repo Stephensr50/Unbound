@@ -130,6 +130,8 @@ Record<number, boolean>
 >({});
 
 const [busyPostId, setBusyPostId] = useState<number | null>(null);
+
+const [pendingDeletePost, setPendingDeletePost] = useState<PostRow | null>(null);
 const [spark, setSpark] = useState<Record<number, boolean>>({});
 
 const [openComments, setOpenComments] = useState<Record<number, boolean>>({});
@@ -662,6 +664,75 @@ setCommentCounts((m) => ({ ...m, [postId]: (m[postId] ?? 0) + 1 }));
 setOpenComments((m) => ({ ...m, [postId]: true }));
 }
 
+
+async function deletePost(post: PostRow) {
+const uid = myUserId ?? (await refreshAuth());
+if (!uid) return;
+
+if (post.user_id !== uid) {
+setBanner("You can only delete your own posts.");
+return;
+}
+
+
+
+setBusyPostId(post.id);
+setBanner(null);
+
+try {
+const media = getPostMedia(post);
+
+if (media) {
+try {
+const url = new URL(media);
+const marker = "/storage/v1/object/public/media/";
+const idx = url.pathname.indexOf(marker);
+
+if (idx >= 0) {
+const path = decodeURIComponent(
+url.pathname.slice(idx + marker.length)
+);
+
+if (path) {
+await supabase.storage.from("media").remove([path]);
+}
+}
+} catch {
+// ignore storage cleanup errors
+}
+}
+
+const { error } = await supabase
+.from("posts")
+.delete()
+.eq("id", post.id)
+.eq("user_id", uid);
+
+if (error) throw error;
+
+setPosts((rows) => rows.filter((row) => row.id !== post.id));
+setLikeCounts((m) => {
+const next = { ...m };
+delete next[post.id];
+return next;
+});
+setCommentCounts((m) => {
+const next = { ...m };
+delete next[post.id];
+return next;
+});
+setReactionCountsByPost((m) => {
+const next = { ...m };
+delete next[post.id];
+return next;
+});
+} catch (e: any) {
+setBanner(e?.message || "Delete failed.");
+} finally {
+setBusyPostId(null);
+}
+}
+
 function makeGalleryItems(items: PostRow[], mode: "photos" | "videos"): GalleryItem[] {
 return items
 .map((p) => {
@@ -943,6 +1014,11 @@ return (
 <div style={{ width: "min(920px, 94vw)", margin: "16px auto 0" }}>
 <style>{`
 @keyframes unboundPop {
+@keyframes deleteBounce {
+0% { transform: scale(0.86); opacity: 0; }
+70% { transform: scale(1.04); opacity: 1; }
+100% { transform: scale(1); opacity: 1; }
+}
 0% { transform: scale(1); }
 45% { transform: scale(1.22); }
 100% { transform: scale(1); }
@@ -965,102 +1041,7 @@ fontSize: 13,
 </div>
 ) : null}
 
-<div style={profileCard}>
-<div
-style={{
-display: "flex",
-gap: 16,
-alignItems: "flex-start",
-flexWrap: "wrap",
-}}
->
-{myProfile?.avatar_url ? (
-// eslint-disable-next-line @next/next/no-img-element
-<img
-src={myProfile.avatar_url}
-alt=""
-style={{
-width: 104,
-height: 104,
-borderRadius: 18,
-objectFit: "contain",
-border: "1px solid rgba(255,255,255,0.16)",
-flex: "0 0 auto",
-}}
-/>
-) : (
-<div
-style={{
-width: 104,
-height: 104,
-borderRadius: 18,
-display: "grid",
-placeItems: "center",
-border: "1px solid rgba(255,255,255,0.16)",
-background: "rgba(255,255,255,0.04)",
-opacity: 0.7,
-flex: "0 0 auto",
-fontWeight: 800,
-fontSize: 30,
-}}
->
-{(myProfile?.display_name || myProfile?.username || "R")
-.charAt(0)
-.toUpperCase()}
-</div>
-)}
 
-<div style={{ flex: 1, minWidth: 220 }}>
-<div style={{ fontSize: 24, fontWeight: 850 }}>
-{myProfile?.display_name || myProfile?.username || "Your profile"}
-</div>
-
-{myProfile?.username ? (
-<div style={{ opacity: 0.85, marginTop: 4 }}>@{myProfile.username}</div>
-) : null}
-
-{myProfile?.location ? (
-<div style={{ opacity: 0.85, marginTop: 6 }}>{myProfile.location}</div>
-) : null}
-
-{myProfile?.bio ? (
-<div style={{ opacity: 0.95, marginTop: 10, whiteSpace: "pre-wrap" }}>
-{myProfile.bio}
-</div>
-) : null}
-
-<div
-style={{
-display: "flex",
-gap: 10,
-flexWrap: "wrap",
-marginTop: 14,
-}}
->
-<button
-onClick={() => openRelationshipModal("followers")}
-style={countPill}
->
-Followers · {relationshipCounts.followers}
-</button>
-
-<button
-onClick={() => openRelationshipModal("following")}
-style={countPill}
->
-Following · {relationshipCounts.following}
-</button>
-
-<button
-onClick={() => openRelationshipModal("friends")}
-style={countPill}
->
-Friends · {relationshipCounts.friends}
-</button>
-</div>
-</div>
-</div>
-</div>
 
 <div
 style={{
@@ -1120,6 +1101,35 @@ marginBottom: 8,
 </div>
 <div style={{ opacity: 0.55, fontSize: 12 }}>
 @{myProfile?.username || "you"}
+</div>
+<div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+<div style={{ opacity: 0.55, fontSize: 12 }}>
+@{myProfile?.username || "you"}
+</div>
+
+<button
+type="button"
+onClick={(e) => {
+e.preventDefault();
+e.stopPropagation();
+setPendingDeletePost(p);
+}}
+disabled={busyPostId === p.id}
+style={{
+border: "1px solid rgba(255,120,120,0.35)",
+background: "rgba(255,80,80,0.10)",
+color: "rgba(255,220,220,0.95)",
+borderRadius: 999,
+padding: "6px 10px",
+cursor: busyPostId === p.id ? "default" : "pointer",
+fontWeight: 800,
+fontSize: 12,
+opacity: busyPostId === p.id ? 0.65 : 1,
+}}
+title="Delete post"
+>
+{busyPostId === p.id ? "Deleting..." : "Delete"}
+</button>
 </div>
 </div>
 
@@ -1531,6 +1541,100 @@ background: "black",
 {currentGalleryItem.caption}
 </div>
 ) : null}
+</div>
+</div>
+</div>
+) : null}
+{pendingDeletePost ? (
+<div
+onClick={() => setPendingDeletePost(null)}
+style={{
+position: "fixed",
+inset: 0,
+zIndex: 10000,
+background: "rgba(0,0,0,0.76)",
+backdropFilter: "blur(10px)",
+display: "flex",
+alignItems: "center",
+justifyContent: "center",
+padding: 18,
+}}
+>
+<div
+onClick={(e) => e.stopPropagation()}
+style={{
+width: "min(420px, 94vw)",
+borderRadius: 22,
+padding: 20,
+background:
+"linear-gradient(180deg, rgba(35,0,48,0.96), rgba(0,0,0,0.94))",
+border: "1px solid rgba(236,72,153,0.55)",
+boxShadow:
+"0 0 30px rgba(236,72,153,0.35), 0 0 70px rgba(168,85,247,0.25)",
+color: "white",
+transform: "scale(1)",
+animation: "deleteBounce 0.22s ease-out",
+}}
+>
+<div
+style={{
+fontSize: 24,
+fontWeight: 900,
+marginBottom: 8,
+color: "rgba(255,230,250,0.98)",
+}}
+>
+Delete this post?
+</div>
+
+<div
+style={{
+opacity: 0.72,
+fontSize: 14,
+lineHeight: 1.45,
+marginBottom: 18,
+}}
+>
+This will permanently remove it from your profile and feed.
+</div>
+
+<div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
+<button
+type="button"
+onClick={() => setPendingDeletePost(null)}
+style={{
+padding: "10px 16px",
+borderRadius: 999,
+border: "1px solid rgba(255,255,255,0.16)",
+background: "rgba(255,255,255,0.08)",
+color: "white",
+cursor: "pointer",
+fontWeight: 800,
+}}
+>
+Cancel
+</button>
+
+<button
+type="button"
+onClick={async () => {
+const post = pendingDeletePost;
+setPendingDeletePost(null);
+if (post) await deletePost(post);
+}}
+style={{
+padding: "10px 16px",
+borderRadius: 999,
+border: "1px solid rgba(255,120,120,0.45)",
+background: "linear-gradient(90deg,#dc2626,#ec4899)",
+color: "white",
+cursor: "pointer",
+fontWeight: 900,
+boxShadow: "0 0 16px rgba(236,72,153,0.45)",
+}}
+>
+Delete
+</button>
 </div>
 </div>
 </div>
