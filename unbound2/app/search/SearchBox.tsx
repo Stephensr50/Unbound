@@ -17,6 +17,7 @@ gender: string | null;
 last_active_at: string | null;
 latitude: number | null;
 longitude: number | null;
+moderation_status: string | null;
 };
 
 type ProfileWithDistance = ProfileRow & {
@@ -248,7 +249,7 @@ setLoading(true);
 let query = supabase
 .from("profiles")
 .select(
-"id, username, display_name, bio, avatar_url, city, state, country, gender, last_active_at, latitude, longitude"
+"id, username, display_name, bio, avatar_url, city, state, country, gender, last_active_at, latitude, longitude, moderation_status"
 )
 .limit(100);
 
@@ -316,7 +317,11 @@ if (blockedId === user.id && blockerId) blockedIds.add(blockerId);
 }
 
 let rows = ((data as ProfileRow[]) ?? [])
-.filter((p) => !blockedIds.has(p.id))
+.filter(
+(p) =>
+!blockedIds.has(p.id) &&
+(p.moderation_status ?? "active") === "active"
+)
 .map((p) => ({
 ...p,
 distanceMiles: null,
