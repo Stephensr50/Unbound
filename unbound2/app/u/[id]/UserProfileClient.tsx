@@ -19,9 +19,13 @@ type ProfileRow = {
 id: string;
 username: string | null;
 display_name: string | null;
+designation?: string | null;
 bio: string | null;
 avatar_url: string | null;
 buy_me_a_coffee_url?: string | null;
+city?: string | null;
+state?: string | null;
+country?: string | null;
 location?: string | null;
 };
 
@@ -167,6 +171,7 @@ const [signalBanner, setSignalBanner] = useState<string | null>(null);
 const [profileKinks, setProfileKinks] = useState<UserKinkRow[]>([]);
 
 const [kinksModalOpen, setKinksModalOpen] = useState(false);
+const [aboutModalOpen, setAboutModalOpen] = useState(false);
 async function refreshAuth() {
 const { data } = await supabase.auth.getSession();
 const uid = data.session?.user?.id ?? null;
@@ -1314,18 +1319,18 @@ flex: "0 0 auto",
 {profile.display_name || profile.username || "Unknown"}
 </div>
 
-{profile.username ? (
-<div style={{ opacity: 0.85, marginTop: 4 }}>@{profile.username}</div>
-) : null}
-
-{profile.location ? (
-<div style={{ opacity: 0.85, marginTop: 6 }}>{profile.location}</div>
-) : null}
-
-{profile.bio ? (
-<div style={{ opacity: 0.95, marginTop: 10, whiteSpace: "pre-wrap" }}>
-{profile.bio}
+{profile.designation ? (
+<div style={{ opacity: 0.9, marginTop: 4, fontWeight: 750 }}>
+{profile.designation}
 </div>
+) : null}
+
+{[profile.city, profile.state, profile.country].filter(Boolean).length > 0 ? (
+<div style={{ opacity: 0.85, marginTop: 6 }}>
+{[profile.city, profile.state, profile.country].filter(Boolean).join(", ")}
+</div>
+) : profile.location ? (
+<div style={{ opacity: 0.85, marginTop: 6 }}>{profile.location}</div>
 ) : null}
 
 <div
@@ -1364,6 +1369,20 @@ targetProfileId={profile.id}
 buyMeACoffeeUrl={profile.buy_me_a_coffee_url ?? null}
 />
 </div>
+{profile.bio ? (
+<button
+type="button"
+onClick={() => setAboutModalOpen(true)}
+style={{
+...pillBtn,
+marginTop: 12,
+border: "1px solid rgba(236,72,153,0.45)",
+boxShadow: "0 0 14px rgba(236,72,153,0.22)",
+}}
+>
+About Me
+</button>
+) : null}
 {myUserId !== profile.id ? (
 <div style={{ marginTop: 14 }}>
 <div
@@ -1748,6 +1767,64 @@ renderMediaGrid(videoPosts, "videos")
 )}
 
 
+{aboutModalOpen ? (
+<div
+onClick={() => setAboutModalOpen(false)}
+style={{
+position: "fixed",
+inset: 0,
+background: "rgba(0,0,0,0.74)",
+backdropFilter: "blur(14px)",
+WebkitBackdropFilter: "blur(14px)",
+display: "flex",
+alignItems: "center",
+justifyContent: "center",
+zIndex: 9999,
+padding: 16,
+}}
+>
+<div
+onClick={(e) => e.stopPropagation()}
+style={{
+width: "min(620px, 96vw)",
+maxHeight: "82vh",
+overflowY: "auto",
+borderRadius: 22,
+padding: 18,
+background:
+"linear-gradient(180deg, rgba(20,0,28,0.96), rgba(0,0,0,0.94))",
+border: "1px solid rgba(236,72,153,0.55)",
+boxShadow:
+"0 0 25px rgba(236,72,153,0.26), 0 0 55px rgba(168,85,247,0.18)",
+color: "white",
+}}
+>
+<div style={{ display: "flex", justifyContent: "space-between", gap: 10 }}>
+<div style={{ fontSize: 24, fontWeight: 900 }}>About Me</div>
+
+<button
+type="button"
+onClick={() => setAboutModalOpen(false)}
+style={pillBtn}
+>
+Close
+</button>
+</div>
+
+<div
+style={{
+marginTop: 16,
+fontSize: 15,
+lineHeight: 1.55,
+whiteSpace: "pre-wrap",
+color: "rgba(255,255,255,0.86)",
+}}
+>
+{profile.bio}
+</div>
+</div>
+</div>
+) : null}
 {kinksModalOpen ? (
 <div
 onClick={() => setKinksModalOpen(false)}

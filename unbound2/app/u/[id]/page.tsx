@@ -7,9 +7,13 @@ type ProfileRow = {
 id: string;
 username: string | null;
 display_name: string | null;
+designation?: string | null;
 bio: string | null;
 avatar_url: string | null;
 buy_me_a_coffee_url: string | null;
+city?: string | null;
+state?: string | null;
+country?: string | null;
 moderation_status?: string | null;
 };
 
@@ -59,7 +63,7 @@ routeId
 const base = supabase
 .from("profiles")
 .select(
-"id, username, display_name, bio, avatar_url, buy_me_a_coffee_url, moderation_status"
+"id, username, display_name, designation, bio, avatar_url, buy_me_a_coffee_url, city, state, country, moderation_status"
 )
 .limit(1);
 
