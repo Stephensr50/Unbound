@@ -40,7 +40,19 @@ display_name: string | null;
 avatar_url: string | null;
 } | null;
 };
+type EventCommentRow = {
+id: number;
+event_id: number;
+user_id: string;
+body: string;
+created_at: string;
 
+author?: {
+username: string | null;
+display_name: string | null;
+avatar_url: string | null;
+} | null;
+};
 type RSVPRow = {
 id: number;
 user_id: string;
@@ -82,6 +94,9 @@ const supabase = useMemo(() => getSupabase(), []);
 const [meId, setMeId] = useState<string | null>(null);
 const [event, setEvent] = useState<EventRow | null>(null);
 const [rsvps, setRsvps] = useState<RSVPRow[]>([]);
+const [comments, setComments] = useState<EventCommentRow[]>([]);
+const [commentBody, setCommentBody] = useState("");
+const [sendingComment, setSendingComment] = useState(false);
 const [myStatus, setMyStatus] = useState<
 "going" | "interested" | "not_going" | null
 >(null);
@@ -157,9 +172,56 @@ const mine = safeRsvps.find((r) => r.user_id === user.id);
 setMyStatus(mine?.status || null);
 }
 }
+const { data: commentData, error: commentError } = await supabase
+.from("event_comments")
+.select(
+`
+id,
+event_id,
+user_id,
+body,
+created_at,
+author:profiles (
+username,
+display_name,
+avatar_url
+)
+`
+)
+.eq("event_id", eventId)
+.order("created_at", { ascending: true });
 
+if (commentError) {
+console.error(commentError);
+setComments([]);
+} else {
+setComments((commentData || []) as unknown as EventCommentRow[]);
+}
 setLoading(false);
 }
+
+async function submitComment() {
+if (!meId || !commentBody.trim()) return;
+
+setSendingComment(true);
+
+const { error } = await supabase.from("event_comments").insert({
+event_id: eventId,
+user_id: meId,
+body: commentBody.trim(),
+});
+
+setSendingComment(false);
+
+if (error) {
+console.error(error);
+return;
+}
+
+setCommentBody("");
+await loadPage();
+}
+
 
 async function setRSVP(status: "going" | "interested" | "not_going") {
 if (!meId || !event || event.status === "cancelled") return;
@@ -383,6 +445,108 @@ return (
 </div>
 )}
 </section>
+<section style={rsvpCardStyle}>
+<h2 style={{ color: "white", marginBottom: 14 }}>
+Comments ({comments.length})
+</h2>
+
+<div
+style={{
+display: "flex",
+flexDirection: "column",
+gap: 12,
+marginBottom: 18,
+}}
+>
+<textarea
+value={commentBody}
+onChange={(e) => setCommentBody(e.target.value)}
+placeholder="Write a comment..."
+rows={4}
+style={{
+width: "100%",
+borderRadius: 16,
+border: "1px solid rgba(255,255,255,0.12)",
+background: "rgba(255,255,255,0.04)",
+color: "white",
+padding: 14,
+resize: "vertical",
+outline: "none",
+}}
+/>
+
+<button
+onClick={submitComment}
+disabled={sendingComment || !commentBody.trim()}
+style={{
+alignSelf: "flex-start",
+border: "none",
+borderRadius: 999,
+padding: "10px 18px",
+background: "linear-gradient(135deg,#c084fc,#7c3aed)",
+color: "white",
+fontWeight: 700,
+cursor: "pointer",
+opacity: sendingComment ? 0.7 : 1,
+}}
+>
+{sendingComment ? "Posting..." : "Post Comment"}
+</button>
+</div>
+
+{comments.length === 0 ? (
+<p style={{ color: "rgba(255,255,255,0.62)" }}>
+No comments yet.
+</p>
+) : (
+<div
+style={{
+display: "flex",
+flexDirection: "column",
+gap: 14,
+}}
+>
+{comments.map((comment) => {
+const name =
+comment.author?.display_name ||
+comment.author?.username ||
+"Unknown user";
+
+return (
+<div
+key={comment.id}
+style={{
+background: "rgba(255,255,255,0.04)",
+border: "1px solid rgba(255,255,255,0.08)",
+borderRadius: 18,
+padding: 14,
+}}
+>
+<div
+style={{
+color: "white",
+fontWeight: 700,
+marginBottom: 6,
+}}
+>
+{name}
+</div>
+
+<div
+style={{
+color: "rgba(255,255,255,0.82)",
+whiteSpace: "pre-wrap",
+lineHeight: 1.5,
+}}
+>
+{comment.body}
+</div>
+</div>
+);
+})}
+</div>
+)}
+</section>
 </main>
 );
 }
@@ -400,7 +564,7 @@ overflow: "hidden",
 
 const bannerWrapStyle: React.CSSProperties = {
 width: "100%",
-height: 260,
+height: "4/5",
 borderRadius: 22,
 overflow: "hidden",
 marginBottom: 22,
@@ -411,16 +575,19 @@ boxShadow: "0 0 28px rgba(123,92,255,0.18)",
 const bannerImageStyle: React.CSSProperties = {
 width: "100%",
 height: "100%",
-objectFit: "contain",
+objectFit: "cover",
 display: "block",
 background: "rgba(0,0,0,0.45)",
 };
-
 const rsvpCardStyle: React.CSSProperties = {
-background: "rgba(255,255,255,0.04)",
-border: "1px solid rgba(255,255,255,0.09)",
-borderRadius: 22,
-padding: 22,
+background:
+"linear-gradient(135deg, rgba(168,85,247,0.24), rgba(76,29,149,0.18)), rgba(10, 10, 18, 0.49)",
+border: "1px solid rgba(192,132,252,0.45)",
+borderRadius: 26,
+padding: 26,
+marginBottom: 28,
+backdropFilter: "blur(16px)",
+boxShadow: "0 0 34px rgba(168,85,247,0.18)",
 };
 
 const pillStyle: React.CSSProperties = {
