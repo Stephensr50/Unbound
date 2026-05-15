@@ -68,14 +68,20 @@ return null;
 export default function EventsPage() {
 const supabase = useMemo(() => getSupabase(), []);
 const [events, setEvents] = useState<EventRow[]>([]);
+const [myUserId, setMyUserId] = useState<string | null>(null);
 const [loading, setLoading] = useState(true);
 
 useEffect(() => {
 loadEvents();
+// eslint-disable-next-line react-hooks/exhaustive-deps
 }, []);
 
 async function loadEvents() {
 setLoading(true);
+
+const { data: authData } = await supabase.auth.getUser();
+const userId = authData?.user?.id ?? null;
+setMyUserId(userId);
 
 const { data, error } = await supabase
 .from("events")
@@ -103,8 +109,11 @@ setEvents((data || []) as unknown as EventRow[]);
 setLoading(false);
 }
 
+const myEvents = events.filter((event) => event.creator_id === myUserId);
+const upcomingEvents = events;
+
 return (
-<main style={{ maxWidth: 960, margin: "0 auto", padding: "120px 20px 80px" }}>
+<main style={{ maxWidth: 960, margin: "0 auto", padding: "150px 20px 80px" }}>
 <style>{`
 .eventCard {
 transition: transform 160ms ease, box-shadow 160ms ease, border-color 160ms ease;
@@ -131,47 +140,59 @@ flexWrap: "wrap",
 Events
 </h1>
 <p style={{ color: "rgba(255,255,255,0.7)", fontSize: 15 }}>
-Find munches, parties, classes, rope jams, and community gatherings.
+Find and manage munches, parties, classes, rope jams, and community gatherings.
 </p>
 </div>
 
-<Link
-href="/events/new"
-style={{
-padding: "12px 18px",
-borderRadius: 14,
-background: "linear-gradient(135deg, #ff4fd8 0%, #7b5cff 100%)",
-color: "white",
-textDecoration: "none",
-fontWeight: 800,
-boxShadow: "0 0 24px rgba(168,85,247,0.45)",
-}}
->
+<Link href="/events/new" style={createBtnStyle}>
 + Create Event
 </Link>
 </div>
 
+{myEvents.length > 0 && (
+<section style={{ marginBottom: 34 }}>
+<h2 style={sectionTitleStyle}>My Events</h2>
+
+<div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+{myEvents.map((event) => (
+<article key={event.id} style={myEventCardStyle}>
+<div>
+<h3 style={{ color: "white", fontSize: 22, margin: "0 0 6px" }}>
+{event.title}
+</h3>
+
+<div style={{ color: "rgba(255,255,255,0.7)", fontSize: 14 }}>
+📅 {formatDate(event.starts_at)}
+</div>
+</div>
+
+<div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+<Link href={`/events/${event.id}`} style={smallBtnStyle}>
+View
+</Link>
+
+<Link href={`/events/${event.id}/edit`} style={smallBtnStyle}>
+Edit
+</Link>
+</div>
+</article>
+))}
+</div>
+</section>
+)}
+
+<section>
+<h2 style={sectionTitleStyle}>Upcoming Events</h2>
+
 {loading ? (
 <div style={{ color: "rgba(255,255,255,0.7)" }}>Loading events...</div>
-) : events.length === 0 ? (
-<div
-style={{
-padding: 24,
-borderRadius: 20,
-background: "rgba(255,255,255,0.04)",
-border: "1px solid rgba(255,255,255,0.08)",
-color: "rgba(255,255,255,0.7)",
-}}
->
-No upcoming events yet.
-</div>
+) : upcomingEvents.length === 0 ? (
+<div style={emptyStyle}>No upcoming events yet.</div>
 ) : (
 <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
-{events.map((event) => {
+{upcomingEvents.map((event) => {
 const creatorName =
-event.creator?.display_name ||
-event.creator?.username ||
-"Unknown host";
+event.creator?.display_name || event.creator?.username || "Unknown host";
 
 const creatorInitial = creatorName.slice(0, 1).toUpperCase();
 
@@ -190,17 +211,7 @@ key={event.id}
 href={`/events/${event.id}`}
 style={{ textDecoration: "none", color: "inherit" }}
 >
-<article
-className="eventCard"
-style={{
-background: "rgba(255,255,255,0.05)",
-border: "1px solid rgba(168,85,247,0.22)",
-borderRadius: 24,
-padding: 22,
-backdropFilter: "blur(12px)",
-boxShadow: "0 0 24px rgba(123,92,255,0.12)",
-}}
->
+<article className="eventCard" style={eventCardStyle}>
 <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 14 }}>
 {dateBadge && <span style={hotPillStyle}>{dateBadge}</span>}
 
@@ -300,9 +311,63 @@ border: "1px solid rgba(255,255,255,0.18)",
 })}
 </div>
 )}
+</section>
 </main>
 );
 }
+
+const sectionTitleStyle: React.CSSProperties = {
+color: "white",
+fontSize: 24,
+fontWeight: 900,
+margin: "0 0 14px",
+};
+
+const createBtnStyle: React.CSSProperties = {
+padding: "12px 18px",
+borderRadius: 14,
+background: "linear-gradient(135deg, #ff4fd8 0%, #7b5cff 100%)",
+color: "white",
+textDecoration: "none",
+fontWeight: 800,
+boxShadow: "0 0 24px rgba(168,85,247,0.45)",
+};
+
+const eventCardStyle: React.CSSProperties = {
+background: "rgba(255,255,255,0.05)",
+border: "1px solid rgba(168,85,247,0.22)",
+borderRadius: 24,
+padding: 22,
+backdropFilter: "blur(12px)",
+boxShadow: "0 0 24px rgba(123,92,255,0.12)",
+};
+
+const myEventCardStyle: React.CSSProperties = {
+...eventCardStyle,
+display: "flex",
+alignItems: "center",
+justifyContent: "space-between",
+gap: 16,
+flexWrap: "wrap",
+};
+
+const smallBtnStyle: React.CSSProperties = {
+padding: "9px 13px",
+borderRadius: 12,
+background: "rgba(255,255,255,0.07)",
+border: "1px solid rgba(255,255,255,0.14)",
+color: "white",
+textDecoration: "none",
+fontWeight: 800,
+};
+
+const emptyStyle: React.CSSProperties = {
+padding: 24,
+borderRadius: 20,
+background: "rgba(255,255,255,0.04)",
+border: "1px solid rgba(255,255,255,0.08)",
+color: "rgba(255,255,255,0.7)",
+};
 
 const pillStyle: React.CSSProperties = {
 padding: "7px 11px",

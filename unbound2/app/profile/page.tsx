@@ -557,13 +557,9 @@ fontSize: 18,
 Edit Profile
 </Link>
 
-<Link href="/events/new" style={S.btn}>
-Create Event
-</Link>
 
-<Link href="/writings/new" style={S.btn}>
-Create Writing
-</Link>
+
+
 
 {isAdmin ? (
 <Link href="/admin/reports" style={S.btn}>
