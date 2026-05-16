@@ -35,6 +35,9 @@ const [loading, setLoading] = useState(true);
 const [busyId, setBusyId] = useState<string | null>(null);
 const [banner, setBanner] = useState<string | null>(null);
 
+const [confirmOpen, setConfirmOpen] = useState(false);
+const [pendingUnblockId, setPendingUnblockId] = useState<string | null>(null);
+
 async function loadBlockedUsers() {
 setLoading(true);
 setBanner(null);
@@ -93,11 +96,13 @@ setProfilesById(map);
 setLoading(false);
 }
 
+function askUnblock(blockedId: string) {
+setPendingUnblockId(blockedId);
+setConfirmOpen(true);
+}
+
 async function unblockUser(blockedId: string) {
 if (!me) return;
-
-const confirmed = window.confirm("Unblock this user?");
-if (!confirmed) return;
 
 setBusyId(blockedId);
 setBanner(null);
@@ -119,10 +124,27 @@ setBusyId(null);
 setBanner("User unblocked.");
 }
 
+async function confirmUnblock() {
+if (!pendingUnblockId) return;
+
+const id = pendingUnblockId;
+setConfirmOpen(false);
+setPendingUnblockId(null);
+
+await unblockUser(id);
+}
+
 useEffect(() => {
 void loadBlockedUsers();
 // eslint-disable-next-line react-hooks/exhaustive-deps
 }, []);
+
+const pendingProfile = pendingUnblockId
+? profilesById[pendingUnblockId]
+: null;
+
+const pendingLabel =
+pendingProfile?.display_name || pendingProfile?.username || "this user";
 
 return (
 <div
@@ -253,7 +275,7 @@ Blocked {new Date(block.created_at).toLocaleDateString()}
 </div>
 
 <button
-onClick={() => unblockUser(block.blocked_id)}
+onClick={() => askUnblock(block.blocked_id)}
 disabled={busyId === block.blocked_id}
 style={{
 padding: "9px 14px",
@@ -274,6 +296,106 @@ opacity: busyId === block.blocked_id ? 0.65 : 1,
 </div>
 )}
 </div>
+
+{confirmOpen ? (
+<div
+onClick={() => {
+if (busyId) return;
+setConfirmOpen(false);
+setPendingUnblockId(null);
+}}
+style={{
+position: "fixed",
+inset: 0,
+zIndex: 9999,
+display: "grid",
+placeItems: "center",
+padding: 18,
+background: "rgba(0,0,0,0.68)",
+backdropFilter: "blur(8px)",
+}}
+>
+<div
+onClick={(e) => e.stopPropagation()}
+style={{
+width: "min(440px, 94vw)",
+borderRadius: 22,
+padding: 18,
+background:
+"linear-gradient(180deg, rgba(30,0,45,0.96), rgba(0,0,0,0.92))",
+border: "1px solid rgba(236,72,153,0.34)",
+boxShadow:
+"0 0 28px rgba(168,85,247,0.42), 0 0 80px rgba(236,72,153,0.18)",
+color: "white",
+}}
+>
+<div
+style={{
+fontFamily: '"Gloock", serif',
+fontSize: 28,
+color: "rgba(236,72,153,0.96)",
+textShadow: "0 0 16px rgba(168,85,247,0.55)",
+marginBottom: 8,
+}}
+>
+Unblock user?
+</div>
+
+<div style={{ opacity: 0.82, lineHeight: 1.45, marginBottom: 16 }}>
+Are you sure you want to unblock{" "}
+<b style={{ color: "white" }}>{pendingLabel}</b>? They may be able
+to see your public activity again.
+</div>
+
+<div
+style={{
+display: "flex",
+justifyContent: "flex-end",
+gap: 10,
+flexWrap: "wrap",
+}}
+>
+<button
+type="button"
+onClick={() => {
+setConfirmOpen(false);
+setPendingUnblockId(null);
+}}
+style={{
+padding: "10px 14px",
+borderRadius: 999,
+border: "1px solid rgba(255,255,255,0.14)",
+background: "rgba(255,255,255,0.06)",
+color: "white",
+cursor: "pointer",
+fontWeight: 900,
+}}
+>
+Cancel
+</button>
+
+<button
+type="button"
+onClick={confirmUnblock}
+disabled={!pendingUnblockId || !!busyId}
+style={{
+padding: "10px 14px",
+borderRadius: 999,
+border: "1px solid rgba(236,72,153,0.45)",
+background: "linear-gradient(90deg,#7c3aed,#ec4899)",
+color: "white",
+cursor: !pendingUnblockId || busyId ? "not-allowed" : "pointer",
+fontWeight: 950,
+boxShadow: "0 0 18px rgba(168,85,247,0.55)",
+opacity: !pendingUnblockId || busyId ? 0.6 : 1,
+}}
+>
+Yes, unblock
+</button>
+</div>
+</div>
+</div>
+) : null}
 </div>
 );
 }

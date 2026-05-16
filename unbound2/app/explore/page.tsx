@@ -25,8 +25,8 @@ id: string;
 username: string | null;
 display_name: string | null;
 avatar_url: string | null;
+moderation_status?: string | null;
 };
-
 function timeAgo(ts: string) {
 const then = new Date(ts).getTime();
 const now = Date.now();
@@ -80,7 +80,7 @@ seen.add(key);
 rows.push(post);
 }
 
-setPosts(rows);
+
 
 const userIds = Array.from(new Set(rows.map((p) => p.user_id).filter(Boolean)));
 
@@ -91,17 +91,25 @@ return;
 
 const { data: profs, error: profErr } = await supabase
 .from("profiles")
-.select("id,username,display_name,avatar_url")
+.select("id,username,display_name,avatar_url,moderation_status")
 .in("id", userIds);
 
 if (profErr) throw profErr;
 if (!alive) return;
 
+const activeProfiles = ((profs ?? []) as ProfileRow[]).filter(
+(p) => (p.moderation_status ?? "active") === "active"
+);
+
+const activeUserIds = new Set(activeProfiles.map((p) => p.id));
+
 const map: Record<string, ProfileRow> = {};
-for (const p of (profs ?? []) as ProfileRow[]) {
+for (const p of activeProfiles) {
 map[p.id] = p;
 }
+
 setProfilesById(map);
+setPosts(rows.filter((post) => activeUserIds.has(post.user_id)));
 } catch (e: any) {
 if (!alive) return;
 setBanner(e?.message || "Failed to load explore.");

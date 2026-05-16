@@ -1447,13 +1447,17 @@ opacity: 0.75,
 onClick={() => setGallery(null)}
 style={{
 position: "fixed",
-inset: 0,
+top: 90,
+left: 0,
+right: 0,
+bottom: 0,
 background: "rgba(0,0,0,0.82)",
 display: "flex",
-alignItems: "center",
+alignItems: "flex-start",
 justifyContent: "center",
-zIndex: 9999,
-padding: 16,
+zIndex: 99999,
+padding: "20px 16px 40px",
+overflowY: "auto",
 }}
 >
 <div
@@ -1464,6 +1468,7 @@ background: "rgba(0,0,0,0.90)",
 border: "1px solid rgba(180,120,255,0.22)",
 borderRadius: 16,
 padding: 12,
+marginBottom: 40,
 }}
 >
 <div
@@ -1490,6 +1495,7 @@ opacity: gallery.items.length <= 1 ? 0.5 : 1,
 >
 ← Prev
 </button>
+
 <button
 onClick={galleryNext}
 disabled={gallery.items.length <= 1}
@@ -1500,6 +1506,7 @@ opacity: gallery.items.length <= 1 ? 0.5 : 1,
 >
 Next →
 </button>
+
 <button onClick={() => setGallery(null)} style={pillBtn}>
 Close
 </button>
@@ -1514,8 +1521,10 @@ alt=""
 style={{
 width: "100%",
 borderRadius: 12,
-maxHeight: "76vh",
+maxHeight: "58vh",
 objectFit: "contain",
+display: "block",
+margin: "0 auto",
 }}
 />
 ) : (
@@ -1526,8 +1535,10 @@ autoPlay
 style={{
 width: "100%",
 borderRadius: 12,
-maxHeight: "76vh",
+maxHeight: "58vh",
 background: "black",
+display: "block",
+margin: "0 auto",
 }}
 />
 )}
@@ -1536,8 +1547,15 @@ background: "black",
 <div style={{ fontSize: 13, opacity: 0.72 }}>
 {timeAgo(currentGalleryItem.createdAt)}
 </div>
+
 {currentGalleryItem.caption ? (
-<div style={{ marginTop: 6, whiteSpace: "pre-wrap", lineHeight: 1.45 }}>
+<div
+style={{
+marginTop: 6,
+whiteSpace: "pre-wrap",
+lineHeight: 1.45,
+}}
+>
 {currentGalleryItem.caption}
 </div>
 ) : null}

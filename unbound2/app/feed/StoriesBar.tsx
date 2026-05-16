@@ -249,6 +249,8 @@ merged.push({
 ...shuffledDiscovery[discoveryIndex],
 isDiscovery: true,
 });
+
+discoveryIndex += 1;
 }
 }
 
