@@ -40,6 +40,7 @@ image_url?: string | null;
 file_url?: string | null;
 media_type?: string | null;
 group_id?: number | null;
+is_locked: boolean | null;
 };
 
 type GroupRow = {
@@ -164,6 +165,8 @@ const [gallery, setGallery] = useState<{
 items: GalleryItem[];
 index: number;
 } | null>(null);
+
+const [unlockedPostIds, setUnlockedPostIds] = useState<Record<number, boolean>>({});
 
 const [signalLoading, setSignalLoading] = useState(false);
 const [mySignalToProfile, setMySignalToProfile] = useState<SignalType | null>(null);
@@ -580,7 +583,7 @@ setBanner(null);
 
 const { data, error } = await supabase
 .from("posts")
-.select("id,user_id,body,kind,created_at,media_url,media_type,group_id")
+.select("id,user_id,body,kind,created_at,media_url,media_type,group_id,is_locked")
 .eq("user_id", targetUserId)
 .order("created_at", { ascending: false })
 .limit(100);
@@ -592,6 +595,30 @@ return;
 }
 
 const rows = (data ?? []) as PostRow[];
+let unlockedMap: Record<number, boolean> = {};
+
+if (viewerId) {
+const lockedPostIds = rows
+.filter((p) => p.is_locked)
+.map((p) => p.id);
+
+if (lockedPostIds.length) {
+const { data: unlockRows } = await supabase
+.from("post_unlocks")
+.select("post_id")
+.eq("buyer_id", viewerId)
+.in("post_id", lockedPostIds);
+
+unlockedMap = Object.fromEntries(
+(unlockRows ?? []).map((r: any) => [
+Number(r.post_id),
+true,
+])
+);
+}
+}
+
+setUnlockedPostIds(unlockedMap);
 setPosts(rows);
 
 const groupIds = Array.from(
@@ -872,6 +899,35 @@ setCommentsByPost((m) => ({
 }));
 }
 
+async function unlockPost(post: PostRow) {
+const uid = myUserId ?? (await refreshAuth());
+
+if (!uid) {
+setBanner("You need to be signed in to unlock this post.");
+return;
+}
+
+const { error } = await supabase.from("post_unlocks").insert({
+post_id: post.id,
+buyer_id: uid,
+creator_id: post.user_id,
+amount_cents: 149,
+currency: "usd",
+});
+
+if (
+error &&
+!String(error.message).toLowerCase().includes("duplicate")
+) {
+setBanner(error.message);
+return;
+}
+
+setUnlockedPostIds((m) => ({
+...m,
+[post.id]: true,
+}));
+}
 async function addComment(postId: number) {
 const uid = myUserId ?? (await refreshAuth());
 if (!uid) return;
@@ -1117,13 +1173,15 @@ return (
 <div
 key={p.id}
 style={mediaTile}
-onClick={() => openGalleryForPost(p.id, mode)}
+onClick={() => {
+if (!p.is_locked) openGalleryForPost(p.id, mode);
+}}
 onMouseEnter={(e) => {
 const el = e.currentTarget;
 el.style.transform = "translateY(-10px) scale(1.04)";
 el.style.borderColor = "rgba(236,72,153,0.95)";
 el.style.boxShadow =
-"0 24px 50px rgba(0,0,0,0.45), 0 0 22px rgba(236,72,153,0.55), 0 0 55px rgba(192,38,211,0.55), 0 0 90px rgba(168,85,247,0.30)";
+"0 24px 50px rgba(0,0,0,0.45), 0 0 22px rgba(236,72,153,0.55), 0 0 55px rgba(192,38,211,0.55)";
 }}
 onMouseLeave={(e) => {
 const el = e.currentTarget;
@@ -1133,8 +1191,49 @@ el.style.boxShadow = "0 0 18px rgba(192,38,211,0.22)";
 }}
 title={p.body || (mode === "photos" ? "Open photo" : "Open video")}
 >
-{mode === "photos" ? (
-// eslint-disable-next-line @next/next/no-img-element
+{p.is_locked ? (
+<div
+style={{
+width: "100%",
+height: "100%",
+display: "flex",
+alignItems: "center",
+justifyContent: "center",
+flexDirection: "column",
+gap: 8,
+background:
+"linear-gradient(180deg, rgba(255,255,255,0.08), rgba(0,0,0,0.82))",
+backdropFilter: "blur(18px)",
+WebkitBackdropFilter: "blur(18px)",
+color: "white",
+textAlign: "center",
+padding: 14,
+boxShadow:
+"inset 0 0 24px rgba(236,72,153,0.16), 0 0 22px rgba(168,85,247,0.16)",
+}}
+>
+<div
+style={{
+width: 58,
+height: 58,
+borderRadius: "50%",
+display: "flex",
+alignItems: "center",
+justifyContent: "center",
+background: "rgba(255,255,255,0.08)",
+border: "1px solid rgba(255,255,255,0.12)",
+boxShadow:
+"0 0 18px rgba(236,72,153,0.32), 0 0 38px rgba(168,85,247,0.22)",
+marginBottom: 4,
+}}
+>
+<div style={{ fontSize: 30 }}>🔒</div>
+</div>
+
+<div style={{ fontWeight: 900 }}>Locked</div>
+<div style={{ fontSize: 12, opacity: 0.78 }}>$1.49 unlock</div>
+</div>
+) : mode === "photos" ? (
 <img
 src={media}
 alt=""
@@ -1142,7 +1241,6 @@ style={{
 width: "100%",
 height: "100%",
 objectFit: "contain",
-
 display: "block",
 }}
 />
@@ -1190,7 +1288,7 @@ Group · {groupInfo.name}
 ) : null}
 </div>
 
-{mode === "videos" ? (
+{mode === "videos" && !p.is_locked ? (
 <div
 style={{
 position: "absolute",
@@ -1634,20 +1732,105 @@ border: "1px solid rgba(255,255,255,0.18)",
 ) : null}
 
 {media && (isPhoto || isVideo) ? (
-isVideo ? (
+p.is_locked && !unlockedPostIds[p.id] ? (
+<div
+onClick={() => unlockPost(p)}
+onMouseEnter={(e) => {
+const el = e.currentTarget;
+el.style.transform = "translateY(-4px) scale(1.01)";
+el.style.boxShadow =
+"0 0 35px rgba(236,72,153,0.32), 0 0 80px rgba(168,85,247,0.22)";
+}}
+onMouseLeave={(e) => {
+const el = e.currentTarget;
+el.style.transform = "translateY(0) scale(1)";
+el.style.boxShadow =
+"0 0 25px rgba(236,72,153,0.18), 0 0 60px rgba(168,85,247,0.12)";
+}}
+style={{
+...mediaStyle,
+minHeight: 420,
+display: "flex",
+alignItems: "center",
+justifyContent: "center",
+flexDirection: "column",
+gap: 14,
+cursor: "pointer",
+background:
+"linear-gradient(180deg, rgba(0,0,0,0.88), rgba(18,18,18,0.96))",
+boxShadow:
+"0 0 25px rgba(236,72,153,0.18), 0 0 60px rgba(168,85,247,0.12)",
+transition: "all 0.22s ease",
+}}
+>
+<div
+style={{
+width: 88,
+height: 88,
+borderRadius: "50%",
+display: "flex",
+alignItems: "center",
+justifyContent: "center",
+background: "rgba(255,255,255,0.08)",
+boxShadow: "0 0 40px rgba(236,72,153,0.35)",
+fontSize: 42,
+}}
+>
+🔒
+</div>
+
+<div
+style={{
+fontSize: 36,
+fontWeight: 800,
+fontFamily: "Gloock, serif",
+color: "#fff",
+}}
+>
+Locked Content
+</div>
+
+<div
+style={{
+fontSize: 18,
+opacity: 0.88,
+color: "#fff",
+}}
+>
+Unlock this post for $1.49
+</div>
+
+<button
+style={{
+marginTop: 8,
+padding: "12px 26px",
+borderRadius: 999,
+border: "1px solid rgba(236,72,153,0.55)",
+background:
+"linear-gradient(180deg, rgba(255,255,255,0.08), rgba(236,72,153,0.16))",
+color: "#fff",
+fontWeight: 800,
+fontSize: 16,
+cursor: "pointer",
+}}
+>
+Unlock Now
+</button>
+</div>
+) : isVideo ? (
 <video
 src={media}
 controls
+playsInline
+preload="metadata"
 style={mediaStyle}
-onClick={() => openGalleryForPost(p.id, "videos")}
 />
 ) : (
 // eslint-disable-next-line @next/next/no-img-element
 <img
 src={media}
 alt=""
-style={{ ...mediaStyle, cursor: "pointer" }}
-onClick={() => openGalleryForPost(p.id, "photos")}
+style={mediaStyle}
 />
 )
 ) : null}
@@ -1702,6 +1885,7 @@ style={{ ...inputStyle, flex: 1 }}
 />
 
 <button
+
 onClick={() => addComment(p.id)}
 disabled={isBusy}
 style={postBtn}

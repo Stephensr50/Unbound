@@ -66,6 +66,27 @@ if (s < 86400) return `${Math.floor(s / 3600)}h`;
 return `${Math.floor(s / 86400)}d`;
 }
 
+function spaceLockedPosts(rows: PostRow[]) {
+const unlocked = rows.filter((p) => !p.is_locked);
+const locked = rows.filter((p) => p.is_locked);
+
+const result: PostRow[] = [];
+let lockedIndex = 0;
+
+for (let i = 0; i < unlocked.length; i++) {
+result.push(unlocked[i]);
+
+const shouldInsertLocked = (i + 1) % 6 === 0;
+
+if (shouldInsertLocked && lockedIndex < locked.length) {
+result.push(locked[lockedIndex]);
+lockedIndex++;
+}
+}
+
+return result;
+}
+
 export default function FeedPage() {
 useEffect(() => {
 async function updateLastActive() {
@@ -135,6 +156,7 @@ const [busyPostId, setBusyPostId] = useState<number | null>(null);
 const [banner, setBanner] = useState<string | null>(null);
 
 const [spark, setSpark] = useState<Record<number, boolean>>({});
+const [unlockedPostIds, setUnlockedPostIds] = useState<Record<number, boolean>>({});
 
 const [viewer, setViewer] = useState<{
 url: string;
@@ -432,7 +454,7 @@ allowedAuthorIds.length > 0 ? allowedAuthorIds : await getAllowedAuthorIds(uid);
 
 const { data, error } = await supabase
 .from("posts")
-.select("id,user_id,body,kind,created_at,media_url,media_type,group_id")
+.select("id,user_id,body,kind,created_at,media_url,media_type,group_id,is_locked")
 .eq("id", focusId)
 .maybeSingle();
 
@@ -540,6 +562,27 @@ return;
 }
 
 const rows = (data ?? []) as PostRow[];
+let unlockedMap: Record<number, boolean> = {};
+
+const lockedPostIds = rows
+.filter((p) => p.is_locked)
+.map((p) => p.id);
+
+if (lockedPostIds.length) {
+const { data: unlockRows, error: unlockErr } = await supabase
+.from("post_unlocks")
+.select("post_id")
+.eq("buyer_id", uid)
+.in("post_id", lockedPostIds);
+
+if (!unlockErr) {
+unlockedMap = Object.fromEntries(
+(unlockRows ?? []).map((r: any) => [Number(r.post_id), true])
+);
+}
+}
+
+setUnlockedPostIds(unlockedMap);
 
 
 
@@ -560,7 +603,8 @@ const map: Record<string, ProfileRow> = {};
 for (const p of activeProfiles) map[p.id] = p;
 
 setProfilesById(map);
-setPosts(rows.filter((post) => activeUserIds.has(post.user_id)));
+const activeRows = rows.filter((post) => activeUserIds.has(post.user_id));
+setPosts(spaceLockedPosts(activeRows));
 } else {
 setProfilesById({});
 }
@@ -1084,6 +1128,35 @@ kind = media_type.startsWith("video/") ? "video" : "image";
 setUploading(false);
 }
 
+if (wantsLocked && file) {
+const { count: totalMediaCount, error: totalMediaError } = await supabase
+.from("posts")
+.select("id", { count: "exact", head: true })
+.eq("user_id", uid)
+.in("kind", ["photo", "video"]);
+
+if (totalMediaError) throw new Error(totalMediaError.message);
+
+const { count: lockedMediaCount, error: lockedMediaError } = await supabase
+.from("posts")
+.select("id", { count: "exact", head: true })
+.eq("user_id", uid)
+.eq("is_locked", true)
+.in("kind", ["photo", "video"]);
+
+if (lockedMediaError) throw new Error(lockedMediaError.message);
+
+const totalAfterThisPost = (totalMediaCount ?? 0) + 1;
+const lockLimit = Math.floor(totalAfterThisPost * 0.3);
+
+if ((lockedMediaCount ?? 0) >= lockLimit) {
+setBanner(
+`You can lock up to 30% of your photos and videos. Add more public media first or unlock something.`
+);
+return;
+}
+}
+
 const { error } = await supabase.from("posts").insert({
 user_id: uid,
 body: trimmed || null,
@@ -1105,6 +1178,29 @@ setBanner(String(e?.message || e));
 setUploading(false);
 setPosting(false);
 }
+}
+
+async function unlockPost(post: PostRow) {
+const uid = myUserId ?? (await refreshAuth());
+if (!uid) {
+setBanner("You need to be signed in to unlock this post.");
+return;
+}
+
+const { error } = await supabase.from("post_unlocks").insert({
+post_id: post.id,
+buyer_id: uid,
+creator_id: post.user_id,
+amount_cents: 149,
+currency: "usd",
+});
+
+if (error && !String(error.message).toLowerCase().includes("duplicate")) {
+setBanner(error.message);
+return;
+}
+
+setUnlockedPostIds((m) => ({ ...m, [post.id]: true }));
 }
 
 async function reportPost(post: PostRow) {
@@ -1170,38 +1266,97 @@ setBanner(e.message || "Delete failed");
 }
 
 const renderMedia = (p: PostRow) => {
-    if (p.is_locked) {
+if (p.is_locked && !unlockedPostIds[p.id]) {
 return (
 <div
+onClick={() => unlockPost(p)}
 style={{
 width: "100%",
-minHeight: 320,
-borderRadius: 14,
-border: "1px solid rgba(180,120,255,0.18)",
-background: "rgba(0,0,0,0.72)",
+minHeight: 420,
+cursor: "pointer",
+borderRadius: 18,
+border: "1px solid rgba(236,72,153,0.28)",
+background:
+"linear-gradient(180deg, rgba(255,255,255,0.08), rgba(0,0,0,0.82))",
+backdropFilter: "blur(18px)",
+WebkitBackdropFilter: "blur(18px)",
 display: "flex",
 alignItems: "center",
 justifyContent: "center",
 flexDirection: "column",
-gap: 10,
+gap: 12,
 marginBottom: 10,
 color: "#fff",
 textAlign: "center",
 padding: 24,
+boxShadow:
+"0 0 25px rgba(236,72,153,0.18), 0 0 60px rgba(168,85,247,0.12)",
+transition: "all 0.22s ease",
+
+}}
+onMouseEnter={(e) => {
+const el = e.currentTarget;
+el.style.transform = "translateY(-4px) scale(1.01)";
+el.style.boxShadow =
+"0 0 35px rgba(236,72,153,0.32), 0 0 80px rgba(168,85,247,0.22)";
+}}
+onMouseLeave={(e) => {
+const el = e.currentTarget;
+el.style.transform = "translateY(0) scale(1)";
+el.style.boxShadow =
+"0 0 25px rgba(236,72,153,0.18), 0 0 60px rgba(168,85,247,0.12)";
+}}
+>
+<div
+style={{
+width: 88,
+height: 88,
+borderRadius: "50%",
+display: "flex",
+alignItems: "center",
+justifyContent: "center",
+background: "rgba(255,255,255,0.08)",
+border: "1px solid rgba(255,255,255,0.12)",
+backdropFilter: "blur(18px)",
+WebkitBackdropFilter: "blur(18px)",
+boxShadow:
+"0 0 22px rgba(236,72,153,0.30), 0 0 45px rgba(168,85,247,0.22)",
+marginBottom: 12,
 }}
 >
 <div style={{ fontSize: 42 }}>🔒</div>
-
-<div style={{ fontSize: 18, fontWeight: 700 }}>
-Locked Content
 </div>
 
-<div style={{ opacity: 0.75, fontSize: 14 }}>
+<div style={{ fontSize: 24, fontWeight: 900 }}>Locked Content</div>
+
+<div style={{ opacity: 0.82, fontSize: 15 }}>
 Unlock this post for $1.49
 </div>
+
+<button
+type="button"
+style={{
+marginTop: 8,
+padding: "12px 22px",
+borderRadius: 999,
+border: "1px solid rgba(236,72,153,0.45)",
+background:
+"linear-gradient(180deg, rgba(255,255,255,0.14), rgba(255,255,255,0.06))",
+color: "white",
+fontWeight: 800,
+cursor: "pointer",
+backdropFilter: "blur(14px)",
+WebkitBackdropFilter: "blur(14px)",
+boxShadow:
+"0 0 18px rgba(236,72,153,0.25), 0 0 40px rgba(168,85,247,0.18)",
+}}
+>
+Unlock Now
+</button>
 </div>
 );
 }
+
 if (!p.media_url) return null;
 
 const isVideo =
@@ -1228,7 +1383,6 @@ background: "rgba(0,0,0,0.5)",
 
 if (isImage) {
 return (
-// eslint-disable-next-line @next/next/no-img-element
 <img
 src={p.media_url}
 alt=""
@@ -1239,7 +1393,6 @@ height: "auto",
 border: "1px solid rgba(180,120,255,0.14)",
 marginBottom: 10,
 objectFit: "contain",
-maxHeight: "none",
 cursor: "pointer",
 }}
 onClick={() => setViewer({ url: p.media_url!, type: "image" })}
@@ -1388,23 +1541,7 @@ onChange={(e) => setWantsLocked(e.target.checked)}
 🔒 Lock this content
 </label>
 )}
-<label
-style={{
-display: "flex",
-alignItems: "center",
-gap: 8,
-marginTop: 10,
-fontSize: 14,
-color: "#ddd",
-}}
->
-<input
-type="checkbox"
-checked={wantsLocked}
-onChange={(e) => setWantsLocked(e.target.checked)}
-/>
-🔒 Lock this content
-</label>
+
 
 
 {file ? (
@@ -1445,7 +1582,7 @@ boxShadow: `
 0 0 20px rgba(192,38,211,0.25),
 0 0 40px rgba(168,85,247,0.15)
 `,
-backdropFilter: "blur(8px)",
+backdropFilter: "blur(18px)",
 }}
 >
 <div

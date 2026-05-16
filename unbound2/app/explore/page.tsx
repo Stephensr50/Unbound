@@ -61,6 +61,7 @@ const { data, error } = await supabase
 .from("posts")
 .select("id,user_id,body,kind,created_at,media_url,media_type")
 .not("media_url", "is", null)
+.or("is_locked.eq.false,is_locked.is.null")
 .order("created_at", { ascending: false })
 .limit(200);
 
