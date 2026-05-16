@@ -7,6 +7,7 @@ import StoriesBar from "./StoriesBar";
 import ReactionBar from "@/app/components/ReactionBar";
 import ReportCommentButton from "@/app/components/ReportCommentButton";
 import ReportPostButton from "@/app/components/ReportPostButton";
+import FeaturedProfileCard from "@/app/components/FeaturedProfileCard";
 
 function getSupabase() {
 const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
@@ -25,6 +26,7 @@ created_at: string;
 media_url: string | null;
 media_type: string | null;
 group_id?: number | null;
+is_locked: boolean | null;
 };
 
 type GroupRow = {
@@ -98,6 +100,7 @@ const [posts, setPosts] = useState<PostRow[]>([]);
 const [text, setText] = useState("");
 
 const [file, setFile] = useState<File | null>(null);
+const [wantsLocked, setWantsLocked] = useState(false);
 const [uploading, setUploading] = useState(false);
 
 const [posting, setPosting] = useState(false);
@@ -526,7 +529,7 @@ return;
 
 const { data, error } = await supabase
 .from("posts")
-.select("id,user_id,body,kind,created_at,media_url,media_type,group_id")
+.select("id,user_id,body,kind,created_at,media_url,media_type,group_id,is_locked")
 .in("user_id", visibleAllowedIds)
 .order("created_at", { ascending: false })
 .limit(200);
@@ -1087,6 +1090,7 @@ body: trimmed || null,
 kind,
 media_url,
 media_type,
+is_locked: wantsLocked,
 });
 
 if (error) throw new Error(error.message);
@@ -1166,6 +1170,38 @@ setBanner(e.message || "Delete failed");
 }
 
 const renderMedia = (p: PostRow) => {
+    if (p.is_locked) {
+return (
+<div
+style={{
+width: "100%",
+minHeight: 320,
+borderRadius: 14,
+border: "1px solid rgba(180,120,255,0.18)",
+background: "rgba(0,0,0,0.72)",
+display: "flex",
+alignItems: "center",
+justifyContent: "center",
+flexDirection: "column",
+gap: 10,
+marginBottom: 10,
+color: "#fff",
+textAlign: "center",
+padding: 24,
+}}
+>
+<div style={{ fontSize: 42 }}>🔒</div>
+
+<div style={{ fontSize: 18, fontWeight: 700 }}>
+Locked Content
+</div>
+
+<div style={{ opacity: 0.75, fontSize: 14 }}>
+Unlock this post for $1.49
+</div>
+</div>
+);
+}
 if (!p.media_url) return null;
 
 const isVideo =
@@ -1215,7 +1251,21 @@ return null;
 };
 
 return (
-<div style={{ maxWidth: 720, margin: "0 auto", padding: 16 }}>
+<div
+style={{
+width: "100%",
+maxWidth: 1240,
+margin: "0 auto",
+padding: 16,
+display: "grid",
+gridTemplateColumns: "220px minmax(0, 720px) 280px",
+gap: 18,
+alignItems: "start",
+}}
+>
+<aside style={{ minHeight: 1 }} />
+
+<main style={{ minWidth: 0 }}>
 <style>{`
 @keyframes unboundPop {
 0% { transform: scale(1); }
@@ -1318,6 +1368,44 @@ setFile(f);
 />
 {file ? "Change media" : "Add photo/video"}
 </label>
+
+{file && (
+<label
+style={{
+display: "flex",
+alignItems: "center",
+gap: 8,
+marginTop: 10,
+fontSize: 14,
+color: "#ddd",
+}}
+>
+<input
+type="checkbox"
+checked={wantsLocked}
+onChange={(e) => setWantsLocked(e.target.checked)}
+/>
+🔒 Lock this content
+</label>
+)}
+<label
+style={{
+display: "flex",
+alignItems: "center",
+gap: 8,
+marginTop: 10,
+fontSize: 14,
+color: "#ddd",
+}}
+>
+<input
+type="checkbox"
+checked={wantsLocked}
+onChange={(e) => setWantsLocked(e.target.checked)}
+/>
+🔒 Lock this content
+</label>
+
 
 {file ? (
 <div
@@ -1483,7 +1571,6 @@ boxShadow: "0 0 16px rgba(168,85,247,0.12)",
 }}
 >
 {user.avatar_url ? (
-// eslint-disable-next-line @next/next/no-img-element
 <img
 src={user.avatar_url}
 alt=""
@@ -1550,9 +1637,7 @@ textOverflow: "ellipsis",
 
 <button
 onClick={() => followUser(user.id)}
-disabled={
-followBusyId === user.id || followingIds.includes(user.id)
-}
+disabled={followBusyId === user.id || followingIds.includes(user.id)}
 style={{
 padding: "8px 12px",
 borderRadius: 999,
@@ -1563,9 +1648,7 @@ fontWeight: 800,
 background: "linear-gradient(90deg,#ec4899,#a855f7)",
 boxShadow: "0 0 14px rgba(168,85,247,0.45)",
 opacity:
-followBusyId === user.id || followingIds.includes(user.id)
-? 0.65
-: 1,
+followBusyId === user.id || followingIds.includes(user.id) ? 0.65 : 1,
 }}
 >
 {followBusyId === user.id
@@ -1582,6 +1665,7 @@ followBusyId === user.id || followingIds.includes(user.id)
 ) : null}
 </div>
 )}
+
 {posts.map((p) => {
 const spanks = likeCounts[p.id] ?? 0;
 const comments = commentCounts[p.id] ?? 0;
@@ -1592,8 +1676,7 @@ const isOpen = !!openComments[p.id];
 
 const isMine = myUserId && p.user_id === myUserId;
 const isFocused = flashPostId === p.id;
-const groupInfo =
-typeof p.group_id === "number" ? groupsById[p.group_id] : null;
+const groupInfo = typeof p.group_id === "number" ? groupsById[p.group_id] : null;
 
 return (
 <div
@@ -1601,12 +1684,8 @@ key={p.id}
 id={`post-${p.id}`}
 style={{
 ...cardStyle,
-border: isFocused
-? "1px solid rgba(192,38,211,0.65)"
-: cardStyle.border,
-boxShadow: isFocused
-? "0 0 34px rgba(192,38,211,0.35)"
-: undefined,
+border: isFocused ? "1px solid rgba(192,38,211,0.65)" : cardStyle.border,
+boxShadow: isFocused ? "0 0 34px rgba(192,38,211,0.35)" : undefined,
 animation: isFocused ? "focusGlow 1.25s ease" : undefined,
 }}
 >
@@ -1619,7 +1698,6 @@ marginBottom: 10,
 }}
 >
 {authorAvatar(p.user_id) ? (
-// eslint-disable-next-line @next/next/no-img-element
 <img
 src={authorAvatar(p.user_id)}
 alt=""
@@ -1673,9 +1751,7 @@ el.style.backdropFilter = "none";
 }}
 >
 <div style={{ minWidth: 0 }}>
-<div style={{ fontWeight: 850, opacity: 0.95 }}>
-{authorName(p.user_id)}
-</div>
+<div style={{ fontWeight: 850, opacity: 0.95 }}>{authorName(p.user_id)}</div>
 <div
 style={{
 opacity: 0.65,
@@ -1686,9 +1762,7 @@ gap: 8,
 flexWrap: "wrap",
 }}
 >
-{authorHandle(p.user_id) ? (
-<span>{authorHandle(p.user_id)}</span>
-) : null}
+{authorHandle(p.user_id) ? <span>{authorHandle(p.user_id)}</span> : null}
 <span>{timeAgo(p.created_at)}</span>
 </div>
 
@@ -1698,7 +1772,6 @@ onClick={() => router.push(`/groups/${groupInfo.slug}`)}
 style={{ ...groupPillStyle, cursor: "pointer" }}
 >
 {groupInfo.avatar_url ? (
-// eslint-disable-next-line @next/next/no-img-element
 <img
 src={groupInfo.avatar_url}
 alt=""
@@ -1732,7 +1805,6 @@ G
 </div>
 ) : null}
 </div>
-
 
 <div
 style={{
@@ -1892,6 +1964,19 @@ No comments yet.
 );
 })}
 </div>
+</main>
+
+<aside
+style={{
+position: "sticky",
+top: 86,
+display: "flex",
+flexDirection: "column",
+gap: 14,
+}}
+>
+<FeaturedProfileCard />
+</aside>
 
 {viewer ? (
 <div
@@ -1918,23 +2003,12 @@ padding: 12,
 }}
 >
 {viewer.type === "image" ? (
-// eslint-disable-next-line @next/next/no-img-element
-<img
-src={viewer.url}
-alt=""
-style={{ width: "100%", borderRadius: 12 }}
-/>
+<img src={viewer.url} alt="" style={{ width: "100%", borderRadius: 12 }} />
 ) : (
-<video
-src={viewer.url}
-controls
-style={{ width: "100%", borderRadius: 12 }}
-/>
+<video src={viewer.url} controls style={{ width: "100%", borderRadius: 12 }} />
 )}
 
-<div
-style={{ display: "flex", justifyContent: "flex-end", marginTop: 10 }}
->
+<div style={{ display: "flex", justifyContent: "flex-end", marginTop: 10 }}>
 <button onClick={() => setViewer(null)} style={pillBtn}>
 Close
 </button>
@@ -1943,7 +2017,5 @@ Close
 </div>
 ) : null}
 </div>
-
-
 );
 }
