@@ -414,13 +414,29 @@ meProfile.suspended_until
 return;
 }
 
-const ext = pickedFile.name.split(".").pop() || "jpg";
-const path = `${user.id}/${crypto.randomUUID()}.${ext}`;
+const isImage = pickedFile.type.startsWith("image/");
+const isVideo = pickedFile.type.startsWith("video/");
+
+if (!isImage && !isVideo) {
+throw new Error("Please choose an image or video.");
+}
+
+const maxMb = isVideo ? 60 : 15;
+if (pickedFile.size > maxMb * 1024 * 1024) {
+throw new Error(`File too large. Max ${maxMb}MB for this upload.`);
+}
+
+const ext = (pickedFile.name.split(".").pop() || "").toLowerCase();
+const safeExt = ext ? ext : isImage ? "jpg" : "mp4";
+const path = `${user.id}/${crypto.randomUUID()}.${safeExt}`;
 
 const { error: upErr } = await supabase.storage
 .from("stories")
-.upload(path, pickedFile, { upsert: false });
-
+.upload(path, pickedFile, {
+contentType: pickedFile.type,
+cacheControl: "3600",
+upsert: false,
+});
 if (upErr) throw upErr;
 
 const { data: pub } = supabase.storage.from("stories").getPublicUrl(path);

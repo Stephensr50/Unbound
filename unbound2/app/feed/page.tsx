@@ -978,6 +978,8 @@ return label.trim().charAt(0).toUpperCase();
 };
 
 async function uploadToStorage(uid: string, f: File) {
+
+
 const isImage = f.type.startsWith("image/");
 const isVideo = f.type.startsWith("video/");
 if (!isImage && !isVideo) {
@@ -1066,6 +1068,13 @@ let kind = "text";
 if (file) {
 setUploading(true);
 const up = await uploadToStorage(uid, file);
+
+console.log("UPLOAD DEBUG", {
+name: file.name,
+type: file.type,
+size: file.size,
+url: up.publicUrl,
+});
 media_url = up.publicUrl;
 media_type = up.mediaType;
 kind = media_type.startsWith("video/") ? "video" : "image";
