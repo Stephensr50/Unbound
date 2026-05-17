@@ -94,13 +94,13 @@ const { data: matchingSignals } = await supabase
 .select("user_id,fingerprint")
 .in("fingerprint", fingerprints);
 
-const linkedIds = [
-...new Set(
+const linkedIds = Array.from(
+new Set(
 (matchingSignals ?? [])
 .map((x: any) => x.user_id)
 .filter((id: string) => id !== userId)
-),
-];
+)
+);
 
 if (linkedIds.length > 0) {
 const { data: linkedProfiles } = await supabase
