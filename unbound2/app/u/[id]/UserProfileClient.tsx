@@ -5,9 +5,9 @@ import { createClient } from "@supabase/supabase-js";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import PublicProfileActions from "./PublicProfileActions";
-import ReactionBar from "@/app/components/ReactionBar";
-import ReportCommentButton from "@/app/components/ReportCommentButton";
-import ReportPostButton from "@/app/components/ReportPostButton";
+import ReactionBar from "../../components/ReactionBar";
+import ReportCommentButton from "../../components/ReportCommentButton";
+import ReportPostButton from "../../components/ReportPostButton";
 
 type ReactionKey = "devil" | "fire" | "eyes" | "purple_heart";
 type ReactionCountsMap = Partial<Record<ReactionKey, number>>;
