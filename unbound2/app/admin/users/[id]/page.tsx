@@ -102,7 +102,7 @@ new Set(
 )
 );
 
-if (linkedIds.length > 0) {  n
+if (linkedIds.length > 0) {  
 const { data: linkedProfiles } = await supabase
 .from("profiles")
 .select("id,username,display_name")
