@@ -349,7 +349,7 @@ return;
 }
 }
 
-setFollowingIds((prev) => [...new Set([...prev, targetUserId])]);
+setFollowingIds((prev) => Array.from(new Set([...prev, targetUserId])));
 setSuggestedUsers((prev) => prev.filter((u) => u.id !== targetUserId));
 
 await loadPosts();
