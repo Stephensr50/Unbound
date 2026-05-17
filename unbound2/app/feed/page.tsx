@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
+import { Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@supabase/supabase-js";
 import StoriesBar from "./StoriesBar";
@@ -87,7 +88,7 @@ lockedIndex++;
 return result;
 }
 
-export default function FeedPage() {
+function FeedPageContent() {
 useEffect(() => {
 async function updateLastActive() {
 const supabase = createClient(
@@ -2167,5 +2168,12 @@ Close
 ) : null}
 </div>
 
+);
+}
+export default function FeedPage() {
+return (
+<Suspense fallback={null}>
+<FeedPageContent />
+</Suspense>
 );
 }
