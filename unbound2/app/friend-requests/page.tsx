@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@supabase/supabase-js";
 
@@ -25,7 +26,7 @@ display_name: string | null;
 avatar_url: string | null;
 };
 
-export default function FriendRequestsPage() {
+function FriendRequestsPageContent() {
 const supabase = useMemo(() => getSupabase(), []);
 const router = useRouter();
 const sp = useSearchParams();
@@ -232,5 +233,12 @@ Accept
 </div>
 )}
 </div>
+);
+}
+export default function FriendRequestPageContent() {
+return (
+<Suspense fallback={null}>
+<FriendRequestPageContent />
+</Suspense>
 );
 }

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@supabase/supabase-js";
 
@@ -47,7 +48,7 @@ function avatarFallback(name: string) {
   return (name || "?").trim().charAt(0).toUpperCase() || "?";
 }
 
-export default function MessagesInbox() {
+function MessagesInboxContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const supabase = useMemo(() => getSupabase(), []);
@@ -336,4 +337,11 @@ export default function MessagesInbox() {
       )}
     </div>
   );
+}
+export default function MessageInboxContent() {
+return (
+<Suspense fallback={null}>
+<MessageInboxContent />
+</Suspense>
+);
 }

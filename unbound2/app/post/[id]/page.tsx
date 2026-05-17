@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createClient } from "@supabase/supabase-js";
+import { Suspense } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import ReactionBar from "../../components/ReactionBar";
 import ReportCommentButton from "../../components/ReportCommentButton";
@@ -53,7 +54,7 @@ if (s < 86400) return `${Math.floor(s / 3600)}h`;
 return `${Math.floor(s / 86400)}d`;
 }
 
-export default function PostPage() {
+function PostPageContent() {
 const supabase = useMemo(() => getSupabase(), []);
 const params = useParams();
 const router = useRouter();
@@ -855,5 +856,12 @@ No comments yet.
 <div style={{ opacity: 0.8 }}>Loading…</div>
 )}
 </div>
+);
+}
+export default function PostPage() {
+return (
+<Suspense fallback={null}>
+<PostPageContent />
+</Suspense>
 );
 }
