@@ -203,12 +203,17 @@ transform: "translateX(-50%)",
 zIndex: 999999,
 }}
 >
+
 <div
 style={{
 display: "flex",
 alignItems: "center",
-gap: 18,
-padding: "10px 14px",
+gap: window.innerWidth <= 640 ? 10 : 18,
+padding: window.innerWidth <= 640 ? "8px 10px" : "10px 14px",
+maxWidth: "100vw",
+width: "100vw",
+overflowX: "auto",
+scrollbarWidth: "none",
 borderRadius: 999,
 background: "rgba(0,0,0,0.40)",
 backdropFilter: "blur(12px)",
