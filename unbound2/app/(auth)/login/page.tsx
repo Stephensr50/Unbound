@@ -1,10 +1,11 @@
 "use client";
 
 import { useEffect, useState, type FormEvent, type CSSProperties } from "react";
+import { Suspense } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/app/supabaseClient";
 
-export default function LoginPage() {
+function LoginPageContent() {
 const router = useRouter();
 
 const [mounted, setMounted] = useState(false);
@@ -206,3 +207,10 @@ color: "#a98bff",
 fontWeight: 700,
 textDecoration: "none",
 };
+export default function LoginPage() {
+return (
+<Suspense fallback={null}>
+<LoginPageContent />
+</Suspense>
+);
+}
