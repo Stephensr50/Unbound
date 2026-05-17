@@ -5,9 +5,9 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@supabase/supabase-js";
 import StoriesBar from "./StoriesBar";
 import ReactionBar from "../components/ReactionBar";
-import ReportCommentButton from "@/app/components/ReportCommentButton";
-import ReportPostButton from "@/app/components/ReportPostButton";
-import FeaturedProfileCard from "@/app/components/FeaturedProfileCard";
+import ReportCommentButton from "../components/ReportCommentButton";
+import ReportPostButton from "../components/ReportPostButton";
+import FeaturedProfileCard from "../components/FeaturedProfileCard";
 
 function getSupabase() {
 const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
