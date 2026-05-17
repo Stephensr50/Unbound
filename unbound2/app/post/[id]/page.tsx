@@ -3,8 +3,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createClient } from "@supabase/supabase-js";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
-import ReactionBar from "@/app/components/ReactionBar";
-import ReportCommentButton from "@/app/components/ReportCommentButton";
+import ReactionBar from "../../components/ReactionBar";
+import ReportCommentButton from "../../components/ReportCommentButton";
 
 function getSupabase() {
 const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
