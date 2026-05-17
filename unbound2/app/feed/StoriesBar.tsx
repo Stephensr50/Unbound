@@ -647,7 +647,7 @@ stories.findIndex((s) => s.id === selectedStory?.id)
 )}
 myUserId={myUserId}
 onStoryChange={(story) => markStoryViewed(story)}
-onDeleteCurrent={async (story: StoryRow) => {
+onDeleteCurrent={async (story: any) => {
 const { data: authData, error: authErr } = await supabase.auth.getUser();
 if (authErr) throw authErr;
 const user = authData?.user;
