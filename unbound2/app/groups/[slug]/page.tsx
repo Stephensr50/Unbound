@@ -3,8 +3,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { createClient } from "@supabase/supabase-js";
 import Link from "next/link";
-import ReactionBar from "@/app/components/ReactionBar";
-import ReportPostButton from "@/app/components/ReportPostButton";
+import ReactionBar from "../../components/ReactionBar";
+import ReportPostButton from "../../components/ReportPostButton";
 
 function getSupabase() {
 const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
