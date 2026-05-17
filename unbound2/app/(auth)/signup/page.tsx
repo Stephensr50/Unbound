@@ -1,10 +1,11 @@
 "use client";
 
 import { useState, type FormEvent } from "react";
+import { Suspense } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/app/supabaseClient";
 
-export default function SignupPage() {
+function SignupPageContent() {
 const router = useRouter();
 
 const [email, setEmail] = useState("");
@@ -146,5 +147,12 @@ Already have an account? <a href="/login">Log in</a>
 </div>
 </form>
 </div>
+);
+}
+export default function SignupPage() {
+return (
+<Suspense fallback={null}>
+<SignupPageContent />
+</Suspense>
 );
 }
