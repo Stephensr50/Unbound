@@ -4,6 +4,7 @@ import "./globals.css";
 import TopNav from "./components/TopNav";
 import ModerationGate from "./components/ModerationGate";
 import { Gloock } from "next/font/google";
+export const dynamic = "force-dynamic";
 
 const gloock = Gloock({
 weight: "400",
