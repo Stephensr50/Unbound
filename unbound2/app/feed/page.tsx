@@ -157,7 +157,18 @@ const [banner, setBanner] = useState<string | null>(null);
 
 const [spark, setSpark] = useState<Record<number, boolean>>({});
 const [unlockedPostIds, setUnlockedPostIds] = useState<Record<number, boolean>>({});
+const [isMobile, setIsMobile] = useState(false);
 
+useEffect(() => {
+function checkMobile() {
+setIsMobile(window.innerWidth <= 900);
+}
+
+checkMobile();
+window.addEventListener("resize", checkMobile);
+
+return () => window.removeEventListener("resize", checkMobile);
+}, []);
 const [viewer, setViewer] = useState<{
 url: string;
 type: "image" | "video";
@@ -1411,12 +1422,12 @@ maxWidth: 1240,
 margin: "0 auto",
 padding: 16,
 display: "grid",
-gridTemplateColumns: "220px minmax(0, 720px) 280px",
+gridTemplateColumns: isMobile ? "1fr" : "220px minmax(0, 720px) 280px",
 gap: 18,
 alignItems: "start",
 }}
 >
-<aside style={{ minHeight: 1 }} />
+{!isMobile ? <aside style={{ minHeight: 1 }} /> : null}
 
 <main style={{ minWidth: 0 }}>
 <style>{`
@@ -2103,6 +2114,7 @@ No comments yet.
 </div>
 </main>
 
+{!isMobile ? (
 <aside
 style={{
 alignSelf: "start",
@@ -2113,6 +2125,7 @@ gap: 14,
 >
 <FeaturedProfileCard />
 </aside>
+) : null}
 
 {viewer ? (
 <div

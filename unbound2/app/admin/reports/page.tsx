@@ -74,14 +74,14 @@ const { data } = await supabase
 
 const rows = (data || []) as ReportRow[];
 
-const userIds = [
-...new Set(
+const userIds = Array.from(
+new Set(
 rows.flatMap((r) => [
 r.reporter_id,
 r.reported_user_id || "",
 ])
-),
-].filter(Boolean);
+)
+).filter(Boolean);
 
 const { data: profiles } = await supabase
 .from("profiles")
