@@ -2105,8 +2105,7 @@ No comments yet.
 
 <aside
 style={{
-position: "sticky",
-top: 86,
+alignSelf: "start",
 display: "flex",
 flexDirection: "column",
 gap: 14,
@@ -2154,5 +2153,6 @@ Close
 </div>
 ) : null}
 </div>
+
 );
 }
