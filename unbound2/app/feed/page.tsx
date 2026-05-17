@@ -1448,17 +1448,19 @@ alignItems: "start",
 
 <div
 style={{
-textAlign: "center",
-fontSize: 90,
 fontWeight: 900,
+fontSize: "clamp(42px, 8vw, 96px)",
+width: "100%",
+lineHeight: 0.82,
+maxWidth: "100%",
+overflow: "visible",
+textAlign: "center",
 letterSpacing: 2,
 marginBottom: 20,
 color: "rgba(238, 8, 169, 0.72)",
 textShadow: `
-0 0 2.5px rgba(168,85,247,0.9),
-0 0 20px rgba(168,85,247,0.9),
-0 0 20px rgba(168,85,247,0.8),
-0 0 35px rgba(168,85,247,0.7)
+0 0 4px rgba(236,72,153,0.75),
+0 0 8px rgba(168,85,247,0.45)
 `,
 animation: "glowPulse 1.5s ease-in-out infinite alternate",
 }}
