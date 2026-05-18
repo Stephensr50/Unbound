@@ -976,7 +976,11 @@ const cardStyle: CSSProperties = {
 background: "rgba(0,0,0,0.55)",
 border: "3px solid rgba(181, 120, 255, 0.33)",
 borderRadius: 16,
-padding: 14,
+padding: isMobile ? 10 : 14,
+boxSizing: "border-box",
+width: "100%",
+maxWidth: "100%",
+overflow: "hidden",
 };
 
 const inputStyle: CSSProperties = {
@@ -1437,14 +1441,16 @@ padding: isMobile ? 10 : 16,
 boxSizing: "border-box",
 overflowX: "hidden",
 display: "grid",
-gridTemplateColumns: isMobile ? "1fr" : "220px minmax(0, 720px) 280px",
-gap: 18,
+gridTemplateColumns: isMobile
+? "1fr"
+: "minmax(0, 220px) minmax(0, 720px) minmax(0, 220px)",
+gap: isMobile ? 12 : 14,
 alignItems: "start",
 }}
 >
 {!isMobile ? <aside style={{ minHeight: 1 }} /> : null}
 
-<main style={{ minWidth: 0 }}>
+<main style={{ minWidth: 0, width: "100%", maxWidth: "100%", overflow: "hidden" }}>
 <style>{`
 @keyframes unboundPop {
 0% { transform: scale(1); }
@@ -2024,7 +2030,7 @@ Delete
 </div>
 
 <div style={{ marginTop: 10 }}>
-{renderMedia(p)}
+
 
 {p.body ? (
 <div
@@ -2040,7 +2046,9 @@ whiteSpace: "pre-wrap",
 </div>
 </div>
 </div>
-
+<div style={{ marginTop: 10 }}>
+{renderMedia(p)}
+</div>
 <ReactionBar
 postId={p.id}
 spanks={spanks}

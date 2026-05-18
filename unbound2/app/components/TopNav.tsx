@@ -17,7 +17,18 @@ const [q, setQ] = useState("");
 const [mounted, setMounted] = useState(false);
 const [restrictedNav, setRestrictedNav] = useState(false);
 const [menuOpen, setMenuOpen] = useState(false);
+const [isMobile, setIsMobile] = useState(false);
 
+useEffect(() => {
+function checkMobile() {
+setIsMobile(window.innerWidth <= 640);
+}
+
+checkMobile();
+window.addEventListener("resize", checkMobile);
+
+return () => window.removeEventListener("resize", checkMobile);
+}, []);
 useEffect(() => {
 setMounted(true);
 }, []);
@@ -201,6 +212,9 @@ top: 14,
 left: "50%",
 transform: "translateX(-50%)",
 zIndex: 999999,
+width: "min(100%, 980px)",
+padding: "0 10px",
+boxSizing: "border-box",
 }}
 >
 
@@ -208,11 +222,12 @@ zIndex: 999999,
 style={{
 display: "flex",
 alignItems: "center",
-gap: window.innerWidth <= 640 ? 10 : 18,
-padding: window.innerWidth <= 640 ? "8px 10px" : "10px 14px",
-maxWidth: "100vw",
-width: "100vw",
+gap: isMobile ? 10 : 18,
+padding: isMobile ? "8px 10px" : "10px 14px",
+maxWidth: "100%",
+width: "100%",
 overflowX: "auto",
+boxSizing: "border-box",
 scrollbarWidth: "none",
 borderRadius: 999,
 background: "rgba(0,0,0,0.40)",
