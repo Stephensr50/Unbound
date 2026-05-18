@@ -1395,20 +1395,32 @@ background: "rgba(0,0,0,0.5)",
 
 if (isImage) {
 return (
+<div
+style={{
+width: "100%",
+display: "flex",
+justifyContent: "center",
+marginBottom: 10,
+}}
+>
+
 <img
 src={p.media_url}
 alt=""
 style={{
+display: "block",
 width: "100%",
-borderRadius: 14,
+maxWidth: "100%",
 height: "auto",
+borderRadius: 14,
 border: "1px solid rgba(180,120,255,0.14)",
-marginBottom: 10,
 objectFit: "contain",
 cursor: "pointer",
+boxSizing: "border-box",
 }}
 onClick={() => setViewer({ url: p.media_url!, type: "image" })}
 />
+</div>
 );
 }
 
@@ -1421,7 +1433,9 @@ style={{
 width: "100%",
 maxWidth: 1240,
 margin: "0 auto",
-padding: 16,
+padding: isMobile ? 10 : 16,
+boxSizing: "border-box",
+overflowX: "hidden",
 display: "grid",
 gridTemplateColumns: isMobile ? "1fr" : "220px minmax(0, 720px) 280px",
 gap: 18,
