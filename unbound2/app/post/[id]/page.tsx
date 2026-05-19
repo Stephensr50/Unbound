@@ -6,6 +6,7 @@ import { Suspense } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import ReactionBar from "../../components/ReactionBar";
 import ReportCommentButton from "../../components/ReportCommentButton";
+import ReportPostButton from "../../components/ReportPostButton";
 
 function getSupabase() {
 const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
@@ -71,6 +72,8 @@ const [post, setPost] = useState<PostRow | null>(null);
 const [author, setAuthor] = useState<ProfileRow | null>(null);
 
 const [banner, setBanner] = useState<string | null>(null);
+
+const [openPostMenu, setOpenPostMenu] = useState(false);
 
 const [likeCount, setLikeCount] = useState(0);
 const [commentCount, setCommentCount] = useState(0);
@@ -611,6 +614,7 @@ fontSize: 13,
 {post ? (
 <div
 style={{
+position: "relative",
 background: "rgba(0,0,0,0.55)",
 border: flashOn
 ? "1px solid rgba(192,38,211,0.65)"
@@ -621,21 +625,127 @@ borderRadius: 16,
 padding: 14,
 }}
 >
+
+{post.user_id !== myUserId ? (
+<>
+<button
+type="button"
+onClick={(e) => {
+e.preventDefault();
+e.stopPropagation();
+setOpenPostMenu((v) => !v);
+}}
+style={{
+position: "absolute",
+top: 14,
+right: 14,
+zIndex: 20,
+width: 34,
+height: 34,
+borderRadius: 999,
+border: "1px solid rgba(180,120,255,0.28)",
+background: "rgba(0,0,0,0.55)",
+color: "rgba(245,235,255,0.95)",
+cursor: "pointer",
+fontSize: 22,
+fontWeight: 900,
+lineHeight: "28px",
+}}
+>
+⋯
+</button>
+
+{openPostMenu ? (
+<div
+style={{
+position: "absolute",
+top: 52,
+right: 14,
+zIndex: 50,
+minWidth: 150,
+padding: 8,
+borderRadius: 14,
+background: "rgba(8,8,12,0.96)",
+border: "1px solid rgba(168,85,247,0.28)",
+boxShadow: "0 18px 45px rgba(0,0,0,0.55)",
+}}
+>
+<ReportPostButton
+postId={post.id}
+reportedUserId={post.user_id}
+myUserId={myUserId}
+onReported={(msg) => {
+setBanner(msg);
+setOpenPostMenu(false);
+}}
+style={{
+width: "100%",
+border: "none",
+background: "transparent",
+color: "rgba(255,220,220,0.95)",
+padding: "10px 12px",
+cursor: "pointer",
+fontWeight: 800,
+fontSize: 13,
+textAlign: "left",
+}}
+/>
+</div>
+) : null}
+</>
+) : null}
 <div
 style={{
 display: "flex",
-justifyContent: "space-between",
-marginBottom: 8,
+alignItems: "center",
+gap: 12,
+marginBottom: 14,
+paddingRight: 52,
 }}
 >
-<div style={{ display: "flex", gap: 10, alignItems: "baseline" }}>
-<div style={{ fontWeight: 850, opacity: 0.95 }}>{authorName}</div>
+
+{author?.avatar_url ? (
+<img
+src={author.avatar_url}
+alt=""
+style={{
+width: 48,
+height: 48,
+borderRadius: 999,
+objectFit: "cover",
+border: "1px solid rgba(180,120,255,0.24)",
+flex: "0 0 auto",
+}}
+/>
+) : (
+<div
+style={{
+width: 48,
+height: 48,
+borderRadius: 999,
+display: "grid",
+placeItems: "center",
+background: "rgba(168,85,247,0.18)",
+border: "1px solid rgba(180,120,255,0.24)",
+fontWeight: 900,
+flex: "0 0 auto",
+}}
+>
+
+{authorName.charAt(0).toUpperCase()}
+</div>
+)}
+
+<div style={{ minWidth: 0 }}>
+<div style={{ fontWeight: 850, fontSize: 16 }}>
+{authorName}
+</div>
+
 <div style={{ opacity: 0.65, fontSize: 12 }}>
+{authorHandle ? `${authorHandle} · ` : ""}
 {timeAgo(post.created_at)}
 </div>
 </div>
-
-<div style={{ opacity: 0.55, fontSize: 12 }}>{authorHandle}</div>
 </div>
 
 {renderMedia(post)}

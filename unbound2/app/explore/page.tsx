@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@supabase/supabase-js";
+import ReportPostButton from "../components/ReportPostButton";
 
 function getSupabase() {
 const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
@@ -49,6 +50,9 @@ const [profilesById, setProfilesById] = useState<Record<string, ProfileRow>>(
 const [loading, setLoading] = useState(true);
 const [banner, setBanner] = useState<string | null>(null);
 
+const [myUserId, setMyUserId] = useState<string | null>(null);
+const [openPostMenu, setOpenPostMenu] = useState<Record<number, boolean>>({});
+
 useEffect(() => {
 let alive = true;
 
@@ -56,6 +60,9 @@ async function loadExplore() {
 try {
 setLoading(true);
 setBanner(null);
+
+const { data: sessionData } = await supabase.auth.getSession();
+setMyUserId(sessionData.session?.user?.id ?? null);
 
 const { data, error } = await supabase
 .from("posts")
@@ -344,6 +351,84 @@ display: "block",
 <div className="exploreTopFade" />
 
 {isVideo ? <div className="explorePill">Video</div> : null}
+
+{myUserId !== post.user_id ? (
+<>
+<button
+type="button"
+onClick={(e) => {
+e.preventDefault();
+e.stopPropagation();
+setOpenPostMenu((m) => ({ ...m, [post.id]: !m[post.id] }));
+}}
+style={{
+position: "absolute",
+top: 10,
+right: 10,
+zIndex: 6,
+width: 36,
+height: 36,
+borderRadius: 999,
+border: "1px solid rgba(180,120,255,0.34)",
+background: "rgba(0,0,0,0.62)",
+color: "rgba(245,235,255,0.96)",
+cursor: "pointer",
+fontSize: 22,
+fontWeight: 900,
+lineHeight: "28px",
+display: "flex",
+alignItems: "center",
+justifyContent: "center",
+}}
+>
+
+⋯
+</button>
+
+{openPostMenu[post.id] ? (
+<div
+onClick={(e) => {
+e.preventDefault();
+e.stopPropagation();
+}}
+style={{
+position: "absolute",
+top: 52,
+right: 10,
+zIndex: 7,
+minWidth: 150,
+padding: 8,
+borderRadius: 14,
+background: "rgba(8,8,12,0.96)",
+border: "1px solid rgba(168,85,247,0.28)",
+boxShadow: "0 18px 45px rgba(0,0,0,0.55)",
+}}
+>
+
+<ReportPostButton
+postId={post.id}
+reportedUserId={post.user_id}
+myUserId={myUserId}
+onReported={(msg) => {
+setBanner(msg);
+setOpenPostMenu((m) => ({ ...m, [post.id]: false }));
+}}
+style={{
+width: "100%",
+border: "none",
+background: "transparent",
+color: "rgba(255,220,220,0.95)",
+padding: "10px 12px",
+cursor: "pointer",
+fontWeight: 800,
+fontSize: 13,
+textAlign: "left",
+}}
+/>
+</div>
+) : null}
+</>
+) : null}
 
 <div className="exploreInfoOverlay">
 {profile?.avatar_url ? (
