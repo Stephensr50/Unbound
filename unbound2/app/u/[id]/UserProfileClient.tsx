@@ -124,6 +124,7 @@ const router = useRouter();
 const [myUserId, setMyUserId] = useState<string | null>(null);
 const [posts, setPosts] = useState<PostRow[]>([]);
 const [banner, setBanner] = useState<string | null>(null);
+const [openPostMenu, setOpenPostMenu] = useState<Record<number, boolean>>({});
 const [profileUnavailable, setProfileUnavailable] = useState(false);
 const [checkingBlock, setCheckingBlock] = useState(true);
 const [groupsById, setGroupsById] = useState<Record<number, GroupRow>>({});
@@ -1673,6 +1674,7 @@ Videos {videoPosts.length ? `· ${videoPosts.length}` : ""}
 {activeTab === "posts" ? (
 <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
 {posts.map((p) => {
+const isMine = p.user_id === myUserId;
 const media = getPostMedia(p);
 
 const isVideo = isVideoPost(p);
@@ -1685,18 +1687,23 @@ typeof p.group_id === "number" ? groupsById[p.group_id] : null;
 
 return (
 <div key={p.id} style={{ ...card, position: "relative" }}>
-<div
-style={{
-display: "flex",
-justifyContent: "space-between",
-marginBottom: 8,
-}}
->
+<div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 14, paddingRight: 52 }}>
+{profile.avatar_url ? (
+<img src={profile.avatar_url} alt="" style={{ width: 48, height: 48, borderRadius: 999, objectFit: "cover", border: "1px solid rgba(180,120,255,0.24)", flex: "0 0 auto" }} />
+) : (
+<div style={{ width: 48, height: 48, borderRadius: 999, display: "grid", placeItems: "center", background: "rgba(168,85,247,0.18)", border: "1px solid rgba(180,120,255,0.24)", fontWeight: 900, flex: "0 0 auto" }}>
+{(profile.display_name || profile.username || "U").charAt(0).toUpperCase()}
+</div>
+)}
+
+<div style={{ minWidth: 0 }}>
+<div style={{ fontWeight: 850, fontSize: 16 }}>
+{profile.display_name || profile.username || "Unknown"}
+</div>
 <div style={{ opacity: 0.65, fontSize: 12 }}>
+{profile.username ? `@${profile.username} · ` : ""}
 {timeAgo(p.created_at)}
 </div>
-<div style={{ opacity: 0.55, fontSize: 12 }}>
-{profile.username ? `@${profile.username}` : ""}
 </div>
 </div>
 
@@ -1835,26 +1842,74 @@ style={mediaStyle}
 )
 ) : null}
 
+{!isMine ? (
+<>
+<button
+type="button"
+onClick={(e) => {
+e.preventDefault();
+e.stopPropagation();
+setOpenPostMenu((m) => ({ ...m, [p.id]: !m[p.id] }));
+}}
+style={{
+position: "absolute",
+top: 14,
+right: 14,
+zIndex: 20,
+width: 34,
+height: 34,
+borderRadius: 999,
+border: "1px solid rgba(180,120,255,0.28)",
+background: "rgba(0,0,0,0.55)",
+color: "rgba(245,235,255,0.95)",
+cursor: "pointer",
+fontSize: 22,
+fontWeight: 900,
+lineHeight: "28px",
+}}
+>
+⋯
+</button>
+
+{openPostMenu[p.id] ? (
+<div
+style={{
+position: "absolute",
+top: 52,
+right: 14,
+zIndex: 50,
+minWidth: 150,
+padding: 8,
+borderRadius: 14,
+background: "rgba(8,8,12,0.96)",
+border: "1px solid rgba(168,85,247,0.28)",
+boxShadow: "0 18px 45px rgba(0,0,0,0.55)",
+}}
+>
 <ReportPostButton
 postId={p.id}
 reportedUserId={p.user_id}
 myUserId={myUserId}
-onReported={setBanner}
+onReported={(msg) => {
+setBanner(msg);
+setOpenPostMenu((m) => ({ ...m, [p.id]: false }));
+}}
 style={{
-position: "absolute",
-top: 12,
-right: 120,
-padding: "4px 9px",
-borderRadius: 999,
-border: "1px solid rgba(255,120,120,0.28)",
-background: "rgba(255,80,80,0.06)",
-color: "rgba(255,220,220,0.82)",
+width: "100%",
+border: "none",
+background: "transparent",
+color: "rgba(255,220,220,0.95)",
+padding: "10px 12px",
 cursor: "pointer",
 fontWeight: 800,
-fontSize: 11,
-zIndex: 2,
+fontSize: 13,
+textAlign: "left",
 }}
 />
+</div>
+) : null}
+</>
+) : null}
 <ReactionBar
 postId={p.id}
 spanks={likeCounts[p.id] ?? 0}

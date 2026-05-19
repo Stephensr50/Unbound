@@ -148,6 +148,7 @@ Record<number, boolean>
 >({});
 
 const [openComments, setOpenComments] = useState<Record<number, boolean>>({});
+const [openPostMenu, setOpenPostMenu] = useState<Record<number, boolean>>({});
 const [commentsByPost, setCommentsByPost] = useState<
 Record<number, CommentRow[]>
 >({});
@@ -1986,22 +1987,68 @@ marginLeft: "auto",
 }}
 >
 {!isMine ? (
+<div style={{ position: "relative" }}>
+<button
+type="button"
+onClick={(e) => {
+e.preventDefault();
+e.stopPropagation();
+setOpenPostMenu((m) => ({ ...m, [p.id]: !m[p.id] }));
+}}
+style={{
+width: 34,
+height: 34,
+borderRadius: 999,
+border: "1px solid rgba(180,120,255,0.28)",
+background: "rgba(0,0,0,0.35)",
+color: "rgba(245,235,255,0.95)",
+cursor: "pointer",
+fontSize: 22,
+fontWeight: 900,
+lineHeight: "28px",
+}}
+>
+⋯
+</button>
+
+{openPostMenu[p.id] ? (
+<div
+style={{
+position: "absolute",
+top: 40,
+right: 0,
+zIndex: 50,
+minWidth: 150,
+padding: 8,
+borderRadius: 14,
+background: "rgba(8,8,12,0.96)",
+border: "1px solid rgba(168,85,247,0.28)",
+boxShadow: "0 18px 45px rgba(0,0,0,0.55)",
+}}
+>
 <ReportPostButton
 postId={p.id}
 reportedUserId={p.user_id}
 myUserId={myUserId}
-onReported={setBanner}
+onReported={(msg) => {
+setBanner(msg);
+setOpenPostMenu((m) => ({ ...m, [p.id]: false }));
+}}
 style={{
-border: "1px solid rgba(255,120,120,0.35)",
-background: "rgba(255,80,80,0.10)",
+width: "100%",
+border: "none",
+background: "transparent",
 color: "rgba(255,220,220,0.95)",
-borderRadius: 999,
-padding: "6px 10px",
+padding: "10px 12px",
 cursor: "pointer",
 fontWeight: 800,
-fontSize: 12,
+fontSize: 13,
+textAlign: "left",
 }}
 />
+</div>
+) : null}
+</div>
 ) : null}
 
 {isMine ? (
