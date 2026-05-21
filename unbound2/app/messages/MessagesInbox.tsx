@@ -338,10 +338,10 @@ function MessagesInboxContent() {
     </div>
   );
 }
-export default function MessageInboxContent() {
+export default function MessagesInbox() {
 return (
-<Suspense fallback={null}>
-<MessageInboxContent />
+<Suspense fallback={<div style={{ padding: 16, opacity: 0.9 }}>Loading messages…</div>}>
+<MessagesInboxContent />
 </Suspense>
 );
 }
