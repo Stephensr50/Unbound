@@ -113,7 +113,7 @@ function MessagesInboxContent() {
       const json = await res.json().catch(() => ({}));
 
       if (!res.ok) {
-        throw new Error(json?.error ?? "Inbox load failed.");
+    throw new Error(json?.error || json?.message || `Inbox load failed. Status: ${res.status}`);
       }
 
       setThreads(Array.isArray(json?.items) ? json.items : []);
