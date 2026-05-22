@@ -209,7 +209,7 @@ const iconStyle: React.CSSProperties = {
 width: 24,
 height: 24,
 display: "block",
-color: "rgba(220,220,230,0.72)",
+color: "rgba(168,85,247,0.72)",
 };
 
 return (
