@@ -204,6 +204,14 @@ const msgBadgeText = unread > 99 ? "99+" : String(unread);
 const signalBadgeText = signalUnread > 99 ? "99+" : String(signalUnread);
 const notifBadgeText = notifUnread > 99 ? "99+" : String(notifUnread);
 
+
+const iconStyle: React.CSSProperties = {
+width: 24,
+height: 24,
+display: "block",
+color: "rgba(220,220,230,0.72)",
+};
+
 return (
 <div
 style={{
@@ -238,7 +246,9 @@ border: "1px solid rgba(168,85,247,0.22)",
 >
 {!isMobile && (
 <>
-<Link href="/feed" style={tabStyle(isActive("/feed"))}>Feed</Link>
+<Link href="/feed" style={tabStyle(isActive("/feed"))}>
+Feed
+</Link>
 
 <Link href="/explore" style={tabStyle(isActive("/explore"))}>
 Explore
@@ -250,9 +260,7 @@ Profile
 
 <Link href="/messages" style={tabStyle(isActive("/messages"))}>
 Messages
-{unread > 0 && (
-<span style={badgeStyle}>{msgBadgeText}</span>
-)}
+{unread > 0 && <span style={badgeStyle}>{msgBadgeText}</span>}
 </Link>
 
 <Link href="/signals" style={tabStyle(isActive("/signals"))}>
@@ -287,6 +295,11 @@ border: "1px solid rgba(168,85,247,0.22)",
 value={q}
 onChange={(e) => setQ(e.target.value)}
 placeholder="Search"
+autoComplete="off"
+autoCorrect="off"
+autoCapitalize="off"
+spellCheck={false}
+suppressHydrationWarning
 style={{
 width: "100%",
 background: "transparent",
@@ -311,43 +324,28 @@ Feed
 Explore
 </Link>
 
-<Link
-href="/search"
-style={{
-...tabStyle(isActive("/search")),
-color: "rgba(220,220,230,0.72)",
-fontSize: 24,
-textShadow: "none",
-}}
->
-⌕
+<Link href="/search" style={tabStyle(isActive("/search"))}>
+<svg viewBox="0 0 24 24" fill="currentColor" style={iconStyle}>
+<path d="M10 18a8 8 0 1 1 5.29-14A8 8 0 0 1 10 18Zm0-2a6 6 0 1 0 0-12a6 6 0 0 0 0 12Zm7.71 3.71-4.2-4.2 1.41-1.41 4.2 4.2Z" />
+</svg>
 </Link>
 
-<Link
-href="/messages"
-style={{
-...tabStyle(isActive("/messages")),
-color: "rgba(220,220,230,0.72)",
-fontSize: 22,
-textShadow: "none",
-}}
->
-✉
-{unread > 0 && (
-<span style={badgeStyle}>{msgBadgeText}</span>
-)}
+<Link href="/messages" style={tabStyle(isActive("/messages"))}>
+<svg viewBox="0 0 24 24" fill="currentColor" style={iconStyle}>
+<path d="M3 5h18v14H3V5Zm2 2v.5l7 4.5 7-4.5V7l-7 4.5L5 7Z" />
+</svg>
+
+{unread > 0 && <span style={badgeStyle}>{msgBadgeText}</span>}
 </Link>
 
 <Link
 href="/notifications"
-style={{
-...tabStyle(isActive("/notifications")),
-color: "rgba(220,220,230,0.72)",
-fontSize: 22,
-textShadow: "none",
-}}
+style={tabStyle(isActive("/notifications"))}
 >
-🔔
+<svg viewBox="0 0 24 24" fill="currentColor" style={iconStyle}>
+<path d="M12 22a2.5 2.5 0 0 0 2.45-2h-4.9A2.5 2.5 0 0 0 12 22Zm7-6v-5a7 7 0 0 0-5-6.71V3a2 2 0 0 0-4 0v1.29A7 7 0 0 0 5 11v5l-2 2v1h18v-1l-2-2Z" />
+</svg>
+
 {notifUnread > 0 && (
 <span style={badgeStyle}>{notifBadgeText}</span>
 )}
@@ -358,6 +356,7 @@ textShadow: "none",
 <button
 type="button"
 onClick={() => setMenuOpen((v) => !v)}
+aria-label="Open menu"
 style={{
 width: 42,
 height: 42,
@@ -388,25 +387,48 @@ borderRadius: 20,
 background: "rgba(8,8,12,0.96)",
 border: "1px solid rgba(168,85,247,0.28)",
 backdropFilter: "blur(18px)",
+WebkitBackdropFilter: "blur(18px)",
 zIndex: 1000000,
 }}
 >
 <div style={menuLabelStyle}>Create</div>
 
-<Link href="/events" style={menuItemStyle}>Events</Link>
-<Link href="/events/new" style={menuItemStyle}>Create Event</Link>
-<Link href="/writings" style={menuItemStyle}>Writings</Link>
+<Link href="/events" style={menuItemStyle}>
+Events
+</Link>
+
+<Link href="/events/new" style={menuItemStyle}>
+Create Event
+</Link>
+
+<Link href="/writings" style={menuItemStyle}>
+Writings
+</Link>
 
 <div style={menuLabelStyle}>Community</div>
 
-<Link href="/game" style={menuItemStyle}>Kinky Games</Link>
-<Link href="/groups" style={menuItemStyle}>Groups</Link>
+<Link href="/game" style={menuItemStyle}>
+Kinky Games
+</Link>
+
+<Link href="/groups" style={menuItemStyle}>
+Groups
+</Link>
 
 <div style={menuLabelStyle}>Account</div>
 
-<Link href="/profile" style={menuItemStyle}>Profile</Link>
-<Link href="/signals" style={menuItemStyle}>Signals</Link>
-<Link href="/settings" style={menuItemStyle}>Settings</Link>
+<Link href="/profile" style={menuItemStyle}>
+Profile
+</Link>
+
+<Link href="/signals" style={menuItemStyle}>
+Signals
+</Link>
+
+<Link href="/settings" style={menuItemStyle}>
+Settings
+</Link>
+
 <Link href="/settings/blocked" style={menuItemStyle}>
 Blocked Users
 </Link>
