@@ -221,6 +221,7 @@ boxSizing: "border-box",
 style={{
 display: "flex",
 alignItems: "center",
+justifyContent: "space-between",
 gap: isMobile ? 8 : 18,
 padding: isMobile ? "8px 10px" : "10px 14px",
 width: "100%",
@@ -271,6 +272,33 @@ Notifications
 <span style={badgeStyle}>{notifBadgeText}</span>
 )}
 </Link>
+
+<form onSubmit={onSubmit} style={{ flex: 1 }}>
+<div
+style={{
+display: "flex",
+alignItems: "center",
+padding: "8px 12px",
+borderRadius: 999,
+background: "rgba(168,85,247,0.12)",
+border: "1px solid rgba(168,85,247,0.22)",
+}}
+>
+<input
+value={q}
+onChange={(e) => setQ(e.target.value)}
+placeholder="Search"
+style={{
+width: "100%",
+background: "transparent",
+border: "none",
+outline: "none",
+color: "rgba(168,85,247,1)",
+fontFamily: '"Gloock", serif',
+}}
+/>
+</div>
+</form>
 </>
 )}
 
@@ -284,8 +312,19 @@ Feed
 Explore
 </Link>
 
+<Link
+href="/search"
+style={{
+...tabStyle(isActive("/search")),
+fontSize: 24,
+padding: "8px",
+}}
+>
+🔎
+</Link>
+
 <Link href="/messages" style={tabStyle(isActive("/messages"))}>
-Msg
+✉
 {unread > 0 && (
 <span style={badgeStyle}>{msgBadgeText}</span>
 )}
@@ -295,7 +334,7 @@ Msg
 href="/notifications"
 style={tabStyle(isActive("/notifications"))}
 >
-Notif
+🔔
 {notifUnread > 0 && (
 <span style={badgeStyle}>{notifBadgeText}</span>
 )}
@@ -303,65 +342,20 @@ Notif
 </>
 )}
 
-<form onSubmit={onSubmit} style={{ flex: 1, minWidth: 0 }}>
-<div
-style={{
-display: "flex",
-alignItems: "center",
-gap: 8,
-padding: "8px 12px",
-borderRadius: 999,
-background: "rgba(168,85,247,0.12)",
-border: "1px solid rgba(168,85,247,0.22)",
-}}
->
-{mounted ? (
-<input
-value={q}
-onChange={(e) => setQ(e.target.value)}
-placeholder="Search"
-autoComplete="off"
-autoCorrect="off"
-autoCapitalize="off"
-spellCheck={false}
-suppressHydrationWarning
-style={{
-width: "100%",
-minWidth: 0,
-background: "transparent",
-border: "none",
-outline: "none",
-color: "rgba(168,85,247,1)",
-fontSize: 14,
-fontWeight: 700,
-fontFamily: '"Gloock", serif',
-}}
-/>
-) : (
-<div style={{ width: "100%", height: 22 }} />
-)}
-</div>
-</form>
-
 <button
 type="button"
 onClick={() => setMenuOpen((v) => !v)}
-aria-label="Open menu"
 style={{
-flex: "0 0 auto",
 width: 42,
 height: 42,
+flexShrink: 0,
 borderRadius: 999,
 border: "1px solid rgba(216,180,254,0.32)",
 background:
 "radial-gradient(circle at top, rgba(168,85,247,0.32), rgba(0,0,0,0.36))",
-color: "rgba(245,235,255,0.95)",
+color: "white",
 fontSize: 22,
-fontWeight: 900,
 cursor: "pointer",
-boxShadow: menuOpen
-? "0 0 18px rgba(168,85,247,0.55), inset 0 0 18px rgba(168,85,247,0.18)"
-: "0 0 14px rgba(168,85,247,0.22)",
 }}
 >
 ☰
@@ -372,69 +366,35 @@ boxShadow: menuOpen
 <div
 style={{
 position: "fixed",
-top: isMobile ? 78 : 74,
-right: isMobile
-? 12
-: "calc((100vw - min(100vw,980px))/2 + 10px)",
+top: 78,
+right: 12,
 width: isMobile ? "calc(100vw - 24px)" : 250,
 maxWidth: 320,
 padding: 10,
 borderRadius: 20,
 background: "rgba(8,8,12,0.96)",
 border: "1px solid rgba(168,85,247,0.28)",
-boxShadow:
-"0 24px 60px rgba(0,0,0,0.75),0 0 34px rgba(168,85,247,0.22)",
 backdropFilter: "blur(18px)",
-WebkitBackdropFilter: "blur(18px)",
 zIndex: 1000000,
 }}
 >
 <div style={menuLabelStyle}>Create</div>
 
-<Link href="/events" style={menuItemStyle}>
-Events <span>📅</span>
-</Link>
-
-<Link href="/events/new" style={menuItemStyle}>
-Create Event <span>＋</span>
-</Link>
-
-<Link href="/writings" style={menuItemStyle}>
-Writings <span>✎</span>
-</Link>
+<Link href="/events" style={menuItemStyle}>Events <span>📅</span></Link>
+<Link href="/events/new" style={menuItemStyle}>Create Event <span>＋</span></Link>
+<Link href="/writings" style={menuItemStyle}>Writings <span>✎</span></Link>
 
 <div style={menuLabelStyle}>Community</div>
 
-<Link href="/game" style={menuItemStyle}>
-Kinky Games <span>🎲</span>
-</Link>
-
-<Link href="/groups" style={menuItemStyle}>
-Groups <span>◎</span>
-</Link>
+<Link href="/game" style={menuItemStyle}>Kinky Games <span>🎲</span></Link>
+<Link href="/groups" style={menuItemStyle}>Groups <span>◎</span></Link>
 
 <div style={menuLabelStyle}>Account</div>
 
-<Link href="/profile" style={menuItemStyle}>
-Profile <span>👤</span>
-</Link>
-
-<Link href="/signals" style={menuItemStyle}>
-Signals
-{signalUnread > 0 ? (
-<span style={badgeStyle}>{signalBadgeText}</span>
-) : (
-<span>♡</span>
-)}
-</Link>
-
-<Link href="/settings" style={menuItemStyle}>
-Settings <span>⚙</span>
-</Link>
-
-<Link href="/settings/blocked" style={menuItemStyle}>
-Blocked Users <span>⊘</span>
-</Link>
+<Link href="/profile" style={menuItemStyle}>Profile <span>👤</span></Link>
+<Link href="/signals" style={menuItemStyle}>Signals <span>♡</span></Link>
+<Link href="/settings" style={menuItemStyle}>Settings <span>⚙</span></Link>
+<Link href="/settings/blocked" style={menuItemStyle}>Blocked Users <span>⊘</span></Link>
 </div>
 )}
 </div>
