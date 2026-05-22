@@ -236,7 +236,6 @@ boxShadow:
 border: "1px solid rgba(168,85,247,0.22)",
 }}
 >
-
 {!isMobile && (
 <>
 <Link href="/feed" style={tabStyle(isActive("/feed"))}>Feed</Link>
@@ -316,14 +315,23 @@ Explore
 href="/search"
 style={{
 ...tabStyle(isActive("/search")),
+color: "rgba(220,220,230,0.72)",
 fontSize: 24,
-padding: "8px",
+textShadow: "none",
 }}
 >
-🔎
+⌕
 </Link>
 
-<Link href="/messages" style={tabStyle(isActive("/messages"))}>
+<Link
+href="/messages"
+style={{
+...tabStyle(isActive("/messages")),
+color: "rgba(220,220,230,0.72)",
+fontSize: 22,
+textShadow: "none",
+}}
+>
 ✉
 {unread > 0 && (
 <span style={badgeStyle}>{msgBadgeText}</span>
@@ -332,7 +340,12 @@ padding: "8px",
 
 <Link
 href="/notifications"
-style={tabStyle(isActive("/notifications"))}
+style={{
+...tabStyle(isActive("/notifications")),
+color: "rgba(220,220,230,0.72)",
+fontSize: 22,
+textShadow: "none",
+}}
 >
 🔔
 {notifUnread > 0 && (
@@ -380,21 +393,23 @@ zIndex: 1000000,
 >
 <div style={menuLabelStyle}>Create</div>
 
-<Link href="/events" style={menuItemStyle}>Events <span>📅</span></Link>
-<Link href="/events/new" style={menuItemStyle}>Create Event <span>＋</span></Link>
-<Link href="/writings" style={menuItemStyle}>Writings <span>✎</span></Link>
+<Link href="/events" style={menuItemStyle}>Events</Link>
+<Link href="/events/new" style={menuItemStyle}>Create Event</Link>
+<Link href="/writings" style={menuItemStyle}>Writings</Link>
 
 <div style={menuLabelStyle}>Community</div>
 
-<Link href="/game" style={menuItemStyle}>Kinky Games <span>🎲</span></Link>
-<Link href="/groups" style={menuItemStyle}>Groups <span>◎</span></Link>
+<Link href="/game" style={menuItemStyle}>Kinky Games</Link>
+<Link href="/groups" style={menuItemStyle}>Groups</Link>
 
 <div style={menuLabelStyle}>Account</div>
 
-<Link href="/profile" style={menuItemStyle}>Profile <span>👤</span></Link>
-<Link href="/signals" style={menuItemStyle}>Signals <span>♡</span></Link>
-<Link href="/settings" style={menuItemStyle}>Settings <span>⚙</span></Link>
-<Link href="/settings/blocked" style={menuItemStyle}>Blocked Users <span>⊘</span></Link>
+<Link href="/profile" style={menuItemStyle}>Profile</Link>
+<Link href="/signals" style={menuItemStyle}>Signals</Link>
+<Link href="/settings" style={menuItemStyle}>Settings</Link>
+<Link href="/settings/blocked" style={menuItemStyle}>
+Blocked Users
+</Link>
 </div>
 )}
 </div>
