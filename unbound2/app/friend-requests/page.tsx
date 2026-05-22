@@ -238,7 +238,7 @@ Accept
 export default function FriendRequestPageContent() {
 return (
 <Suspense fallback={null}>
-<FriendRequestPageContent />
+<FriendRequestsPageContent />
 </Suspense>
 );
 }
