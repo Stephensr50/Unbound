@@ -212,23 +212,20 @@ top: 14,
 left: "50%",
 transform: "translateX(-50%)",
 zIndex: 999999,
-width: "min(100%, 980px)",
-padding: "0 10px",
+width: "calc(100vw - 20px)",
+maxWidth: 980,
 boxSizing: "border-box",
 }}
 >
-
 <div
 style={{
 display: "flex",
 alignItems: "center",
-gap: isMobile ? 10 : 18,
+gap: isMobile ? 8 : 18,
 padding: isMobile ? "8px 10px" : "10px 14px",
-maxWidth: "100%",
 width: "100%",
-overflowX: "auto",
+overflow: "visible",
 boxSizing: "border-box",
-scrollbarWidth: "none",
 borderRadius: 999,
 background: "rgba(0,0,0,0.40)",
 backdropFilter: "blur(12px)",
@@ -238,34 +235,41 @@ boxShadow:
 border: "1px solid rgba(168,85,247,0.22)",
 }}
 >
-<Link href="/feed" style={tabStyle(isActive("/feed"))}>
-Feed
-</Link>
-
-<Link href="/explore" style={tabStyle(isActive("/explore"))}>
-Explore
-</Link>
-
-<Link href="/profile" style={tabStyle(isActive("/profile"))}>
-Profile
-</Link>
-
+{!isMobile && (
+<>
+<Link href="/feed" style={tabStyle(isActive("/feed"))}>Feed</Link>
+<Link href="/explore" style={tabStyle(isActive("/explore"))}>Explore</Link>
+<Link href="/profile" style={tabStyle(isActive("/profile"))}>Profile</Link>
 <Link href="/messages" style={tabStyle(isActive("/messages"))}>
 Messages
 {unread > 0 && <span style={badgeStyle}>{msgBadgeText}</span>}
 </Link>
-
 <Link href="/signals" style={tabStyle(isActive("/signals"))}>
 Signals
 {signalUnread > 0 && <span style={badgeStyle}>{signalBadgeText}</span>}
 </Link>
-
 <Link href="/notifications" style={tabStyle(isActive("/notifications"))}>
 Notifications
 {notifUnread > 0 && <span style={badgeStyle}>{notifBadgeText}</span>}
 </Link>
+</>
+)}
 
-<form onSubmit={onSubmit}>
+{isMobile && (
+<>
+<Link href="/feed" style={tabStyle(isActive("/feed"))}>Feed</Link>
+<Link href="/messages" style={tabStyle(isActive("/messages"))}>
+Msg
+{unread > 0 && <span style={badgeStyle}>{msgBadgeText}</span>}
+</Link>
+<Link href="/notifications" style={tabStyle(isActive("/notifications"))}>
+Notif
+{notifUnread > 0 && <span style={badgeStyle}>{notifBadgeText}</span>}
+</Link>
+</>
+)}
+
+<form onSubmit={onSubmit} style={{ flex: 1, minWidth: 0 }}>
 <div
 style={{
 display: "flex",
@@ -288,7 +292,8 @@ autoCapitalize="off"
 spellCheck={false}
 suppressHydrationWarning
 style={{
-width: 180,
+width: "100%",
+minWidth: 0,
 background: "transparent",
 border: "none",
 outline: "none",
@@ -299,17 +304,17 @@ fontFamily: '"Gloock", serif',
 }}
 />
 ) : (
-<div style={{ width: 180, height: 22 }} />
+<div style={{ width: "100%", height: 22 }} />
 )}
 </div>
 </form>
 
-<div style={{ position: "relative" }}>
 <button
 type="button"
 onClick={() => setMenuOpen((v) => !v)}
 aria-label="Open menu"
 style={{
+flex: "0 0 auto",
 width: 42,
 height: 42,
 borderRadius: 999,
@@ -320,30 +325,32 @@ color: "rgba(245,235,255,0.95)",
 fontSize: 22,
 fontWeight: 900,
 cursor: "pointer",
-boxShadow:
-menuOpen
+boxShadow: menuOpen
 ? "0 0 18px rgba(168,85,247,0.55), inset 0 0 18px rgba(168,85,247,0.18)"
 : "0 0 14px rgba(168,85,247,0.22)",
 }}
 >
 ☰
 </button>
+</div>
 
 {menuOpen && (
 <div
 style={{
-position: "absolute",
-top: 54,
-right: 0,
-width: 250,
+position: "fixed",
+top: isMobile ? 78 : 74,
+right: isMobile ? 12 : "calc((100vw - min(100vw, 980px)) / 2 + 10px)",
+width: isMobile ? "calc(100vw - 24px)" : 250,
+maxWidth: 320,
 padding: 10,
 borderRadius: 20,
-background: "rgba(8,8,12,0.94)",
+background: "rgba(8,8,12,0.96)",
 border: "1px solid rgba(168,85,247,0.28)",
 boxShadow:
-"0 24px 60px rgba(0,0,0,0.65), 0 0 34px rgba(168,85,247,0.22)",
+"0 24px 60px rgba(0,0,0,0.75), 0 0 34px rgba(168,85,247,0.22)",
 backdropFilter: "blur(18px)",
 WebkitBackdropFilter: "blur(18px)",
+zIndex: 1000000,
 }}
 >
 <div style={menuLabelStyle}>Create</div>
@@ -361,24 +368,26 @@ Writings <span>✎</span>
 </Link>
 
 <div style={menuLabelStyle}>Community</div>
+
 <Link href="/game" style={menuItemStyle}>
 Kinky Games <span>🎲</span>
 </Link>
+
 <Link href="/groups" style={menuItemStyle}>
 Groups <span>◎</span>
 </Link>
 
 <div style={menuLabelStyle}>Account</div>
+
 <Link href="/settings" style={menuItemStyle}>
 Settings <span>⚙</span>
 </Link>
+
 <Link href="/settings/blocked" style={menuItemStyle}>
 Blocked Users <span>⊘</span>
 </Link>
 </div>
 )}
-</div>
-</div>
 </div>
 );
 }
