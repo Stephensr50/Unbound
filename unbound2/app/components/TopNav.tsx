@@ -235,36 +235,70 @@ boxShadow:
 border: "1px solid rgba(168,85,247,0.22)",
 }}
 >
+
 {!isMobile && (
 <>
 <Link href="/feed" style={tabStyle(isActive("/feed"))}>Feed</Link>
-<Link href="/explore" style={tabStyle(isActive("/explore"))}>Explore</Link>
-<Link href="/profile" style={tabStyle(isActive("/profile"))}>Profile</Link>
+
+<Link href="/explore" style={tabStyle(isActive("/explore"))}>
+Explore
+</Link>
+
+<Link href="/profile" style={tabStyle(isActive("/profile"))}>
+Profile
+</Link>
+
 <Link href="/messages" style={tabStyle(isActive("/messages"))}>
 Messages
-{unread > 0 && <span style={badgeStyle}>{msgBadgeText}</span>}
+{unread > 0 && (
+<span style={badgeStyle}>{msgBadgeText}</span>
+)}
 </Link>
+
 <Link href="/signals" style={tabStyle(isActive("/signals"))}>
 Signals
-{signalUnread > 0 && <span style={badgeStyle}>{signalBadgeText}</span>}
+{signalUnread > 0 && (
+<span style={badgeStyle}>{signalBadgeText}</span>
+)}
 </Link>
-<Link href="/notifications" style={tabStyle(isActive("/notifications"))}>
+
+<Link
+href="/notifications"
+style={tabStyle(isActive("/notifications"))}
+>
 Notifications
-{notifUnread > 0 && <span style={badgeStyle}>{notifBadgeText}</span>}
+{notifUnread > 0 && (
+<span style={badgeStyle}>{notifBadgeText}</span>
+)}
 </Link>
 </>
 )}
 
 {isMobile && (
 <>
-<Link href="/feed" style={tabStyle(isActive("/feed"))}>Feed</Link>
+<Link href="/feed" style={tabStyle(isActive("/feed"))}>
+Feed
+</Link>
+
+<Link href="/explore" style={tabStyle(isActive("/explore"))}>
+Explore
+</Link>
+
 <Link href="/messages" style={tabStyle(isActive("/messages"))}>
 Msg
-{unread > 0 && <span style={badgeStyle}>{msgBadgeText}</span>}
+{unread > 0 && (
+<span style={badgeStyle}>{msgBadgeText}</span>
+)}
 </Link>
-<Link href="/notifications" style={tabStyle(isActive("/notifications"))}>
+
+<Link
+href="/notifications"
+style={tabStyle(isActive("/notifications"))}
+>
 Notif
-{notifUnread > 0 && <span style={badgeStyle}>{notifBadgeText}</span>}
+{notifUnread > 0 && (
+<span style={badgeStyle}>{notifBadgeText}</span>
+)}
 </Link>
 </>
 )}
@@ -339,7 +373,9 @@ boxShadow: menuOpen
 style={{
 position: "fixed",
 top: isMobile ? 78 : 74,
-right: isMobile ? 12 : "calc((100vw - min(100vw, 980px)) / 2 + 10px)",
+right: isMobile
+? 12
+: "calc((100vw - min(100vw,980px))/2 + 10px)",
 width: isMobile ? "calc(100vw - 24px)" : 250,
 maxWidth: 320,
 padding: 10,
@@ -347,7 +383,7 @@ borderRadius: 20,
 background: "rgba(8,8,12,0.96)",
 border: "1px solid rgba(168,85,247,0.28)",
 boxShadow:
-"0 24px 60px rgba(0,0,0,0.75), 0 0 34px rgba(168,85,247,0.22)",
+"0 24px 60px rgba(0,0,0,0.75),0 0 34px rgba(168,85,247,0.22)",
 backdropFilter: "blur(18px)",
 WebkitBackdropFilter: "blur(18px)",
 zIndex: 1000000,
@@ -378,6 +414,19 @@ Groups <span>◎</span>
 </Link>
 
 <div style={menuLabelStyle}>Account</div>
+
+<Link href="/profile" style={menuItemStyle}>
+Profile <span>👤</span>
+</Link>
+
+<Link href="/signals" style={menuItemStyle}>
+Signals
+{signalUnread > 0 ? (
+<span style={badgeStyle}>{signalBadgeText}</span>
+) : (
+<span>♡</span>
+)}
+</Link>
 
 <Link href="/settings" style={menuItemStyle}>
 Settings <span>⚙</span>
