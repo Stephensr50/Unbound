@@ -112,7 +112,7 @@ overflow: "hidden",
 
 const brand: CSSProperties = {
 textAlign: "center",
-fontSize: "clamp(54px, 15vw, 120px)",
+fontSize: "clamp(46px, 13vw, 92px)",
 fontWeight: 900,
 letterSpacing: 1,
 marginBottom: 6,
