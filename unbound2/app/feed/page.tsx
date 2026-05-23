@@ -1436,7 +1436,7 @@ return (
 <div
 style={{
 width: "100%",
-maxWidth: 1240,
+maxWidth: 1040,
 margin: "0 auto",
 padding: isMobile ? 10 : 16,
 boxSizing: "border-box",
@@ -1444,7 +1444,7 @@ overflowX: "hidden",
 display: "grid",
 gridTemplateColumns: isMobile
 ? "1fr"
-: "minmax(0, 220px) minmax(0, 720px) minmax(0, 220px)",
+: "minmax(0, 220px) minmax(0, 560px) minmax(0, 220px)",
 gap: isMobile ? 12 : 14,
 alignItems: "start",
 }}
