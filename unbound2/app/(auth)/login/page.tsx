@@ -48,7 +48,7 @@ style={{
 width: 520,
 height: "auto",
 objectFit: "contain",
-marginBottom: -40,
+marginBottom: -180,
 filter:
 "drop-shadow(0 0 35px rgba(255,60,200,1)) drop-shadow(0 0 90px rgba(180,60,255,1))",
 }}
