@@ -112,28 +112,28 @@ overflow: "hidden",
 
 const brand: CSSProperties = {
 textAlign: "center",
-fontSize: "clamp(62px, 18vw, 120px)",
+fontSize: "clamp(54px, 15vw, 120px)",
 fontWeight: 900,
-letterSpacing: 2,
-marginBottom: 4,
+letterSpacing: 1,
+marginBottom: 6,
 color: "#fc0ce8",
+maxWidth: "100%",
 textShadow: `
 0 0 10px rgba(168,85,247,0.9),
 0 0 25px rgba(168,85,247,0.9),
-0 0 50px rgba(168,85,247,0.8),
-0 0 90px rgba(168,85,247,0.7)
+0 0 50px rgba(168,85,247,0.8)
 `,
 animation: "glowPulse 1.5s ease-in-out infinite alternate",
 };
 
 const tagline: CSSProperties = {
 textAlign: "center",
-fontSize: "clamp(14px, 4vw, 18px)",
-fontWeight: 600,
-letterSpacing: 1,
-color: "rgba(255,255,255,0.85)",
+fontSize: "clamp(15px, 4vw, 20px)",
+fontWeight: 800,
+letterSpacing: 0.8,
+color: "#c084fc",
 marginBottom: 22,
-textShadow: "0 0 12px rgba(168,85,247,0.45)",
+textShadow: "0 0 10px rgba(192,132,252,0.75)",
 };
 
 const card: CSSProperties = {
