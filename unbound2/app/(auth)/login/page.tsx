@@ -4,6 +4,7 @@ import { useEffect, useState, type FormEvent, type CSSProperties } from "react";
 import { Suspense } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/app/supabaseClient";
+import Image from "next/image";
 
 function LoginPageContent() {
 const router = useRouter();
@@ -41,7 +42,7 @@ router.push("/feed");
 return (
 <div style={wrap}>
   <img
-src="/rope-devil.png"
+src="/unbound-logo.png"
 alt="Unbound logo"
 style={{
 width: 145,
