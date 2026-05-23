@@ -9,7 +9,6 @@ function LoginPageContent() {
 const router = useRouter();
 
 const [mounted, setMounted] = useState(false);
-
 const [email, setEmail] = useState("");
 const [password, setPassword] = useState("");
 const [loading, setLoading] = useState(false);
@@ -40,36 +39,10 @@ router.push("/feed");
 }
 
 return (
-<div
-  style={{
-    ...wrap,
-    display: "flex",
-    flexDirection: "column",
-    alignItems: "center",
-  }}
->
-<div
-  style={{
-    textAlign: "center",
-    fontSize: 120,
-    fontWeight: 900,
-    letterSpacing: 2,
-    marginBottom: 20,
-    color: "#fc0ce8",
-textShadow: `
-  0 0 10px rgba(168,85,247,0.9),
-  0 0 25px rgba(168,85,247,0.9),
-  0 0 50px rgba(168,85,247,0.8),
-  0 0 90px rgba(168,85,247,0.7)
-`,
-animation: "glowPulse 1.5s ease-in-out infinite alternate",
-  }}
->
-  UNBOUND 
-</div>
+<div style={wrap}>
+<div style={brand}>UNBOUND</div>
+<div style={tagline}>Build Community • Build Your Brand</div>
 
-
-    
 <form onSubmit={handleLogin} style={card}>
 <h1 style={title}>Welcome Back</h1>
 
@@ -104,7 +77,6 @@ style={input}
 />
 </>
 ) : (
-// SSR-safe placeholders (same spacing so layout doesn't jump)
 <>
 <div style={inputPlaceholder} />
 <div style={inputPlaceholder} />
@@ -131,9 +103,37 @@ Sign up
 const wrap: CSSProperties = {
 minHeight: "100vh",
 display: "flex",
+flexDirection: "column",
 alignItems: "center",
 justifyContent: "center",
 padding: 24,
+overflow: "hidden",
+};
+
+const brand: CSSProperties = {
+textAlign: "center",
+fontSize: "clamp(62px, 18vw, 120px)",
+fontWeight: 900,
+letterSpacing: 2,
+marginBottom: 4,
+color: "#fc0ce8",
+textShadow: `
+0 0 10px rgba(168,85,247,0.9),
+0 0 25px rgba(168,85,247,0.9),
+0 0 50px rgba(168,85,247,0.8),
+0 0 90px rgba(168,85,247,0.7)
+`,
+animation: "glowPulse 1.5s ease-in-out infinite alternate",
+};
+
+const tagline: CSSProperties = {
+textAlign: "center",
+fontSize: "clamp(14px, 4vw, 18px)",
+fontWeight: 600,
+letterSpacing: 1,
+color: "rgba(255,255,255,0.85)",
+marginBottom: 22,
+textShadow: "0 0 12px rgba(168,85,247,0.45)",
 };
 
 const card: CSSProperties = {
@@ -191,8 +191,7 @@ fontSize: 18,
 fontWeight: 700,
 color: "white",
 cursor: disabled ? "not-allowed" : "pointer",
-background:
-"linear-gradient(180deg, rgba(160,120,255,1) 0%, rgba(120,80,255,1) 100%)",
+background: "linear-gradient(180deg, rgba(160,120,255,1) 0%, rgba(120,80,255,1) 100%)",
 boxShadow: "0 0 22px rgba(140, 82, 255, 0.35)",
 opacity: disabled ? 0.7 : 1,
 });
@@ -207,6 +206,7 @@ color: "#a98bff",
 fontWeight: 700,
 textDecoration: "none",
 };
+
 export default function LoginPage() {
 return (
 <Suspense fallback={null}>
