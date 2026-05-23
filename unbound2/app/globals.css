@@ -617,35 +617,20 @@ will-change: transform;
 
 
 /* =========================
-UNBOUND: STOP CLIPPING STORY GLOWS
-(override any earlier overflow:hidden)
+UNBOUND: keep page clean, allow local glows
 ========================= */
 
-/* Keep sideways overflow clean, but allow vertical effects (glows, shadows) */
 html,
 body {
 overflow-x: hidden !important;
 overflow-y: auto !important;
 }
 
-/* Your rope background wrapper must not clip children */
-.unbound-bg {
-overflow: visible !important;
-}
-
-/* App content wrapper must not clip either */
-.app-shell {
-overflow: visible !important;
-}
-
-/* In Next, main can end up being the clipping parent */
+.unbound-bg,
+.app-shell,
 main {
-overflow: visible !important;
-}
-
-/* If anything wraps feed content in a layout, also don’t clip */
-#\_\_next {
-overflow: visible !important;
+overflow-x: hidden !important;
+overflow-y: visible !important;
 }
 /* typing dots animation */
 .unbound-typing-dots {
