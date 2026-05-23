@@ -199,7 +199,7 @@ z-index: 3;
 .explorePill {
 position: absolute;
 top: 10px;
-right: 10px;
+right: 58px;
 padding: 6px 8px;
 border-radius: 999px;
 background: rgba(0,0,0,0.55);
