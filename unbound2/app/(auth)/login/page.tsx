@@ -45,12 +45,12 @@ return (
 src="/unbound-logo.png"
 alt="Unbound logo"
 style={{
-width: 280,
+width: 520,
 height: "auto",
 objectFit: "contain",
-marginBottom: -14,
+marginBottom: -40,
 filter:
-"drop-shadow(0 0 18px rgba(236,72,153,0.85)) drop-shadow(0 0 42px rgba(168,85,247,0.75))",
+"drop-shadow(0 0 35px rgba(255,60,200,1)) drop-shadow(0 0 90px rgba(180,60,255,1))",
 }}
 />
 <div style={brand}>UNBOUND</div>
