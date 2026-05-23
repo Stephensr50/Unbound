@@ -1471,7 +1471,7 @@ alignItems: "start",
 style={{
 display: "flex",
 justifyContent: "center",
-marginTop: 14,
+marginTop: -8,
 marginBottom: 12,
 }}
 >
@@ -1479,10 +1479,10 @@ marginBottom: 12,
 src="/unbound-logo1.png"
 alt="Unbound"
 style={{
-width: 90,
+width: 120,
 height: "auto",
 filter:
-"drop-shadow(0 0 16px rgba(255,60,200,.65)) drop-shadow(0 0 24px rgba(140,80,255,.35))",
+"drop-shadow(0 0 22px rgba(255,60,200,.95)) drop-shadow(0 0 42px rgba(140,80,255,.75))",
 }}
 />
 </div>
