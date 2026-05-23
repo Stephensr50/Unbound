@@ -42,7 +42,7 @@ router.push("/feed");
 return (
 <div style={wrap}>
   <img
-src="/unbound-logo.png"
+src="/unbound-logo1.png"
 alt="Unbound logo"
 style={{
 width: 520,
