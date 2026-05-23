@@ -799,12 +799,11 @@ objectFit: "contain",
 const pillBtn: React.CSSProperties = {
 padding: "8px 14px",
 borderRadius: 999,
-border: "1px solid rgba(192,38,211,0.55)",
-background: "linear-gradient(90deg,#7c3aed,#c026d3)",
+border: "1px solid rgba(180,120,255,0.25)",
+background: "rgba(0,0,0,0.35)",
 color: "white",
 cursor: "pointer",
 fontWeight: 700,
-boxShadow: "0 0 14px rgba(192,38,211,0.45)",
 };
 
 const tabBtn = (active: boolean): React.CSSProperties => ({

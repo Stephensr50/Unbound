@@ -981,7 +981,7 @@ padding: isMobile ? 10 : 14,
 boxSizing: "border-box",
 width: "100%",
 maxWidth: "100%",
-overflow: "hidden",
+overflow: "visible",
 };
 
 const inputStyle: CSSProperties = {

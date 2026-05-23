@@ -1,5 +1,7 @@
 "use client";
 
+import type React from "react";
+
 type ReactionKey = "devil" | "fire" | "eyes" | "purple_heart";
 
 const REACTIONS: Record<ReactionKey, string> = {
@@ -54,11 +56,25 @@ gap: 14,
 marginTop: 12,
 alignItems: "center",
 flexWrap: "wrap",
+position: "relative",
+zIndex: isPickerOpen ? 9999 : 1,
+overflow: "visible",
 }}
 >
-<div style={{ position: "relative", display: "flex", gap: 8 }}>
+<div
+style={{
+position: "relative",
+display: "flex",
+gap: 8,
+overflow: "visible",
+}}
+>
 <button
-onClick={() => !isBusy && onToggleSpank(postId)}
+type="button"
+onClick={(e) => {
+e.stopPropagation();
+if (!isBusy) onToggleSpank(postId);
+}}
 disabled={isBusy}
 style={{
 ...pillBtn,
@@ -77,13 +93,7 @@ background: iSpanked
 }}
 title="Spank"
 >
-<span
-style={{
-fontSize: 16,
-lineHeight: 1,
-display: "inline-flex",
-}}
->
+<span style={{ fontSize: 16, lineHeight: 1, display: "inline-flex" }}>
 {iSpanked ? REACTIONS[myReaction || "devil"] : "👿"}
 </span>
 
@@ -94,13 +104,26 @@ display: "inline-flex",
 </button>
 
 <button
-onClick={() => onTogglePicker(postId)}
+type="button"
+onClick={(e) => {
+e.preventDefault();
+e.stopPropagation();
+
+console.log("PICKER CLICKED", postId);
+
+if (!isBusy) {
+onTogglePicker(postId);
+}
+}}
 disabled={isBusy}
 style={{
 ...pillBtn,
 padding: "8px 10px",
 minWidth: 40,
 opacity: isBusy ? 0.6 : 1,
+position: "relative",
+zIndex: 10000,
+touchAction: "manipulation",
 }}
 title="Choose reaction"
 >
@@ -109,6 +132,7 @@ title="Choose reaction"
 
 {isPickerOpen ? (
 <div
+onClick={(e) => e.stopPropagation()}
 style={{
 position: "absolute",
 top: "100%",
@@ -118,16 +142,22 @@ display: "flex",
 gap: 8,
 padding: 8,
 borderRadius: 14,
-background: "rgba(10,10,10,0.94)",
-border: "1px solid rgba(180,120,255,0.28)",
-boxShadow: "0 10px 28px rgba(0,0,0,0.35)",
-zIndex: 40,
+background: "rgba(10,10,10,0.96)",
+border: "1px solid rgba(180,120,255,0.32)",
+boxShadow: "0 10px 28px rgba(0,0,0,0.45)",
+zIndex: 99999,
+pointerEvents: "auto",
+overflow: "visible",
 }}
 >
 {(Object.keys(REACTIONS) as ReactionKey[]).map((reaction) => (
 <button
+type="button"
 key={reaction}
-onClick={() => onSetReaction(postId, reaction)}
+onClick={(e) => {
+e.stopPropagation();
+onSetReaction(postId, reaction);
+}}
 style={{
 width: 40,
 height: 40,
@@ -144,6 +174,7 @@ color: "white",
 cursor: "pointer",
 fontSize: 20,
 lineHeight: "20px",
+touchAction: "manipulation",
 }}
 title={reaction}
 >
@@ -154,7 +185,14 @@ title={reaction}
 ) : null}
 </div>
 
-<button onClick={() => onOpenComments(postId)} style={pillBtn}>
+<button
+type="button"
+onClick={(e) => {
+e.stopPropagation();
+onOpenComments(postId);
+}}
+style={pillBtn}
+>
 Comments {comments ? `· ${comments}` : ""}
 </button>
 
