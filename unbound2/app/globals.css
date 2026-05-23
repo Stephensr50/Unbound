@@ -686,3 +686,10 @@ transform: rotate(360deg);
       0 0 80px rgba(168,85,247,0.9);
   }
 }
+
+@media (max-width: 900px) {
+.app-shell {
+padding-left: 0 !important;
+padding-right: 0 !important;
+}
+}
