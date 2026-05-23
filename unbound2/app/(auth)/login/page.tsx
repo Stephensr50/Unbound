@@ -45,10 +45,10 @@ return (
 src="/unbound-logo.png"
 alt="Unbound logo"
 style={{
-width: 145,
+width: 280,
 height: "auto",
 objectFit: "contain",
-marginBottom: -6,
+marginBottom: -14,
 filter:
 "drop-shadow(0 0 18px rgba(236,72,153,0.85)) drop-shadow(0 0 42px rgba(168,85,247,0.75))",
 }}
