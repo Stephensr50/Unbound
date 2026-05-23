@@ -1466,7 +1466,27 @@ alignItems: "start",
 `}</style>
 
 <StoriesBar />
-
+{isMobile && (
+<div
+style={{
+display: "flex",
+justifyContent: "center",
+marginTop: 14,
+marginBottom: 12,
+}}
+>
+<img
+src="/unbound-logo1.png"
+alt="Unbound"
+style={{
+width: 90,
+height: "auto",
+filter:
+"drop-shadow(0 0 16px rgba(255,60,200,.65)) drop-shadow(0 0 24px rgba(140,80,255,.35))",
+}}
+/>
+</div>
+)}
 <div
 style={{
 fontWeight: 900,
