@@ -225,6 +225,21 @@ maxWidth: 980,
 boxSizing: "border-box",
 }}
 >
+    <img
+src="/unbound-logo1.png"
+alt="Unbound"
+style={{
+position: "fixed",
+top: -8,
+left: -200,
+width: 145,
+height: "auto",
+zIndex: 49,
+pointerEvents: "none",
+filter:
+"drop-shadow(0 0 22px rgba(255,60,200,.85)) drop-shadow(0 0 36px rgba(140,80,255,.55))",
+}}
+/>
 <div
 style={{
 display: "flex",
