@@ -40,6 +40,18 @@ router.push("/feed");
 
 return (
 <div style={wrap}>
+  <img
+src="/rope-devil-purple.png"
+alt="Unbound logo"
+style={{
+width: 120,
+height: 120,
+objectFit: "contain",
+marginBottom: 10,
+borderRadius: 24,
+boxShadow: "0 0 30px rgba(168,85,247,0.55)",
+}}
+/>
 <div style={brand}>UNBOUND</div>
 <div style={tagline}>Build Community • Build Your Brand</div>
 
