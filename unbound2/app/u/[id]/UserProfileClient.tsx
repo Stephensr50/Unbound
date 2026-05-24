@@ -2175,56 +2175,19 @@ onClick={(e) => e.stopPropagation()}
 style={{
 width: "min(680px, 96vw)",
 maxHeight: "82vh",
-overflow: "auto",
+overflowY: "auto",
 background: "rgba(0,0,0,0.88)",
 border: "1px solid rgba(180,120,255,0.22)",
 borderRadius: 16,
 padding: 14,
 }}
 >
-<div
-style={{
-display: "flex",
-gap: 10,
-flexWrap: "wrap",
-marginBottom: 14,
-}}
->
-<button
-onClick={() => {
-setRelationshipTab("followers");
-void loadRelationshipProfiles(profile.id, "followers");
-}}
-style={tabBtn(relationshipTab === "followers")}
->
-Followers
-</button>
-
-<button
-onClick={() => {
-setRelationshipTab("following");
-void loadRelationshipProfiles(profile.id, "following");
-}}
-style={tabBtn(relationshipTab === "following")}
->
-Following
-</button>
-
-<button
-onClick={() => {
-setRelationshipTab("friends");
-void loadRelationshipProfiles(profile.id, "friends");
-}}
-style={tabBtn(relationshipTab === "friends")}
->
-Friends
-</button>
-
+<div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 14 }}>
+<button onClick={() => { if (!myUserId) return; setRelationshipTab("followers"); void loadRelationshipProfiles(myUserId, "followers"); }} style={tabBtn(relationshipTab === "followers")}>Followers</button>
+<button onClick={() => { if (!myUserId) return; setRelationshipTab("following"); void loadRelationshipProfiles(myUserId, "following"); }} style={tabBtn(relationshipTab === "following")}>Following</button>
+<button onClick={() => { if (!myUserId) return; setRelationshipTab("friends"); void loadRelationshipProfiles(myUserId, "friends"); }} style={tabBtn(relationshipTab === "friends")}>Friends</button>
 <div style={{ flex: 1 }} />
-
-<button onClick={() => setRelationshipModalOpen(false)} style={pillBtn}>
-Close
-</button>
+<button onClick={() => setRelationshipModalOpen(false)} style={pillBtn}>Close</button>
 </div>
 
 <div style={{ fontSize: 22, fontWeight: 850, marginBottom: 12 }}>
@@ -2238,68 +2201,56 @@ Close
 ) : (
 <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
 {relationshipProfiles.map((p) => (
-<Link
+<div
 key={p.id}
-
-href={`/u/${p.username || p.id}`}
-onClick={(e) => {
-e.stopPropagation();
-setRelationshipModalOpen(false);
-}}
 style={{
+position: "relative",
 display: "flex",
 alignItems: "center",
 gap: 12,
-padding: 12,
+padding: "12px 92px 12px 12px",
 borderRadius: 14,
 border: "1px solid rgba(180,120,255,0.10)",
 background: "rgba(0,0,0,0.18)",
-textDecoration: "none",
 color: "white",
 }}
 >
 {p.avatar_url ? (
-// eslint-disable-next-line @next/next/no-img-element
-<img
-src={p.avatar_url}
-alt=""
-style={{
-width: 46,
-height: 46,
-borderRadius: 999,
-objectFit: "cover",
-border: "1px solid rgba(255,255,255,0.16)",
-}}
-/>
+<img src={p.avatar_url} alt="" style={{ width: 46, height: 46, borderRadius: 999, objectFit: "cover", border: "1px solid rgba(255,255,255,0.16)" }} />
 ) : (
-<div
-style={{
-width: 46,
-height: 46,
-borderRadius: 999,
-display: "grid",
-placeItems: "center",
-border: "1px solid rgba(255,255,255,0.16)",
-background: "rgba(255,255,255,0.04)",
-fontWeight: 800,
-opacity: 0.75,
-}}
->
+<div style={{ width: 46, height: 46, borderRadius: 999, display: "grid", placeItems: "center", border: "1px solid rgba(255,255,255,0.16)", background: "rgba(255,255,255,0.04)", fontWeight: 800, opacity: 0.75 }}>
 {(p.display_name || p.username || "?").charAt(0).toUpperCase()}
 </div>
 )}
 
-<div style={{ minWidth: 0, flex: 1 }}>
-<div style={{ fontWeight: 800 }}>
-{p.display_name || p.username || "Unknown"}
-</div>
-{p.username ? (
-<div style={{ opacity: 0.72, fontSize: 13 }}>@{p.username}</div>
-) : null}
+<div style={{ minWidth: 0 }}>
+<div style={{ fontWeight: 800 }}>{p.display_name || p.username || "Unknown"}</div>
+{p.username ? <div style={{ opacity: 0.72, fontSize: 13 }}>@{p.username}</div> : null}
 </div>
 
-<div style={{ opacity: 0.62, fontSize: 13 }}>View →</div>
-</Link>
+<button
+type="button"
+onClick={() => {
+setRelationshipModalOpen(false);
+router.push(`/u/${p.username || p.id}`);
+}}
+style={{
+position: "absolute",
+right: 12,
+top: "50%",
+transform: "translateY(-50%)",
+padding: "7px 14px",
+borderRadius: 999,
+border: "1px solid rgba(236,72,153,0.55)",
+background: "rgba(236,72,153,0.18)",
+color: "white",
+fontWeight: 900,
+cursor: "pointer",
+}}
+>
+View
+</button>
+</div>
 ))}
 </div>
 )}

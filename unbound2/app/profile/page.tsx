@@ -719,18 +719,21 @@ No one yet.
 <div style={S.list}>
 {modalUsers.map((u) => {
 const label = u.display_name || u.username || "User";
-const href = u.username ? `/u/${u.username}` : `/profile`;
+const href = `/u/${u.username || u.id}`;
 
 return (
 <Link
 key={u.id}
 href={href}
-style={S.userRow}
+style={{
+...S.userRow,
+justifyContent: "space-between",
+}}
 onClick={() => setModalOpen(false)}
 >
+<div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
 <div style={S.userAvatar}>
 {u.avatar_url ? (
-// eslint-disable-next-line @next/next/no-img-element
 <img
 src={u.avatar_url}
 alt=""
@@ -763,6 +766,21 @@ fontSize: 12,
 {u.username ? (
 <div style={S.userHandle}>@{u.username}</div>
 ) : null}
+</div>
+</div>
+
+<div
+style={{
+flex: "0 0 auto",
+padding: "6px 12px",
+borderRadius: 999,
+border: "1px solid rgba(236,72,153,0.55)",
+background: "rgba(236,72,153,0.16)",
+color: "white",
+fontWeight: 900,
+fontSize: 13,
+}}>
+View
 </div>
 </Link>
 );
