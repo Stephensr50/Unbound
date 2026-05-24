@@ -204,6 +204,29 @@ const msgBadgeText = unread > 99 ? "99+" : String(unread);
 const signalBadgeText = signalUnread > 99 ? "99+" : String(signalUnread);
 const notifBadgeText = notifUnread > 99 ? "99+" : String(notifUnread);
 
+const mobileIconLinkStyle = (active: boolean): React.CSSProperties => ({
+...tabStyle(active),
+position: "relative",
+width: 44,
+height: 42,
+padding: 0,
+display: "inline-flex",
+alignItems: "center",
+justifyContent: "center",
+flex: "0 0 44px",
+});
+
+const mobileBadgeStyle: React.CSSProperties = {
+...badgeStyle,
+position: "absolute",
+top: 3,
+right: 1,
+minWidth: 18,
+height: 18,
+padding: "0 4px",
+fontSize: 10,
+lineHeight: "18px",
+};
 
 const iconStyle: React.CSSProperties = {
 width: 24,
@@ -339,30 +362,30 @@ Feed
 Explore
 </Link>
 
-<Link href="/search" style={tabStyle(isActive("/search"))}>
+<Link href="/search" style={mobileIconLinkStyle(isActive("/search"))}>
 <svg viewBox="0 0 24 24" fill="currentColor" style={iconStyle}>
 <path d="M10 18a8 8 0 1 1 5.29-14A8 8 0 0 1 10 18Zm0-2a6 6 0 1 0 0-12a6 6 0 0 0 0 12Zm7.71 3.71-4.2-4.2 1.41-1.41 4.2 4.2Z" />
 </svg>
 </Link>
 
-<Link href="/messages" style={tabStyle(isActive("/messages"))}>
+<Link href="/messages" style={mobileIconLinkStyle(isActive("/messages"))}>
 <svg viewBox="0 0 24 24" fill="currentColor" style={iconStyle}>
 <path d="M3 5h18v14H3V5Zm2 2v.5l7 4.5 7-4.5V7l-7 4.5L5 7Z" />
 </svg>
 
-{unread > 0 && <span style={badgeStyle}>{msgBadgeText}</span>}
+{unread > 0 && <span style={mobileBadgeStyle}>{msgBadgeText}</span>}
 </Link>
 
 <Link
 href="/notifications"
-style={tabStyle(isActive("/notifications"))}
+style={mobileIconLinkStyle(isActive("/notifications"))}
 >
 <svg viewBox="0 0 24 24" fill="currentColor" style={iconStyle}>
 <path d="M12 22a2.5 2.5 0 0 0 2.45-2h-4.9A2.5 2.5 0 0 0 12 22Zm7-6v-5a7 7 0 0 0-5-6.71V3a2 2 0 0 0-4 0v1.29A7 7 0 0 0 5 11v5l-2 2v1h18v-1l-2-2Z" />
 </svg>
 
 {notifUnread > 0 && (
-<span style={badgeStyle}>{notifBadgeText}</span>
+<span style={mobileBadgeStyle}>{notifBadgeText}</span>
 )}
 </Link>
 </>
