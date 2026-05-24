@@ -63,9 +63,17 @@ return;
 
 setLoading(true);
 
+const emailRedirectTo =
+typeof window !== "undefined"
+? `${window.location.origin}/login?verified=1`
+: undefined;
+
 const { data, error: signUpError } = await supabase.auth.signUp({
 email,
 password,
+options: {
+emailRedirectTo,
+},
 });
 
 setLoading(false);
@@ -77,13 +85,8 @@ return;
 
 // If email confirmations are ON, Supabase may not create a session yet.
 // So we handle both cases cleanly.
-if (!data.session) {
 router.push("/login?check_email=1");
 return;
-}
-
-// If confirmations are OFF, user is signed in immediately.
-router.push("/feed");
 }
 
 return (

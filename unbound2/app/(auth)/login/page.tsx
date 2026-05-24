@@ -2,12 +2,14 @@
 
 import { useEffect, useState, type FormEvent, type CSSProperties } from "react";
 import { Suspense } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "@/app/supabaseClient";
-import Image from "next/image";
 
 function LoginPageContent() {
 const router = useRouter();
+const searchParams = useSearchParams();
+const checkEmail = searchParams.get("check_email") === "1";
+const verified = searchParams.get("verified") === "1";
 
 const [mounted, setMounted] = useState(false);
 const [email, setEmail] = useState("");
@@ -41,7 +43,7 @@ router.push("/feed");
 
 return (
 <div style={wrap}>
-  <img
+<img
 src="/unbound-logo1.png"
 alt="Unbound logo"
 style={{
@@ -53,11 +55,24 @@ filter:
 "drop-shadow(0 0 18px rgba(255,60,200,1)) drop-shadow(0 0 28px rgba(180,60,255,1))",
 }}
 />
+
 <div style={brand}>UNBOUND</div>
 <div style={tagline}>Build Community • Build Your Brand</div>
 
 <form onSubmit={handleLogin} style={card}>
 <h1 style={title}>Welcome Back</h1>
+
+{checkEmail ? (
+<div style={successText}>
+Account created. Check your email and click the verification link before logging in.
+</div>
+) : null}
+
+{verified ? (
+<div style={successText}>
+Email verified. You can log in now.
+</div>
+) : null}
 
 {mounted ? (
 <>
@@ -192,6 +207,15 @@ const errorText: CSSProperties = {
 color: "#ff6b6b",
 marginTop: 10,
 fontSize: 14,
+};
+
+const successText: CSSProperties = {
+color: "#86efac",
+marginTop: 10,
+marginBottom: 10,
+fontSize: 14,
+fontWeight: 700,
+lineHeight: 1.35,
 };
 
 const button = (disabled: boolean): CSSProperties => ({
