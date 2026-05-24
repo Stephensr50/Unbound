@@ -1960,7 +1960,10 @@ flexWrap: "wrap",
 
 {groupInfo ? (
 <div
-onClick={() => router.push(`/groups/${groupInfo.slug}`)}
+onClick={(e) => {
+e.stopPropagation();
+router.push(`/groups/${groupInfo.slug}`);
+}}
 style={{ ...groupPillStyle, cursor: "pointer" }}
 >
 {groupInfo.avatar_url ? (
