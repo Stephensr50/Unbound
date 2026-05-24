@@ -2240,8 +2240,12 @@ Close
 {relationshipProfiles.map((p) => (
 <Link
 key={p.id}
-href={`/u/${p.id}`}
-onClick={() => setRelationshipModalOpen(false)}
+
+href={`/u/${p.username || p.id}`}
+onClick={(e) => {
+e.stopPropagation();
+setRelationshipModalOpen(false);
+}}
 style={{
 display: "flex",
 alignItems: "center",
