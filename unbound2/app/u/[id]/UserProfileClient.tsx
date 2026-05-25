@@ -1179,7 +1179,12 @@ return (
 key={p.id}
 style={mediaTile}
 onClick={() => {
-if (!p.is_locked) openGalleryForPost(p.id, mode);
+if (p.is_locked && !unlockedPostIds[p.id]) {
+void unlockPost(p);
+return;
+}
+
+openGalleryForPost(p.id, mode);
 }}
 onMouseEnter={(e) => {
 const el = e.currentTarget;
