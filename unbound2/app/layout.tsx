@@ -1,4 +1,4 @@
-import type { Metadata, Viewport } from "next";
+import type { Metadata } from "next";
 import { Suspense } from "react";
 import "./globals.css";
 import TopNav from "./components/TopNav";
@@ -8,7 +8,7 @@ import { Gloock } from "next/font/google";
 
 export const dynamic = "force-dynamic";
 
-export const viewport: Viewport = {
+export const viewport = {
 width: "device-width",
 initialScale: 1,
 };
