@@ -1,9 +1,6 @@
 import { NextResponse } from "next/server";
-import Stripe from "stripe";
 
 export const runtime = "nodejs";
-
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
 
 export async function POST(req: Request) {
 try {
@@ -16,31 +13,46 @@ return NextResponse.json(
 );
 }
 
-const siteUrl =
-process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000";
+const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000";
+const secretKey = process.env.STRIPE_SECRET_KEY;
 
-const session = await stripe.checkout.sessions.create({
-mode: "payment",
-payment_method_types: ["card"],
-line_items: [
-{
-quantity: 1,
-price_data: {
-currency: "usd",
-unit_amount: 149,
-product_data: {
-name: "Unlock Unbound content",
+if (!secretKey) {
+return NextResponse.json(
+{ error: "Missing STRIPE_SECRET_KEY" },
+{ status: 500 }
+);
+}
+
+const params = new URLSearchParams();
+
+params.append("mode", "payment");
+params.append("payment_method_types[]", "card");
+params.append("line_items[0][quantity]", "1");
+params.append("line_items[0][price_data][currency]", "usd");
+params.append("line_items[0][price_data][unit_amount]", "149");
+params.append(
+"line_items[0][price_data][product_data][name]",
+"Unlock Unbound content"
+);
+params.append("success_url", `${siteUrl}/feed?unlock=success&postId=${postId}`);
+params.append("cancel_url", `${siteUrl}/feed?unlock=cancelled&postId=${postId}`);
+params.append("metadata[postId]", String(postId));
+params.append("metadata[userId]", String(userId));
+
+const stripeRes = await fetch("https://api.stripe.com/v1/checkout/sessions", {
+method: "POST",
+headers: {
+Authorization: `Bearer ${secretKey}`,
+"Content-Type": "application/x-www-form-urlencoded",
 },
-},
-},
-],
-success_url: `${siteUrl}/feed?unlock=success&postId=${postId}`,
-cancel_url: `${siteUrl}/feed?unlock=cancelled&postId=${postId}`,
-metadata: {
-postId: String(postId),
-userId: String(userId),
-},
+body: params.toString(),
 });
+
+const session = await stripeRes.json();
+
+if (!stripeRes.ok) {
+throw new Error(session?.error?.message || "Stripe checkout failed.");
+}
 
 return NextResponse.json({ url: session.url });
 } catch (err: any) {
