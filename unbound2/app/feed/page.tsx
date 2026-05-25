@@ -663,7 +663,62 @@ await loadSuggestedUsers(uid);
 })();
 // eslint-disable-next-line react-hooks/exhaustive-deps
 }, []);
+useEffect(() => {
+void (async () => {
+const unlockStatus = searchParams?.get("unlock");
+const postIdRaw = searchParams?.get("postId");
+const postId = postIdRaw ? Number(postIdRaw) : NaN;
 
+if (unlockStatus !== "success" || !Number.isFinite(postId) || postId <= 0) {
+return;
+}
+
+const uid = myUserId ?? (await refreshAuth());
+if (!uid) return;
+
+setBanner("Unlock confirmed. Opening content...");
+
+const { data: postRow, error: postErr } = await supabase
+.from("posts")
+.select("id,user_id")
+.eq("id", postId)
+.maybeSingle();
+
+if (postErr || !postRow) {
+setBanner("Payment succeeded, but we could not find that post.");
+return;
+}
+
+const { data: existing } = await supabase
+.from("post_unlocks")
+.select("id")
+.eq("post_id", postId)
+.eq("buyer_id", uid)
+.maybeSingle();
+
+if (!existing) {
+const { error: insertErr } = await supabase.from("post_unlocks").insert({
+post_id: postId,
+buyer_id: uid,
+creator_id: postRow.user_id,
+amount_cents: 149,
+currency: "usd",
+});
+
+if (insertErr) {
+setBanner(insertErr.message);
+return;
+}
+}
+
+setUnlockedPostIds((m) => ({ ...m, [postId]: true }));
+await loadPosts();
+
+router.replace("/feed");
+setBanner(null);
+})();
+// eslint-disable-next-line react-hooks/exhaustive-deps
+}, [searchParams?.toString(), myUserId]);
 useEffect(() => {
 void (async () => {
 if (!focusPostId) return;
@@ -1218,7 +1273,7 @@ return;
 }
 
 try {
-setBanner(null);
+setBanner("Opening checkout...");
 
 const res = await fetch("/api/checkout", {
 method: "POST",
@@ -1241,7 +1296,7 @@ if (!data?.url) {
 throw new Error("Checkout did not return a Stripe URL.");
 }
 
-window.location.href = data.url;
+window.location.assign(data.url);
 } catch (e: any) {
 setBanner(e?.message || "Checkout failed.");
 }

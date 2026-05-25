@@ -13,10 +13,7 @@ return NextResponse.json(
 );
 }
 
-return NextResponse.json(
-{ error: "CHECKOUT DEBUG HIT" },
-{ status: 418 }
-);
+
 
 const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000";
 const secretKey = process.env.STRIPE_SECRET_KEY;
