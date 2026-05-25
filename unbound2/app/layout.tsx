@@ -3,7 +3,9 @@ import { Suspense } from "react";
 import "./globals.css";
 import TopNav from "./components/TopNav";
 import ModerationGate from "./components/ModerationGate";
+import AgeGate from "./components/AgeGate";
 import { Gloock } from "next/font/google";
+
 export const dynamic = "force-dynamic";
 
 const gloock = Gloock({
@@ -23,14 +25,21 @@ children: React.ReactNode;
 }) {
 return (
 <html lang="en" suppressHydrationWarning>
-<body suppressHydrationWarning className={`unbound-bg ${gloock.className}`}>
+<body
+suppressHydrationWarning
+className={`unbound-bg ${gloock.className}`}
+>
+<AgeGate>
 <Suspense fallback={null}>
 <TopNav />
 </Suspense>
+
 <ModerationGate />
+
 <main className="app-shell" style={{ paddingTop: 110 }}>
 {children}
 </main>
+</AgeGate>
 </body>
 </html>
 );
