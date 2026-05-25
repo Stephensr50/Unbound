@@ -908,26 +908,30 @@ setBanner("You need to be signed in to unlock this post.");
 return;
 }
 
-const { error } = await supabase.from("post_unlocks").insert({
-post_id: post.id,
-buyer_id: uid,
-creator_id: post.user_id,
-amount_cents: 149,
-currency: "usd",
+const res = await fetch("/api/checkout", {
+method: "POST",
+headers: {
+"Content-Type": "application/json",
+},
+body: JSON.stringify({
+postId: post.id,
+userId: uid,
+}),
 });
 
-if (
-error &&
-!String(error.message).toLowerCase().includes("duplicate")
-) {
-setBanner(error.message);
+const data = await res.json();
+
+if (!res.ok) {
+setBanner(data.error || "Unable to start checkout.");
 return;
 }
 
-setUnlockedPostIds((m) => ({
-...m,
-[post.id]: true,
-}));
+if (!data.url) {
+setBanner("Checkout did not return a payment link.");
+return;
+}
+
+window.location.href = data.url;
 }
 async function addComment(postId: number) {
 const uid = myUserId ?? (await refreshAuth());
