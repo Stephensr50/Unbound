@@ -1812,6 +1812,12 @@ Unlock this post for $1.49
 </div>
 
 <button
+type="button"
+onClick={(e) => {
+e.preventDefault();
+e.stopPropagation();
+void unlockPost(p);
+}}
 style={{
 marginTop: 8,
 padding: "12px 26px",
