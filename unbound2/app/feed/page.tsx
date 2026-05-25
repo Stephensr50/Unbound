@@ -1199,25 +1199,40 @@ setPosting(false);
 
 async function unlockPost(post: PostRow) {
 const uid = myUserId ?? (await refreshAuth());
+
 if (!uid) {
 setBanner("You need to be signed in to unlock this post.");
 return;
 }
 
-const { error } = await supabase.from("post_unlocks").insert({
-post_id: post.id,
-buyer_id: uid,
-creator_id: post.user_id,
-amount_cents: 149,
-currency: "usd",
+try {
+setBanner(null);
+
+const res = await fetch("/api/checkout", {
+method: "POST",
+headers: {
+"Content-Type": "application/json",
+},
+body: JSON.stringify({
+postId: post.id,
+userId: uid,
+}),
 });
 
-if (error && !String(error.message).toLowerCase().includes("duplicate")) {
-setBanner(error.message);
-return;
+const data = await res.json();
+
+if (!res.ok) {
+throw new Error(data?.error || "Checkout failed.");
 }
 
-setUnlockedPostIds((m) => ({ ...m, [post.id]: true }));
+if (!data?.url) {
+throw new Error("Checkout did not return a Stripe URL.");
+}
+
+window.location.href = data.url;
+} catch (e: any) {
+setBanner(e?.message || "Checkout failed.");
+}
 }
 
 async function reportPost(post: PostRow) {
