@@ -85,6 +85,11 @@ lockedIndex++;
 }
 }
 
+while (lockedIndex < locked.length) {
+result.push(locked[lockedIndex]);
+lockedIndex++;
+}
+
 return result;
 }
 
@@ -593,6 +598,12 @@ unlockedMap = Object.fromEntries(
 (unlockRows ?? []).map((r: any) => [Number(r.post_id), true])
 );
 }
+
+for (const post of rows) {
+if (post.is_locked && post.user_id === uid) {
+unlockedMap[post.id] = true;
+}
+}
 }
 
 setUnlockedPostIds(unlockedMap);
@@ -617,7 +628,7 @@ for (const p of activeProfiles) map[p.id] = p;
 
 setProfilesById(map);
 const activeRows = rows.filter((post) => activeUserIds.has(post.user_id));
-setPosts(spaceLockedPosts(activeRows));
+setPosts(activeRows);
 } else {
 setProfilesById({});
 }
@@ -1162,11 +1173,12 @@ const { count: lockedMediaCount, error: lockedMediaError } = await supabase
 .in("kind", ["photo", "video"]);
 
 if (lockedMediaError) throw new Error(lockedMediaError.message);
-
 const totalAfterThisPost = (totalMediaCount ?? 0) + 1;
-const lockLimit = Math.floor(totalAfterThisPost * 0.3);
+const lockedAfterThisPost = (lockedMediaCount ?? 0) + 1;
+const lockLimit = Math.ceil(totalAfterThisPost * 0.3);
 
-if ((lockedMediaCount ?? 0) >= lockLimit) {
+
+if (lockedAfterThisPost > lockLimit) {
 setBanner(
 `You can lock up to 30% of your photos and videos. Add more public media first or unlock something.`
 );
