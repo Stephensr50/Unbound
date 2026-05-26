@@ -3,11 +3,6 @@ import { createClient } from "@supabase/supabase-js";
 
 export const runtime = "nodejs";
 
-const supabaseAdmin = createClient(
-process.env.NEXT_PUBLIC_SUPABASE_URL!,
-process.env.SUPABASE_SERVICE_ROLE_KEY!
-);
-
 export async function POST(req: Request) {
 try {
 const { sessionId } = await req.json();
@@ -16,7 +11,16 @@ if (!sessionId) {
 return NextResponse.json({ error: "Missing sessionId" }, { status: 400 });
 }
 
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const secretKey = process.env.STRIPE_SECRET_KEY;
+
+if (!supabaseUrl || !serviceRoleKey) {
+return NextResponse.json(
+{ error: "Missing Supabase server environment variables" },
+{ status: 500 }
+);
+}
 
 if (!secretKey) {
 return NextResponse.json(
@@ -24,6 +28,8 @@ return NextResponse.json(
 { status: 500 }
 );
 }
+
+const supabaseAdmin = createClient(supabaseUrl, serviceRoleKey);
 
 const stripeRes = await fetch(
 `https://api.stripe.com/v1/checkout/sessions/${sessionId}`,
@@ -67,10 +73,7 @@ const { data: postRow, error: postErr } = await supabaseAdmin
 .maybeSingle();
 
 if (postErr || !postRow) {
-return NextResponse.json(
-{ error: "Post not found" },
-{ status: 404 }
-);
+return NextResponse.json({ error: "Post not found" }, { status: 404 });
 }
 
 const { error: upsertErr } = await supabaseAdmin
@@ -87,10 +90,7 @@ currency: "usd",
 );
 
 if (upsertErr) {
-return NextResponse.json(
-{ error: upsertErr.message },
-{ status: 500 }
-);
+return NextResponse.json({ error: upsertErr.message }, { status: 500 });
 }
 
 return NextResponse.json({ ok: true, postId });
