@@ -36,7 +36,10 @@ params.append(
 "line_items[0][price_data][product_data][name]",
 "Unlock Unbound content"
 );
-params.append("success_url", `${siteUrl}/feed?unlock=success&postId=${postId}`);
+params.append(
+"success_url",
+`${siteUrl}/feed?checkout_session_id={CHECKOUT_SESSION_ID}`
+);
 params.append("cancel_url", `${siteUrl}/feed?unlock=cancelled&postId=${postId}`);
 params.append("metadata[postId]", String(postId));
 params.append("metadata[userId]", String(userId));

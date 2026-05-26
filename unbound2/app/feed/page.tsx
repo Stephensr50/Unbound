@@ -665,58 +665,42 @@ await loadSuggestedUsers(uid);
 }, []);
 useEffect(() => {
 void (async () => {
-const unlockStatus = searchParams?.get("unlock");
-const postIdRaw = searchParams?.get("postId");
-const postId = postIdRaw ? Number(postIdRaw) : NaN;
+const sessionId = searchParams?.get("checkout_session_id");
 
-if (unlockStatus !== "success" || !Number.isFinite(postId) || postId <= 0) {
-return;
-}
+if (!sessionId) return;
 
 const uid = myUserId ?? (await refreshAuth());
 if (!uid) return;
 
-setBanner("Unlock confirmed. Opening content...");
+setBanner("Confirming payment...");
 
-const { data: postRow, error: postErr } = await supabase
-.from("posts")
-.select("id,user_id")
-.eq("id", postId)
-.maybeSingle();
-
-if (postErr || !postRow) {
-setBanner("Payment succeeded, but we could not find that post.");
-return;
-}
-
-const { data: existing } = await supabase
-.from("post_unlocks")
-.select("id")
-.eq("post_id", postId)
-.eq("buyer_id", uid)
-.maybeSingle();
-
-if (!existing) {
-const { error: insertErr } = await supabase.from("post_unlocks").insert({
-post_id: postId,
-buyer_id: uid,
-creator_id: postRow.user_id,
-amount_cents: 149,
-currency: "usd",
+const res = await fetch("/api/unlocks/confirm", {
+method: "POST",
+headers: {
+"Content-Type": "application/json",
+},
+body: JSON.stringify({ sessionId }),
 });
 
-if (insertErr) {
-setBanner(insertErr.message);
+const data = await res.json();
+
+if (!res.ok) {
+setBanner(data?.error || "Could not confirm payment.");
 return;
 }
+
+const postId = Number(data.postId);
+
+if (postId) {
+setUnlockedPostIds((m) => ({ ...m, [postId]: true }));
 }
 
-setUnlockedPostIds((m) => ({ ...m, [postId]: true }));
 await loadPosts();
 
 router.replace("/feed");
-setBanner(null);
+setBanner("Payment confirmed. Content unlocked.");
 })();
+
 // eslint-disable-next-line react-hooks/exhaustive-deps
 }, [searchParams?.toString(), myUserId]);
 useEffect(() => {
@@ -1216,7 +1200,7 @@ const { count: totalMediaCount, error: totalMediaError } = await supabase
 .from("posts")
 .select("id", { count: "exact", head: true })
 .eq("user_id", uid)
-.in("kind", ["photo", "video"]);
+.in("kind", ["image", "photo", "video"]);
 
 if (totalMediaError) throw new Error(totalMediaError.message);
 
@@ -1225,7 +1209,7 @@ const { count: lockedMediaCount, error: lockedMediaError } = await supabase
 .select("id", { count: "exact", head: true })
 .eq("user_id", uid)
 .eq("is_locked", true)
-.in("kind", ["photo", "video"]);
+.in("kind", ["image", "photo", "video"]);
 
 if (lockedMediaError) throw new Error(lockedMediaError.message);
 const totalAfterThisPost = (totalMediaCount ?? 0) + 1;
