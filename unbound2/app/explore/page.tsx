@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@supabase/supabase-js";
-import ReportPostButton from "../components/ReportPostButton";
+
 
 function getSupabase() {
 const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
@@ -28,16 +28,7 @@ display_name: string | null;
 avatar_url: string | null;
 moderation_status?: string | null;
 };
-function timeAgo(ts: string) {
-const then = new Date(ts).getTime();
-const now = Date.now();
-const s = Math.max(0, Math.floor((now - then) / 1000));
-if (s < 15) return "just now";
-if (s < 60) return `${s}s`;
-if (s < 3600) return `${Math.floor(s / 60)}m`;
-if (s < 86400) return `${Math.floor(s / 3600)}h`;
-return `${Math.floor(s / 86400)}d`;
-}
+
 
 export default function ExplorePage() {
 const supabase = useMemo(() => getSupabase(), []);
@@ -50,8 +41,7 @@ const [profilesById, setProfilesById] = useState<Record<string, ProfileRow>>(
 const [loading, setLoading] = useState(true);
 const [banner, setBanner] = useState<string | null>(null);
 
-const [myUserId, setMyUserId] = useState<string | null>(null);
-const [openPostMenu, setOpenPostMenu] = useState<Record<number, boolean>>({});
+
 
 useEffect(() => {
 let alive = true;
@@ -62,7 +52,7 @@ setLoading(true);
 setBanner(null);
 
 const { data: sessionData } = await supabase.auth.getSession();
-setMyUserId(sessionData.session?.user?.id ?? null);
+
 
 const { data, error } = await supabase
 .from("posts")
@@ -137,30 +127,19 @@ return (
 <div style={{ maxWidth: 1240, margin: "0 auto", padding: 16 }}>
 <style>{`
 .exploreCard {
-border: 1px solid rgba(180,120,255,0.16);
-background: rgba(0,0,0,0.46);
-border-radius: 20px;
+border: none;
+background: transparent;
+border-radius: 0;
 overflow: hidden;
 padding: 0;
 cursor: pointer;
 text-align: left;
-transition:
-transform 0.18s ease,
-box-shadow 0.18s ease,
-border-color 0.18s ease,
-background 0.18s ease;
-backdrop-filter: blur(4px);
 }
 
 .exploreCard:hover {
-transform: translateY(-6px) scale(1.025);
-border-color: rgba(192,38,211,0.65);
-box-shadow:
-0 22px 50px rgba(0,0,0,0.45),
-0 0 18px rgba(168,85,247,0.35),
-0 0 40px rgba(168,85,247,0.45),
-0 0 70px rgba(168,85,247,0.25);
-background: rgba(0,0,0,0.62);
+transform: none;
+box-shadow: none;
+background: transparent;
 }
 
 .exploreMedia {
@@ -269,7 +248,6 @@ gap: 4,
 {posts.map((post) => {
 const profile = profilesById[post.user_id];
 const label = profile?.display_name || profile?.username || "Unknown";
-const handle = profile?.username ? `@${profile.username}` : "";
 const isVideo =
 (post.media_type && post.media_type.startsWith("video/")) ||
 post.kind === "video";
@@ -294,8 +272,8 @@ style={{
 position: "relative",
 aspectRatio: "1 / 1",
 overflow: "hidden",
-borderRadius: 10,
-background: "rgba(0,0,0,0.45)",
+borderRadius: 0,
+background: "black",
 }}
 >
 {post.media_url ? (
@@ -309,8 +287,7 @@ className="exploreMedia"
 style={{
 width: "100%",
 height: "100%",
-objectFit: "contain",
-background: "rgba(0,0,0,0.75)",
+objectFit: "cover",
 display: "block",
 }}
 />
@@ -323,96 +300,12 @@ className="exploreMedia"
 style={{
 width: "100%",
 height: "100%",
-objectFit: "contain",
+objectFit: "cover",
 display: "block",
 }}
 />
 )
 ) : null}
-
-<div className="exploreTopFade" />
-
-{isVideo ? <div className="explorePill">Video</div> : null}
-
-{myUserId !== post.user_id ? (
-<>
-<button
-type="button"
-onClick={(e) => {
-e.preventDefault();
-e.stopPropagation();
-setOpenPostMenu((m) => ({ ...m, [post.id]: !m[post.id] }));
-}}
-style={{
-position: "absolute",
-top: 10,
-right: 10,
-zIndex: 6,
-width: 36,
-height: 36,
-borderRadius: 999,
-border: "1px solid rgba(180,120,255,0.34)",
-background: "rgba(0,0,0,0.62)",
-color: "rgba(245,235,255,0.96)",
-cursor: "pointer",
-fontSize: 22,
-fontWeight: 900,
-lineHeight: "28px",
-display: "flex",
-alignItems: "center",
-justifyContent: "center",
-}}
->
-
-⋯
-</button>
-
-{openPostMenu[post.id] ? (
-<div
-onClick={(e) => {
-e.preventDefault();
-e.stopPropagation();
-}}
-style={{
-position: "absolute",
-top: 52,
-right: 10,
-zIndex: 7,
-minWidth: 150,
-padding: 8,
-borderRadius: 14,
-background: "rgba(8,8,12,0.96)",
-border: "1px solid rgba(168,85,247,0.28)",
-boxShadow: "0 18px 45px rgba(0,0,0,0.55)",
-}}
->
-
-<ReportPostButton
-postId={post.id}
-reportedUserId={post.user_id}
-myUserId={myUserId}
-onReported={(msg) => {
-setBanner(msg);
-setOpenPostMenu((m) => ({ ...m, [post.id]: false }));
-}}
-style={{
-width: "100%",
-border: "none",
-background: "transparent",
-color: "rgba(255,220,220,0.95)",
-padding: "10px 12px",
-cursor: "pointer",
-fontWeight: 800,
-fontSize: 13,
-textAlign: "left",
-}}
-/>
-</div>
-) : null}
-</>
-) : null}
-
-
 </div>
 </div>
 );
