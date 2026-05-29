@@ -639,6 +639,7 @@ viewerId
 }
 
 useEffect(() => {
+let cancelled = false;
 let channel: ReturnType<typeof supabase.channel> | null = null;
 
 (async () => {
@@ -651,10 +652,12 @@ loadMySignal(profile.id, uid),
 loadProfileKinks(profile.id),
 ]);
 
-if (!uid) return;
+if (cancelled || !uid) return;
+
+const channelName = `user-signals-profile-${profile.id}-${uid}-${Date.now()}-${Math.random()}`;
 
 channel = supabase
-.channel(`user-signals-profile-${profile.id}-${uid}`)
+.channel(channelName)
 .on(
 "postgres_changes",
 {
@@ -698,6 +701,8 @@ setSignalBanner("🔥 It's mutual!");
 })();
 
 return () => {
+cancelled = true;
+
 if (channel) {
 supabase.removeChannel(channel);
 }
@@ -1803,7 +1808,7 @@ fontFamily: "Gloock, serif",
 color: "#fff",
 }}
 >
-Locked Content
+Locked Content 
 </div>
 
 <div
@@ -1813,7 +1818,7 @@ opacity: 0.88,
 color: "#fff",
 }}
 >
-Unlock this post for $1.49
+Unlock this post for $1.49 
 </div>
 
 <button

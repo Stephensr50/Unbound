@@ -72,22 +72,19 @@ const unlocked = rows.filter((p) => !p.is_locked);
 const locked = rows.filter((p) => p.is_locked);
 
 const result: PostRow[] = [];
+let unlockedIndex = 0;
 let lockedIndex = 0;
 
-for (let i = 0; i < unlocked.length; i++) {
-result.push(unlocked[i]);
+while (unlockedIndex < unlocked.length) {
+for (let i = 0; i < 5 && unlockedIndex < unlocked.length; i++) {
+result.push(unlocked[unlockedIndex]);
+unlockedIndex++;
+}
 
-const shouldInsertLocked = (i + 1) % 6 === 0;
-
-if (shouldInsertLocked && lockedIndex < locked.length) {
+if (lockedIndex < locked.length) {
 result.push(locked[lockedIndex]);
 lockedIndex++;
 }
-}
-
-while (lockedIndex < locked.length) {
-result.push(locked[lockedIndex]);
-lockedIndex++;
 }
 
 return result;
@@ -605,7 +602,24 @@ unlockedMap[post.id] = true;
 }
 }
 }
+function spreadLockedFeedPosts(list: PostRow[]) {
+const unlocked = list.filter((p) => !p.is_locked);
+const locked = list.filter((p) => p.is_locked);
 
+const result: PostRow[] = [];
+let lockedIndex = 0;
+
+for (let i = 0; i < unlocked.length; i++) {
+result.push(unlocked[i]);
+
+if ((i + 1) % 5 === 0 && lockedIndex < locked.length) {
+result.push(locked[lockedIndex]);
+lockedIndex++;
+}
+}
+
+return result;
+}
 setUnlockedPostIds(unlockedMap);
 
 
@@ -628,7 +642,7 @@ for (const p of activeProfiles) map[p.id] = p;
 
 setProfilesById(map);
 const activeRows = rows.filter((post) => activeUserIds.has(post.user_id));
-setPosts(activeRows);
+setPosts(spreadLockedFeedPosts(activeRows));
 } else {
 setProfilesById({});
 }
@@ -1347,7 +1361,28 @@ setPosts((rows) => rows.filter((r) => r.id !== post.id));
 setBanner(e.message || "Delete failed");
 }
 }
+const visiblePosts = useMemo(() => {
+const publicPosts = posts.filter((p) => !p.is_locked || unlockedPostIds[p.id]);
+const lockedPosts = posts.filter((p) => p.is_locked && !unlockedPostIds[p.id]);
 
+const result: PostRow[] = [];
+let publicIndex = 0;
+let lockedIndex = 0;
+
+while (publicIndex < publicPosts.length) {
+for (let i = 0; i < 5 && publicIndex < publicPosts.length; i++) {
+result.push(publicPosts[publicIndex]);
+publicIndex++;
+}
+
+if (lockedIndex < lockedPosts.length) {
+result.push(lockedPosts[lockedIndex]);
+lockedIndex++;
+}
+}
+
+return result;
+}, [posts, unlockedPostIds]);
 const renderMedia = (p: PostRow) => {
 if (p.is_locked && !unlockedPostIds[p.id]) {
 return (
@@ -1413,7 +1448,7 @@ marginBottom: 12,
 <div style={{ fontSize: 24, fontWeight: 900 }}>Locked Content</div>
 
 <div style={{ opacity: 0.82, fontSize: 15 }}>
-Unlock this post for $1.49
+Unlock this post for $1.49 
 </div>
 
 <button
@@ -1684,6 +1719,9 @@ maxWidth: 260,
 
 <div style={{ flex: 1 }} />
 
+
+
+
 <button onClick={submitPost} disabled={posting || uploading} style={postBtn}>
 {uploading ? "Reaching climax..." : posting ? "Reaching climax..." : "Post"}
 </button>
@@ -1924,7 +1962,7 @@ followBusyId === user.id || followingIds.includes(user.id) ? 0.65 : 1,
 </div>
 )}
 
-{posts.map((p) => {
+{visiblePosts.map((p) => {
 const spanks = likeCounts[p.id] ?? 0;
 const comments = commentCounts[p.id] ?? 0;
 const iSpanked = !!likedByMe[p.id];
