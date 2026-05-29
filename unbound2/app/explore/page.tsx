@@ -172,29 +172,8 @@ transform: scale(1.035);
 filter: brightness(1.04);
 }
 
-.exploreTopFade {
-position: absolute;
-inset: 0;
-background:
-linear-gradient(to bottom, rgba(0,0,0,0.00) 44%, rgba(0,0,0,0.12) 62%, rgba(0,0,0,0.48) 100%);
-pointer-events: none;
-}
 
-.exploreInfoOverlay {
-position: absolute;
-left: 10px;
-right: 10px;
-bottom: 10px;
-display: flex;
-align-items: center;
-gap: 10px;
-padding: 10px 12px;
-border-radius: 16px;
-background: rgba(0,0,0,0.42);
-border: 1px solid rgba(255,255,255,0.08);
-backdrop-filter: blur(10px);
-z-index: 3;
-}
+
 
 .explorePill {
 position: absolute;
@@ -433,91 +412,7 @@ textAlign: "left",
 </>
 ) : null}
 
-<div className="exploreInfoOverlay">
-{profile?.avatar_url ? (
-// eslint-disable-next-line @next/next/no-img-element
-<img
-src={profile.avatar_url}
-alt={label}
-onClick={(e) => {
-e.stopPropagation();
-e.preventDefault();
-if (profile?.id) router.push(`/u/${profile.id}`);
-}}
-style={{
-width: 38,
-height: 38,
-borderRadius: 999,
-objectFit: "contain",
-background: "rgba(0,0,0,0.75)",
-border: "1px solid rgba(180,120,255,0.22)",
-flexShrink: 0,
-cursor: "pointer",
-}}
-/>
-) : (
-<div
-onClick={(e) => {
-e.stopPropagation();
-e.preventDefault();
-if (profile?.id) router.push(`/u/${profile.id}`);
-}}
-style={{
-width: 38,
-height: 38,
-borderRadius: 999,
-display: "grid",
-placeItems: "center",
-border: "1px solid rgba(180,120,255,0.22)",
-background: "rgba(0,0,0,0.45)",
-color: "rgba(255,255,255,0.92)",
-fontWeight: 800,
-flexShrink: 0,
-cursor: "pointer",
-}}
->
-{label.trim().charAt(0).toUpperCase()}
-</div>
-)}
 
-<div style={{ minWidth: 0, flex: 1 }}>
-<div
-onClick={(e) => {
-e.stopPropagation();
-e.preventDefault();
-if (profile?.id) router.push(`/u/${profile.id}`);
-}}
-style={{
-fontWeight: 850,
-fontSize: 14,
-color: "#fff",
-textShadow: "0 1px 6px rgba(0,0,0,0.8)",
-whiteSpace: "nowrap",
-overflow: "hidden",
-textOverflow: "ellipsis",
-cursor: "pointer",
-}}
->
-{label}
-</div>
-
-<div
-style={{
-display: "flex",
-gap: 8,
-alignItems: "center",
-flexWrap: "wrap",
-marginTop: 2,
-color: "rgba(255,255,255,0.85)",
-textShadow: "0 1px 4px rgba(0,0,0,0.8)",
-fontSize: 12,
-}}
->
-{handle ? <span>{handle}</span> : null}
-<span>{timeAgo(post.created_at)}</span>
-</div>
-</div>
-</div>
 </div>
 </div>
 );
