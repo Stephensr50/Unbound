@@ -251,7 +251,7 @@ fontSize: 13,
 <div
 style={{
 display: "grid",
-gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))",
+gridTemplateColumns: "repeat(auto-fill, minmax(140px, 1fr))",
 gap: 18,
 }}
 >
@@ -283,8 +283,8 @@ No photo or video posts yet.
 <div
 style={{
 display: "grid",
-gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))",
-gap: 18,
+gridTemplateColumns: "repeat(3, 1fr)",
+gap: 4,
 }}
 >
 {posts.map((post) => {
@@ -313,7 +313,9 @@ title={`Open ${label}'s post`}
 <div
 style={{
 position: "relative",
-aspectRatio: "4 / 5",
+aspectRatio: "1 / 1",
+overflow: "hidden",
+borderRadius: 10,
 background: "rgba(0,0,0,0.45)",
 }}
 >
@@ -328,7 +330,8 @@ className="exploreMedia"
 style={{
 width: "100%",
 height: "100%",
-objectFit: "cover",
+objectFit: "contain",
+background: "rgba(0,0,0,0.75)",
 display: "block",
 }}
 />
@@ -341,7 +344,7 @@ className="exploreMedia"
 style={{
 width: "100%",
 height: "100%",
-objectFit: "cover",
+objectFit: "contain",
 display: "block",
 }}
 />
@@ -445,7 +448,8 @@ style={{
 width: 38,
 height: 38,
 borderRadius: 999,
-objectFit: "cover",
+objectFit: "contain",
+background: "rgba(0,0,0,0.75)",
 border: "1px solid rgba(180,120,255,0.22)",
 flexShrink: 0,
 cursor: "pointer",
