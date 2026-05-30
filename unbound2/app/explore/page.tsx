@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@supabase/supabase-js";
 
 function getSupabase() {
@@ -43,13 +43,19 @@ return text.includes(q) || text.includes(`#${q}`);
 export default function ExplorePage() {
 const supabase = useMemo(() => getSupabase(), []);
 const router = useRouter();
+const searchParams = useSearchParams();
+const tagFromUrl = searchParams.get("tag") ?? "";
 
 const [allPosts, setAllPosts] = useState<ExplorePostRow[]>([]);
 const [posts, setPosts] = useState<ExplorePostRow[]>([]);
 const [profilesById, setProfilesById] = useState<Record<string, ProfileRow>>({});
 const [loading, setLoading] = useState(true);
 const [banner, setBanner] = useState<string | null>(null);
-const [search, setSearch] = useState("");
+const [search, setSearch] = useState(tagFromUrl);
+
+useEffect(() => {
+setSearch(tagFromUrl);
+}, [tagFromUrl]);
 
 useEffect(() => {
 let alive = true;

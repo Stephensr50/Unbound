@@ -1587,6 +1587,41 @@ onClick={() => setViewer({ url: p.media_url!, type: "image" })}
 return null;
 };
 
+function renderClickableBody(body: string) {
+const parts = body.split(/(#[a-zA-Z0-9_]+)/g);
+
+return parts.map((part, index) => {
+if (part.startsWith("#")) {
+const tag = part.slice(1).toLowerCase();
+
+return (
+<button
+key={index}
+type="button"
+onClick={(e) => {
+e.stopPropagation();
+router.push(`/explore?tag=${encodeURIComponent(tag)}`);
+}}
+style={{
+border: "none",
+background: "transparent",
+color: "rgb(236, 72, 154)",
+font: "inherit",
+fontWeight: 900,
+padding: 0,
+cursor: "pointer",
+textShadow: "0 0 12px rgba(236, 72, 154, 0.55)",
+}}
+>
+{part}
+</button>
+);
+}
+
+return part;
+});
+}
+
 return (
 <div
 style={{
@@ -2260,6 +2295,14 @@ Delete
 <div style={{ marginTop: 10 }}>
 
 
+
+</div>
+</div>
+</div>
+<div style={{ marginTop: 10 }}>
+{renderMedia(p)}
+</div>
+
 {p.body ? (
 <div
 style={{
@@ -2268,15 +2311,10 @@ lineHeight: 1.4,
 whiteSpace: "pre-wrap",
 }}
 >
-{p.body}
+{renderClickableBody(p.body)}
 </div>
 ) : null}
-</div>
-</div>
-</div>
-<div style={{ marginTop: 10 }}>
-{renderMedia(p)}
-</div>
+
 <ReactionBar
 postId={p.id}
 spanks={spanks}
