@@ -4,7 +4,6 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@supabase/supabase-js";
 
-
 function getSupabase() {
 const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
@@ -29,19 +28,28 @@ avatar_url: string | null;
 moderation_status?: string | null;
 };
 
+function normalizeSearch(value: string) {
+return value.trim().replace(/^#/, "").toLowerCase();
+}
+
+function bodyMatchesSearch(body: string | null, search: string) {
+const q = normalizeSearch(search);
+if (!q) return true;
+
+const text = (body ?? "").toLowerCase();
+return text.includes(q) || text.includes(`#${q}`);
+}
 
 export default function ExplorePage() {
 const supabase = useMemo(() => getSupabase(), []);
 const router = useRouter();
 
+const [allPosts, setAllPosts] = useState<ExplorePostRow[]>([]);
 const [posts, setPosts] = useState<ExplorePostRow[]>([]);
-const [profilesById, setProfilesById] = useState<Record<string, ProfileRow>>(
-{}
-);
+const [profilesById, setProfilesById] = useState<Record<string, ProfileRow>>({});
 const [loading, setLoading] = useState(true);
 const [banner, setBanner] = useState<string | null>(null);
-
-
+const [search, setSearch] = useState("");
 
 useEffect(() => {
 let alive = true;
@@ -50,9 +58,6 @@ async function loadExplore() {
 try {
 setLoading(true);
 setBanner(null);
-
-const { data: sessionData } = await supabase.auth.getSession();
-
 
 const { data, error } = await supabase
 .from("posts")
@@ -65,12 +70,11 @@ const { data, error } = await supabase
 if (error) throw error;
 if (!alive) return;
 
-const rawRows = ((data ?? []) as ExplorePostRow[]).filter(
-(p) => !!p.media_url
-);
+const rawRows = ((data ?? []) as ExplorePostRow[]).filter((p) => !!p.media_url);
 
 const seen = new Set<string>();
 const rows: ExplorePostRow[] = [];
+
 for (const post of rawRows) {
 const key = `${post.user_id}::${post.media_url}`;
 if (seen.has(key)) continue;
@@ -78,12 +82,12 @@ seen.add(key);
 rows.push(post);
 }
 
-
-
 const userIds = Array.from(new Set(rows.map((p) => p.user_id).filter(Boolean)));
 
 if (!userIds.length) {
 setProfilesById({});
+setAllPosts([]);
+setPosts([]);
 return;
 }
 
@@ -106,8 +110,11 @@ for (const p of activeProfiles) {
 map[p.id] = p;
 }
 
+const cleanRows = rows.filter((post) => activeUserIds.has(post.user_id));
+
 setProfilesById(map);
-setPosts(rows.filter((post) => activeUserIds.has(post.user_id)));
+setAllPosts(cleanRows);
+setPosts(cleanRows);
 } catch (e: any) {
 if (!alive) return;
 setBanner(e?.message || "Failed to load explore.");
@@ -123,9 +130,42 @@ alive = false;
 };
 }, [supabase]);
 
+useEffect(() => {
+const q = normalizeSearch(search);
+
+if (!q) {
+setPosts(allPosts);
+return;
+}
+
+setPosts(allPosts.filter((post) => bodyMatchesSearch(post.body, q)));
+}, [search, allPosts]);
+
 return (
 <div style={{ maxWidth: 1240, margin: "0 auto", padding: 16 }}>
 <style>{`
+.exploreSearch {
+width: 100%;
+max-width: 520px;
+padding: 13px 16px;
+border-radius: 999px;
+border: 1px solid rgba(236, 72, 154, 0.45);
+background: rgba(0,0,0,0.52);
+color: white;
+outline: none;
+font-size: 15px;
+box-shadow: 0 0 22px rgba(168, 85, 247, 0.18);
+}
+
+.exploreSearch::placeholder {
+color: rgba(255,255,255,0.52);
+}
+
+.exploreSearch:focus {
+border-color: rgba(236, 72, 154, 0.85);
+box-shadow: 0 0 26px rgba(236, 72, 154, 0.26);
+}
+
 .exploreCard {
 border: none;
 background: transparent;
@@ -150,23 +190,6 @@ transition: transform 0.24s ease, filter 0.24s ease;
 transform: scale(1.035);
 filter: brightness(1.04);
 }
-
-
-
-
-.explorePill {
-position: absolute;
-top: 10px;
-right: 58px;
-padding: 6px 8px;
-border-radius: 999px;
-background: rgba(0,0,0,0.55);
-border: 1px solid rgba(255,255,255,0.12);
-color: rgba(255,255,255,0.92);
-font-size: 12px;
-font-weight: 800;
-z-index: 2;
-}
 `}</style>
 
 <div style={{ marginBottom: 18 }}>
@@ -175,18 +198,18 @@ style={{
 fontSize: 46,
 fontWeight: 900,
 lineHeight: 1,
-marginBottom: 10,
+marginBottom: 14,
 }}
 >
 Explore
 </div>
 
-<div
-style={{
-opacity: 0.82,
-fontSize: 15,
-}}
-></div>
+<input
+className="exploreSearch"
+value={search}
+onChange={(e) => setSearch(e.target.value)}
+placeholder="Search #hashtags or posts..."
+/>
 </div>
 
 {banner ? (
@@ -235,7 +258,7 @@ padding: 18,
 opacity: 0.86,
 }}
 >
-No photo or video posts yet.
+No matching photo or video posts found.
 </div>
 ) : (
 <div

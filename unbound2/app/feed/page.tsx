@@ -1179,6 +1179,52 @@ throw new Error(
 return uid;
 }
 
+function extractHashtags(text: string) {
+const matches = text.match(/#[a-zA-Z0-9_]+/g) ?? [];
+
+return Array.from(
+new Set(
+matches
+.map((tag) => tag.replace("#", "").trim().toLowerCase())
+.filter(Boolean)
+)
+);
+}
+
+async function savePostHashtags(
+supabase: ReturnType<typeof getSupabase>,
+postId: number,
+body: string
+) {
+const tags = extractHashtags(body);
+
+if (!tags.length) return;
+
+const { data: hashtagRows, error: hashtagError } = await supabase
+.from("hashtags")
+.upsert(
+tags.map((tag) => ({ tag })),
+{ onConflict: "tag" }
+)
+.select("id,tag");
+
+if (hashtagError) throw new Error(hashtagError.message);
+
+const joins =
+hashtagRows?.map((row: { id: number; tag: string }) => ({
+post_id: postId,
+hashtag_id: row.id,
+})) ?? [];
+
+if (!joins.length) return;
+
+const { error: joinError } = await supabase
+.from("post_hashtags")
+.upsert(joins, { onConflict: "post_id,hashtag_id" });
+
+if (joinError) throw new Error(joinError.message);
+}
+
 async function submitPost() {
 const trimmed = text.trim();
 if (!trimmed && !file) return;
@@ -1239,16 +1285,24 @@ return;
 }
 }
 
-const { error } = await supabase.from("posts").insert({
+const { data: insertedPost, error } = await supabase
+.from("posts")
+.insert({
 user_id: uid,
 body: trimmed || null,
 kind,
 media_url,
 media_type,
 is_locked: wantsLocked,
-});
+})
+.select("id")
+.single();
 
 if (error) throw new Error(error.message);
+
+if (insertedPost?.id && trimmed) {
+await savePostHashtags(supabase, insertedPost.id, trimmed);
+}
 
 setText("");
 setFile(null);
