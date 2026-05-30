@@ -52,6 +52,7 @@ const otherTypingTimerRef = useRef<number | null>(null);
 const lastTypingSentAtRef = useRef(0);
 const stopTypingTimerRef = useRef<number | null>(null);
 const [otherLastReadId, setOtherLastReadId] = useState<number>(0);
+const paymentConfirmedRef = useRef(false);
 
 const lastMineId = useMemo(() => {
 if (!me) return 0;
@@ -83,6 +84,49 @@ const uid = data.session?.user?.id ?? null;
 setMe(uid);
 })();
 }, [supabase]);
+useEffect(() => {
+if (!conversationId) return;
+if (paymentConfirmedRef.current) return;
+
+if (typeof window === "undefined") return;
+
+const params = new URLSearchParams(window.location.search);
+
+const sessionId = params.get("checkout_session_id");
+const messagePaid = params.get("message_paid");
+
+if (!sessionId || messagePaid !== "1") return;
+
+paymentConfirmedRef.current = true;
+
+(async () => {
+try {
+const res = await fetch("/api/messages/confirm-payment", {
+method: "POST",
+headers: {
+"Content-Type": "application/json",
+},
+body: JSON.stringify({
+sessionId,
+conversationId,
+}),
+});
+
+const json = await res.json().catch(() => ({}));
+
+if (!res.ok) {
+throw new Error(json?.error ?? "Payment confirmation failed");
+}
+
+setErr(null);
+
+const cleanUrl = `/messages/${conversationId}`;
+window.history.replaceState({}, "", cleanUrl);
+} catch (e: any) {
+setErr(e?.message ?? "Could not confirm payment.");
+}
+})();
+}, [conversationId]);
 
 async function markConversationRead(convId: number, upToMessageId?: number | null) {
 if (!me) return;
@@ -495,7 +539,42 @@ setErr("Messaging unavailable.");
 return;
 }
 }
+const { data: conversation, error: conversationError } = await supabase
+.from("conversations")
+.select("paid_unlocked")
+.eq("id", conversationId)
+.single();
 
+if (conversationError) {
+setErr("Could not verify payment status.");
+return;
+}
+
+const otherUserId = otherUserIds[0] ?? null;
+
+let isFriendConversation = false;
+
+if (otherUserId) {
+const { data: friendRows, error: friendError } = await supabase
+.from("friends")
+.select("user_id, friend_id")
+.or(
+`and(user_id.eq.${me},friend_id.eq.${otherUserId}),and(user_id.eq.${otherUserId},friend_id.eq.${me})`
+)
+.limit(1);
+
+if (friendError) {
+setErr("Could not verify friend status.");
+return;
+}
+
+isFriendConversation = (friendRows ?? []).length > 0;
+}
+
+if (!conversation?.paid_unlocked && !isFriendConversation) {
+setErr("Please purchase this conversation before sending messages.");
+return;
+}
 const { error } = await supabase.from("messages").insert({
 conversation_id: conversationId,
 sender_id: me,
