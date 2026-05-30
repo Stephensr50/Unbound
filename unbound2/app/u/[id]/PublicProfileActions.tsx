@@ -466,6 +466,31 @@ if (!res.ok) {
 throw new Error(json?.error ?? "Could not start conversation");
 }
 
+if (json.requires_payment) {
+const checkoutRes = await fetch("/api/checkout", {
+method: "POST",
+headers: {
+"Content-Type": "application/json",
+},
+body: JSON.stringify({
+checkoutType: "message",
+conversationId: json.conversation_id,
+payerId: uid,
+receiverId: targetProfileId,
+priceCents: json.price_cents,
+}),
+});
+
+const checkoutJson = await checkoutRes.json().catch(() => ({}));
+
+if (!checkoutRes.ok) {
+throw new Error(checkoutJson?.error ?? "Could not start checkout");
+}
+
+window.location.href = checkoutJson.url;
+return;
+}
+
 router.push(`/messages/${json.conversation_id}`);
 } catch (e: any) {
 setBanner(String(e?.message || e || "Could not start conversation"));
