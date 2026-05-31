@@ -92,7 +92,15 @@ currency: "usd",
 if (upsertErr) {
 return NextResponse.json({ error: upsertErr.message }, { status: 500 });
 }
-
+if (postRow.user_id !== buyerId) {
+await supabaseAdmin.from("notifications").insert({
+user_id: postRow.user_id,
+actor_id: buyerId,
+type: "content_unlock",
+message: "Someone unlocked your photo/video 🔓",
+href: `/feed?post=${postId}`,
+});
+}
 return NextResponse.json({ ok: true, postId });
 } catch (err: any) {
 return NextResponse.json(
