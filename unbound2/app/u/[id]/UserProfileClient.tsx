@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { createClient } from "@supabase/supabase-js";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import PublicProfileActions from "./PublicProfileActions";
 import ReactionBar from "../../components/ReactionBar";
 import ReportCommentButton from "../../components/ReportCommentButton";
@@ -118,6 +118,7 @@ return (
 export default function UserProfileClient({ profile }: { profile: ProfileRow }) {
 const supabase = useMemo(() => getSupabase(), []);
 const router = useRouter();
+const searchParams = useSearchParams();
 
 
 
@@ -218,7 +219,36 @@ await checkProfileBlockStatus(uid);
 })();
 // eslint-disable-next-line react-hooks/exhaustive-deps
 }, [profile.id]);
+useEffect(() => {
+void (async () => {
+const sessionId = searchParams.get("checkout_session_id");
 
+if (!sessionId) return;
+
+setBanner("Confirming payment...");
+
+const res = await fetch("/api/unlocks/confirm", {
+method: "POST",
+headers: {
+"Content-Type": "application/json",
+},
+body: JSON.stringify({ sessionId }),
+});
+
+const data = await res.json();
+
+if (!res.ok) {
+setBanner(data?.error || "Could not confirm payment.");
+return;
+}
+
+window.location.reload();
+
+
+})();
+
+// eslint-disable-next-line react-hooks/exhaustive-deps
+}, [searchParams]);
 async function loadProfileKinks(targetUserId: string) {
 const { data, error } = await supabase
 .from("user_kinks")
