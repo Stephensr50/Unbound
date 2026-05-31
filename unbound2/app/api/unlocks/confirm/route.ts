@@ -76,9 +76,14 @@ if (postErr || !postRow) {
 return NextResponse.json({ error: "Post not found" }, { status: 404 });
 }
 
-const { error: upsertErr } = await supabaseAdmin
+const { data: existingUnlock } = await supabaseAdmin
 .from("post_unlocks")
-.upsert(
+.select("post_id")
+.eq("post_id", postId)
+.eq("buyer_id", buyerId)
+.maybeSingle();
+
+const { error: upsertErr } = await supabaseAdmin.from("post_unlocks").upsert(
 {
 post_id: postId,
 buyer_id: buyerId,
@@ -92,7 +97,8 @@ currency: "usd",
 if (upsertErr) {
 return NextResponse.json({ error: upsertErr.message }, { status: 500 });
 }
-if (postRow.user_id !== buyerId) {
+
+if (!existingUnlock && postRow.user_id !== buyerId) {
 await supabaseAdmin.from("notifications").insert({
 user_id: postRow.user_id,
 actor_id: buyerId,
@@ -101,6 +107,7 @@ message: "Someone unlocked your photo/video 🔓",
 href: `/feed?post=${postId}`,
 });
 }
+
 return NextResponse.json({ ok: true, postId });
 } catch (err: any) {
 return NextResponse.json(
