@@ -921,6 +921,7 @@ headers: {
 body: JSON.stringify({
 postId: post.id,
 userId: uid,
+returnTo: `/u/${profile.id}?post=${post.id}`,
 }),
 });
 

@@ -62,7 +62,7 @@ params.append("metadata[payerId]", String(payerId));
 params.append("metadata[receiverId]", String(receiverId));
 params.append("metadata[priceCents]", String(priceCents));
 } else {
-const { postId, userId } = body;
+const { postId, userId, returnTo } = body;
 
 if (!postId || !userId) {
 return NextResponse.json(
@@ -77,9 +77,16 @@ params.append(
 "Unlock Unbound content"
 );
 
+const safeReturnTo =
+typeof returnTo === "string" && returnTo.startsWith("/")
+? returnTo
+: "/feed";
+
+const separator = safeReturnTo.includes("?") ? "&" : "?";
+
 params.append(
 "success_url",
-`${siteUrl}/feed?checkout_session_id={CHECKOUT_SESSION_ID}`
+`${siteUrl}${safeReturnTo}${separator}checkout_session_id={CHECKOUT_SESSION_ID}`
 );
 params.append(
 "cancel_url",
