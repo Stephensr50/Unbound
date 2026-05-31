@@ -55,6 +55,7 @@ const [friendBusy, setFriendBusy] = useState(false);
 const [friendState, setFriendState] = useState<FriendState>("none");
 
 const [showTipModal, setShowTipModal] = useState(false);
+const [tipAmount, setTipAmount] = useState("5");
 const [tipMessage, setTipMessage] = useState("");
 const [tipBusy, setTipBusy] = useState(false);
 
@@ -643,31 +644,30 @@ if (tipBusy) return;
 setTipBusy(true);
 setBanner(null);
 
-const { data: sessionData } = await supabase.auth.getSession();
-const accessToken = sessionData.session?.access_token ?? "";
-
-const res = await fetch("/api/tip-messages/send", {
+const res = await fetch("/api/tips/create-checkout", {
 method: "POST",
 headers: {
 "Content-Type": "application/json",
-Authorization: `Bearer ${accessToken}`,
 },
 body: JSON.stringify({
-receiver_id: targetProfileId,
-amount: 5,
-message: tipMessage,
+senderId: uid,
+recipientId: targetProfileId,
+amountCents: Math.round(Number(tipAmount) * 100),
+message: tipMessage.trim() || null,
 }),
 });
 
 const json = await res.json().catch(() => ({}));
 
 if (!res.ok) {
-throw new Error(json?.error || "Failed to send tip");
+throw new Error(json?.error || "Could not start tip checkout.");
 }
 
-setTipMessage("");
-setShowTipModal(false);
-setBanner("Tip sent 😈");
+if (!json.url) {
+throw new Error("Checkout URL missing.");
+}
+
+window.location.href = json.url;
 } catch (err: any) {
 setBanner(err?.message || "Something went wrong");
 } finally {
@@ -933,7 +933,25 @@ color: "rgba(255,255,255,0.92)",
 >
 Add a message with your tip 😈
 </div>
-
+<input
+value={tipAmount}
+onChange={(e) => setTipAmount(e.target.value)}
+type="number"
+min="1"
+step="1"
+placeholder="Tip amount"
+style={{
+width: "100%",
+background: "rgba(255,255,255,0.04)",
+color: "white",
+border: "1px solid rgba(168,85,247,0.3)",
+borderRadius: 14,
+padding: "12px 14px",
+outline: "none",
+marginBottom: 14,
+fontWeight: 800,
+}}
+/>
 <textarea
 value={tipMessage}
 onChange={(e) => setTipMessage(e.target.value)}
