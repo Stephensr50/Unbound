@@ -99,13 +99,26 @@ return NextResponse.json({ error: upsertErr.message }, { status: 500 });
 }
 
 if (!existingUnlock && postRow.user_id !== buyerId) {
+const href = `/feed?post=${postId}`;
+
+const { data: existingNotification } = await supabaseAdmin
+.from("notifications")
+.select("id")
+.eq("user_id", postRow.user_id)
+.eq("actor_id", buyerId)
+.eq("type", "content_unlock")
+.eq("href", href)
+.maybeSingle();
+
+if (!existingNotification) {
 await supabaseAdmin.from("notifications").insert({
 user_id: postRow.user_id,
 actor_id: buyerId,
 type: "content_unlock",
 message: "Someone unlocked your photo/video 🔓",
-href: `/feed?post=${postId}`,
+href,
 });
+}
 }
 
 return NextResponse.json({ ok: true, postId });
