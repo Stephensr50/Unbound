@@ -404,8 +404,7 @@ border: "1px solid rgba(216,180,254,0.32)",
 background:
 "radial-gradient(circle at top, rgba(168,85,247,0.32), rgba(0,0,0,0.36))",
 color: "white",
-fontSize: 22,
-cursor: "pointer",
+fontSize: 22,cursor: "pointer",
 }}
 >
 ☰
@@ -431,45 +430,27 @@ zIndex: 1000000,
 >
 <div style={menuLabelStyle}>Create</div>
 
-<Link href="/events" style={menuItemStyle}>
-Events
-</Link>
-
-<Link href="/events/new" style={menuItemStyle}>
-Create Event
-</Link>
-
-<Link href="/writings" style={menuItemStyle}>
-Writings
-</Link>
+<Link href="/events" style={menuItemStyle}>Events</Link>
+<Link href="/events/new" style={menuItemStyle}>Create Event</Link>
+<Link href="/writings" style={menuItemStyle}>Writings</Link>
 
 <div style={menuLabelStyle}>Community</div>
 
-<Link href="/game" style={menuItemStyle}>
-Kinky Games
-</Link>
-
-<Link href="/groups" style={menuItemStyle}>
-Groups
-</Link>
+<Link href="/game" style={menuItemStyle}>Kinky Games</Link>
+<Link href="/groups" style={menuItemStyle}>Groups</Link>
 
 <div style={menuLabelStyle}>Account</div>
 
-<Link href="/profile" style={menuItemStyle}>
-Profile
-</Link>
+<Link href="/profile" style={menuItemStyle}>Profile</Link>
+<Link href="/signals" style={menuItemStyle}>Signals</Link>
+<Link href="/settings" style={menuItemStyle}>Settings</Link>
+<Link href="/settings/blocked" style={menuItemStyle}>Blocked Users</Link>
 
-<Link href="/signals" style={menuItemStyle}>
-Signals
-</Link>
+<div style={menuLabelStyle}>Legal</div>
 
-<Link href="/settings" style={menuItemStyle}>
-Settings
-</Link>
-
-<Link href="/settings/blocked" style={menuItemStyle}>
-Blocked Users
-</Link>
+<Link href="/terms" style={menuItemStyle}>Terms of Service</Link>
+<Link href="/guidelines" style={menuItemStyle}>Community Guidelines</Link>
+<Link href="/privacy" style={menuItemStyle}>Privacy Policy</Link>
 </div>
 )}
 </div>
