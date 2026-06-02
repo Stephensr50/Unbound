@@ -20,6 +20,7 @@ id: string;
 username: string | null;
 display_name: string | null;
 designation?: string | null;
+founder_badge?: string | null;
 bio: string | null;
 avatar_url: string | null;
 buy_me_a_coffee_url?: string | null;
@@ -1466,6 +1467,50 @@ flex: "0 0 auto",
 {profile.designation ? (
 <div style={{ opacity: 0.9, marginTop: 4, fontWeight: 750 }}>
 {profile.designation}
+</div>
+) : null}
+
+{profile.founder_badge === "founding_member_001" ? (
+<div
+style={{
+display: "inline-flex",
+alignItems: "center",
+gap: 8,
+marginTop: 10,
+padding: "8px 13px",
+borderRadius: 999,
+background:
+"linear-gradient(135deg, rgba(168,85,247,0.30), rgba(236,72,153,0.24))",
+border: "1px solid rgba(255,215,0,0.65)",
+boxShadow:
+"0 0 18px rgba(255,215,0,0.35), 0 0 32px rgba(168,85,247,0.35)",
+color: "rgba(255,245,255,0.96)",
+fontWeight: 900,
+fontSize: 13,
+}}
+>
+<div
+style={{
+display: "flex",
+flexDirection: "column",
+alignItems: "center",
+gap: 2,
+}}
+>
+<div>⭐ 💜 Founding Member #001 ⭐</div>
+
+<div
+style={{
+fontSize: 11,
+fontWeight: 700,
+color: "rgba(255,220,120,0.88)",
+letterSpacing: "0.04em",
+textTransform: "uppercase",
+}}
+>
+First Official Member of Unbound
+</div>
+</div>
 </div>
 ) : null}
 

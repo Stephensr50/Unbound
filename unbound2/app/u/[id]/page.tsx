@@ -8,6 +8,7 @@ id: string;
 username: string | null;
 display_name: string | null;
 designation?: string | null;
+founder_badge?: string | null;
 bio: string | null;
 avatar_url: string | null;
 buy_me_a_coffee_url: string | null;
@@ -39,7 +40,9 @@ margin: "30px auto",
 color: "white",
 }}
 >
-<h1 style={{ fontSize: 34, marginBottom: 10 }}>Profile unavailable.</h1>
+<h1 style={{ fontSize: 34, marginBottom: 10 }}>
+Profile unavailable.
+</h1>
 <div style={{ opacity: 0.85 }}>This profile is not available.</div>
 </div>
 );
@@ -63,7 +66,7 @@ routeId
 const base = supabase
 .from("profiles")
 .select(
-"id, username, display_name, designation, bio, avatar_url, buy_me_a_coffee_url, city, state, country, moderation_status"
+"id, username, display_name, designation, founder_badge, bio, avatar_url, buy_me_a_coffee_url, city, state, country, moderation_status"
 )
 .limit(1);
 
@@ -80,7 +83,9 @@ margin: "30px auto",
 color: "white",
 }}
 >
-<h1 style={{ fontSize: 34, marginBottom: 10 }}>Profile not found.</h1>
+<h1 style={{ fontSize: 34, marginBottom: 10 }}>
+Profile not found.
+</h1>
 <div style={{ opacity: 0.85 }}>
 {error ? error.message : `No profile matched: ${routeId}`}
 </div>
