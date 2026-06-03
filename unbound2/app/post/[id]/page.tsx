@@ -704,6 +704,29 @@ paddingRight: 52,
 }}
 >
 
+
+
+<button
+type="button"
+onClick={() => {
+if (!author) return;
+router.push(`/u/${author.username || author.id}`);
+}}
+style={{
+display: "flex",
+alignItems: "center",
+gap: 12,
+padding: 0,
+border: "none",
+background: "transparent",
+color: "inherit",
+cursor: author ? "pointer" : "default",
+textAlign: "left",
+}}
+title={author ? `View ${authorName}'s profile` : undefined}
+>
+
+
 {author?.avatar_url ? (
 <img
 src={author.avatar_url}
@@ -730,6 +753,7 @@ border: "1px solid rgba(180,120,255,0.24)",
 fontWeight: 900,
 flex: "0 0 auto",
 }}
+
 >
 
 {authorName.charAt(0).toUpperCase()}
@@ -746,6 +770,7 @@ flex: "0 0 auto",
 {timeAgo(post.created_at)}
 </div>
 </div>
+</button>
 </div>
 
 {renderMedia(post)}
