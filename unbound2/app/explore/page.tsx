@@ -28,6 +28,8 @@ avatar_url: string | null;
 moderation_status?: string | null;
 };
 
+type ExploreMode = "photos" | "videos";
+
 function normalizeSearch(value: string) {
 return value.trim().replace(/^#/, "").toLowerCase();
 }
@@ -40,6 +42,13 @@ const text = (body ?? "").toLowerCase();
 return text.includes(q) || text.includes(`#${q}`);
 }
 
+function isVideoPost(post: ExplorePostRow) {
+return (
+(post.media_type && post.media_type.startsWith("video/")) ||
+post.kind === "video"
+);
+}
+
 export default function ExplorePage() {
 const supabase = useMemo(() => getSupabase(), []);
 const router = useRouter();
@@ -48,10 +57,13 @@ const tagFromUrl = searchParams.get("tag") ?? "";
 
 const [allPosts, setAllPosts] = useState<ExplorePostRow[]>([]);
 const [posts, setPosts] = useState<ExplorePostRow[]>([]);
-const [profilesById, setProfilesById] = useState<Record<string, ProfileRow>>({});
+const [profilesById, setProfilesById] = useState<Record<string, ProfileRow>>(
+{}
+);
 const [loading, setLoading] = useState(true);
 const [banner, setBanner] = useState<string | null>(null);
 const [search, setSearch] = useState(tagFromUrl);
+const [mode, setMode] = useState<ExploreMode>("photos");
 
 useEffect(() => {
 setSearch(tagFromUrl);
@@ -76,7 +88,9 @@ const { data, error } = await supabase
 if (error) throw error;
 if (!alive) return;
 
-const rawRows = ((data ?? []) as ExplorePostRow[]).filter((p) => !!p.media_url);
+const rawRows = ((data ?? []) as ExplorePostRow[]).filter(
+(p) => !!p.media_url
+);
 
 const seen = new Set<string>();
 const rows: ExplorePostRow[] = [];
@@ -88,7 +102,9 @@ seen.add(key);
 rows.push(post);
 }
 
-const userIds = Array.from(new Set(rows.map((p) => p.user_id).filter(Boolean)));
+const userIds = Array.from(
+new Set(rows.map((p) => p.user_id).filter(Boolean))
+);
 
 if (!userIds.length) {
 setProfilesById({});
@@ -139,13 +155,32 @@ alive = false;
 useEffect(() => {
 const q = normalizeSearch(search);
 
-if (!q) {
-setPosts(allPosts);
-return;
-}
+const filtered = allPosts.filter((post) => {
+const matchesSearch = !q || bodyMatchesSearch(post.body, q);
+const matchesMode = mode === "videos" ? isVideoPost(post) : !isVideoPost(post);
 
-setPosts(allPosts.filter((post) => bodyMatchesSearch(post.body, q)));
-}, [search, allPosts]);
+return matchesSearch && matchesMode;
+});
+
+setPosts(filtered);
+}, [search, allPosts, mode]);
+
+const tabStyle = (active: boolean): React.CSSProperties => ({
+padding: "9px 18px",
+borderRadius: 999,
+border: active
+? "1px solid rgba(236,72,153,0.95)"
+: "1px solid rgba(180,120,255,0.25)",
+background: active
+? "linear-gradient(180deg, rgba(240,32,139,0.95), rgba(192,38,211,0.85))"
+: "rgba(0,0,0,0.35)",
+color: "white",
+cursor: "pointer",
+fontWeight: 900,
+boxShadow: active
+? "0 0 18px rgba(236,72,153,0.45), 0 0 35px rgba(192,38,211,0.35)"
+: undefined,
+});
 
 return (
 <div style={{ maxWidth: 1240, margin: "0 auto", padding: 16 }}>
@@ -216,6 +251,31 @@ value={search}
 onChange={(e) => setSearch(e.target.value)}
 placeholder="Search #hashtags or posts..."
 />
+
+<div
+style={{
+display: "flex",
+gap: 10,
+marginTop: 14,
+flexWrap: "wrap",
+}}
+>
+<button
+type="button"
+onClick={() => setMode("photos")}
+style={tabStyle(mode === "photos")}
+>
+Photos
+</button>
+
+<button
+type="button"
+onClick={() => setMode("videos")}
+style={tabStyle(mode === "videos")}
+>
+Videos
+</button>
+</div>
 </div>
 
 {banner ? (
@@ -264,7 +324,7 @@ padding: 18,
 opacity: 0.86,
 }}
 >
-No matching photo or video posts found.
+No matching {mode === "photos" ? "photo" : "video"} posts found.
 </div>
 ) : (
 <div
@@ -277,9 +337,7 @@ gap: 4,
 {posts.map((post) => {
 const profile = profilesById[post.user_id];
 const label = profile?.display_name || profile?.username || "Unknown";
-const isVideo =
-(post.media_type && post.media_type.startsWith("video/")) ||
-post.kind === "video";
+const isVideo = isVideoPost(post);
 
 return (
 <div
