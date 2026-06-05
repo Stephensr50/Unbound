@@ -1293,7 +1293,7 @@ body: trimmed || null,
 kind,
 media_url,
 media_type,
-is_locked: wantsLocked,
+is_locked: false,
 })
 .select("id")
 .single();
