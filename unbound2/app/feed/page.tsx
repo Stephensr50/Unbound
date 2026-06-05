@@ -1438,7 +1438,7 @@ lockedIndex++;
 return result;
 }, [posts, unlockedPostIds]);
 const renderMedia = (p: PostRow) => {
-if (p.is_locked && !unlockedPostIds[p.id]) {
+if (false) {
 return (
 <div
 onClick={() => unlockPost(p)}

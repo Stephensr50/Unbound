@@ -1829,7 +1829,7 @@ border: "1px solid rgba(255,255,255,0.18)",
 ) : null}
 
 {media && (isPhoto || isVideo) ? (
-p.is_locked && !unlockedPostIds[p.id] ? (
+false ? (
 <div
 onClick={() => unlockPost(p)}
 onMouseEnter={(e) => {
