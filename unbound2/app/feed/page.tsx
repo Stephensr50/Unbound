@@ -1716,6 +1716,13 @@ fontSize: 13,
 </div>
 ) : null}
 
+{isMobile ? (
+<div style={{ marginBottom: 14 }}>
+<FeaturedProfileCard />
+</div>
+) : null}
+
+
 <div
 style={{
 background: "rgba(0,0,0,0.55)",
