@@ -1767,25 +1767,7 @@ setFile(f);
 {file ? "Change media" : "Add photo/video"}
 </label>
 
-{file && (
-<label
-style={{
-display: "flex",
-alignItems: "center",
-gap: 8,
-marginTop: 10,
-fontSize: 14,
-color: "#ddd",
-}}
->
-<input
-type="checkbox"
-checked={wantsLocked}
-onChange={(e) => setWantsLocked(e.target.checked)}
-/>
-🔒 Lock this content
-</label>
-)}
+
 
 
 
