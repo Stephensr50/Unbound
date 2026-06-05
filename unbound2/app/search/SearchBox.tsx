@@ -118,13 +118,14 @@ const supabase = useMemo(() => getSupabase(), []);
 
 const [q, setQ] = useState(initialValue);
 const [locationText, setLocationText] = useState("");
-const [gender, setGender] = useState("Any");
+
+const [selectedGenders, setSelectedGenders] = useState<string[]>([]);
 const [recency, setRecency] = useState("any");
 const [radius, setRadius] = useState("any");
 
 const [submittedQ, setSubmittedQ] = useState(initialValue);
 const [submittedLocationText, setSubmittedLocationText] = useState("");
-const [submittedGender, setSubmittedGender] = useState("Any");
+const [submittedGenders, setSubmittedGenders] = useState<string[]>([]);
 const [submittedRecency, setSubmittedRecency] = useState("any");
 const [submittedRadius, setSubmittedRadius] = useState("any");
 const [ripples, setRipples] = useState<Record<string, boolean>>({});
@@ -182,7 +183,7 @@ window.setTimeout(() => {
 setShowRadar(false);
 setSubmittedQ(nextQ);
 setSubmittedLocationText(nextLocation);
-setSubmittedGender(gender);
+setSubmittedGenders(selectedGenders);
 setSubmittedRecency(recency);
 setSubmittedRadius(radius);
 }, 2200);
@@ -192,7 +193,7 @@ return;
 
 setSubmittedQ(nextQ);
 setSubmittedLocationText(nextLocation);
-setSubmittedGender(gender);
+setSubmittedGenders(selectedGenders);
 setSubmittedRecency(recency);
 setSubmittedRadius(radius);
 }
@@ -200,13 +201,13 @@ setSubmittedRadius(radius);
 function clearFilters() {
 setQ("");
 setLocationText("");
-setGender("Any");
+setSelectedGenders([]);
 setRecency("any");
 setRadius("any");
 
 setSubmittedQ("");
 setSubmittedLocationText("");
-setSubmittedGender("Any");
+setSubmittedGenders([]);
 setSubmittedRecency("any");
 setSubmittedRadius("any");
 
@@ -228,7 +229,7 @@ setError(null);
 if (
 !term &&
 !loc &&
-submittedGender === "Any" &&
+submittedGenders.length === 0 &&
 submittedRecency === "any" &&
 submittedRadius === "any"
 ) {
@@ -265,10 +266,9 @@ query = query.or(
 );
 }
 
-if (submittedGender !== "Any") {
-query = query.eq("gender", submittedGender);
+if (submittedGenders.length > 0) {
+query = query.in("gender", submittedGenders);
 }
-
 if (submittedRecency !== "any") {
 const days = Number(submittedRecency);
 const cutoff = new Date(
@@ -398,7 +398,7 @@ cancelled = true;
 }, [
 submittedQ,
 submittedLocationText,
-submittedGender,
+submittedGenders,
 submittedRecency,
 submittedRadius,
 supabase,
@@ -512,7 +512,7 @@ marginTop: 4,
 const hasActiveSearch =
 !!submittedQ ||
 !!submittedLocationText ||
-submittedGender !== "Any" ||
+submittedGenders.length > 0 ||
 submittedRecency !== "any" ||
 submittedRadius !== "any";
 
@@ -576,17 +576,40 @@ autoCorrect="off"
 autoCapitalize="none"
 />
 
-<select
-value={gender}
-onChange={(e) => setGender(e.target.value)}
-style={selectStyle}
+<div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+{GENDER_OPTIONS.filter((option) => option !== "Any").map((option) => {
+const active = selectedGenders.includes(option);
+
+return (
+<button
+key={option}
+type="button"
+onClick={() =>
+setSelectedGenders((current) =>
+active
+? current.filter((g) => g !== option)
+: [...current, option]
+)
+}
+style={{
+padding: "10px 12px",
+borderRadius: 999,
+border: active
+? "1px solid rgba(236,72,153,0.95)"
+: "1px solid rgba(255,255,255,0.18)",
+background: active
+? "linear-gradient(90deg,#ec4899,#a855f7)"
+: "rgba(0,0,0,0.30)",
+color: "white",
+fontWeight: 800,
+cursor: "pointer",
+}}
 >
-{GENDER_OPTIONS.map((option) => (
-<option key={option} value={option} style={{ color: "black" }}>
 {option}
-</option>
-))}
-</select>
+</button>
+);
+})}
+</div>
 
 <select
 value={recency}
