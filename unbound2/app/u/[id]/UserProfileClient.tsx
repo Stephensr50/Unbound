@@ -1558,7 +1558,6 @@ targetProfileId={profile.id}
 buyMeACoffeeUrl={profile.buy_me_a_coffee_url ?? null}
 />
 </div>
-{profile.bio ? (
 <button
 type="button"
 onClick={() => setAboutModalOpen(true)}
@@ -1571,7 +1570,6 @@ boxShadow: "0 0 14px rgba(236,72,153,0.22)",
 >
 About Me
 </button>
-) : null}
 {myUserId !== profile.id ? (
 <div style={{ marginTop: 14 }}>
 <div
@@ -2155,7 +2153,7 @@ whiteSpace: "pre-wrap",
 color: "rgba(255,255,255,0.86)",
 }}
 >
-{profile.bio}
+{profile.bio || "This member has not added an About Me yet."}
 </div>
 </div>
 </div>
