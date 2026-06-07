@@ -28,6 +28,11 @@ city?: string | null;
 state?: string | null;
 country?: string | null;
 location?: string | null;
+relationship_status?: string | null;
+orientation?: string | null;
+pronouns?: string | null;
+looking_for?: string | null;
+ds_relationship?: string | null;
 };
 
 type PostRow = {
@@ -1700,6 +1705,73 @@ mySignalToProfile === "crush"
 </div>
 </div>
 
+<div
+style={{
+marginTop: 16,
+padding: 16,
+borderRadius: 16,
+border: "1px solid rgba(180,120,255,0.18)",
+background: "rgba(0,0,0,0.42)",
+boxShadow: "0 0 14px rgba(168,85,247,0.10)",
+}}
+
+>
+
+
+
+<div>
+<div style={{ opacity: 0.58, fontSize: 13, fontWeight: 800 }}>
+Relationship Status
+</div>
+<div>{profile.relationship_status || "Not specified"}</div>
+</div>
+
+<div>
+<div style={{ opacity: 0.58, fontSize: 13, fontWeight: 800 }}>
+Orientation
+</div>
+<div>{profile.orientation || "Not specified"}</div>
+</div>
+
+<div>
+<div style={{ opacity: 0.58, fontSize: 13, fontWeight: 800 }}>
+Pronouns
+</div>
+<div>{profile.pronouns || "Not specified"}</div>
+</div>
+
+<div>
+<div style={{ opacity: 0.58, fontSize: 13, fontWeight: 800 }}>
+Looking For
+</div>
+<div>{profile.looking_for || "Not specified"}</div>
+</div>
+
+<div>
+<div style={{ opacity: 0.58, fontSize: 13, fontWeight: 800 }}>
+D/s Relationship
+</div>
+<div>{profile.ds_relationship || "Not specified"}</div>
+</div>
+<div
+style={{
+fontSize: 15,
+lineHeight: 1.55,
+whiteSpace: "pre-wrap",
+color: "rgba(255,255,255,0.86)",
+}}
+>
+{profile.bio || "This member has not added an About Me yet."}
+</div>
+
+<div
+style={{
+height: 1,
+background: "rgba(255,255,255,0.10)",
+margin: "16px 0",
+}}
+/>
+
 {profileKinks.length > 0 ? (
 <div
 style={{
@@ -2465,6 +2537,7 @@ display: "block",
 </div>
 </div>
 ) : null}
+</div>
 </div>
 );
 }

@@ -25,6 +25,11 @@ display_name: string | null;
 bio?: string | null;
 avatar_url: string | null;
 location?: string | null;
+relationship_status?: string | null;
+orientation?: string | null;
+pronouns?: string | null;
+looking_for?: string | null;
+ds_relationship?: string | null;
 };
 
 type PostRow = {
@@ -165,7 +170,7 @@ return uid;
 async function loadMyProfile(uid: string) {
 const { data, error } = await supabase
 .from("profiles")
-.select("id,username,display_name,bio,avatar_url,location")
+.select("id,username,display_name,bio,avatar_url,location,relationship_status,orientation,pronouns,looking_for,ds_relationship")
 .eq("id", uid)
 .maybeSingle();
 
@@ -1040,7 +1045,78 @@ fontSize: 13,
 </div>
 ) : null}
 
+{myProfile ? (
+<div
+style={{
+...profileCard,
+marginBottom: 18,
+}}
+>
+<div style={{ fontWeight: 900, fontSize: 22, marginBottom: 14 }}>
+Profile Details
+</div>
 
+<div style={{ display: "grid", gap: 12 }}>
+<div>
+<div style={{ opacity: 0.58, fontSize: 13, fontWeight: 800 }}>
+Relationship Status
+</div>
+<div>{myProfile.relationship_status || "Not specified"}</div>
+</div>
+
+<div>
+<div style={{ opacity: 0.58, fontSize: 13, fontWeight: 800 }}>
+Orientation
+</div>
+<div>{myProfile.orientation || "Not specified"}</div>
+</div>
+
+<div>
+<div style={{ opacity: 0.58, fontSize: 13, fontWeight: 800 }}>
+Pronouns
+</div>
+<div>{myProfile.pronouns || "Not specified"}</div>
+</div>
+
+<div>
+<div style={{ opacity: 0.58, fontSize: 13, fontWeight: 800 }}>
+Looking For
+</div>
+<div>{myProfile.looking_for || "Not specified"}</div>
+</div>
+
+<div>
+<div style={{ opacity: 0.58, fontSize: 13, fontWeight: 800 }}>
+D/s Relationship
+</div>
+<div>{myProfile.ds_relationship || "Not specified"}</div>
+</div>
+</div>
+
+<div
+style={{
+height: 1,
+background: "rgba(255,255,255,0.10)",
+margin: "18px 0",
+}}
+/>
+
+<div style={{ fontWeight: 900, fontSize: 22, marginBottom: 10 }}>
+About Me
+</div>
+
+<div
+style={{
+fontSize: 15,
+lineHeight: 1.55,
+whiteSpace: "pre-wrap",
+color: "rgba(255,255,255,0.86)",
+}}
+>
+{myProfile.bio || "You have not added an About Me yet."}
+</div>
+</div>
+) : null}
 
 <div
 style={{

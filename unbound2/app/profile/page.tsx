@@ -117,7 +117,6 @@ return;
 await loadKinks(myUserId);
 }
 
-// 1) Session -> myUserId
 useEffect(() => {
 (async () => {
 try {
@@ -145,42 +144,40 @@ setStatus("Not signed in.");
 // eslint-disable-next-line react-hooks/exhaustive-deps
 }, [supabase]);
 
-// 2) Load profile + counts
 useEffect(() => {
 if (!myUserId) return;
 
 (async () => {
 const { data: p, error: pErr } = await supabase
 .from("profiles")
-.select("id, username, display_name, designation, bio, avatar_url, city, state, country, is_admin")
+.select(
+"id, username, display_name, designation, bio, avatar_url, city, state, country, is_admin"
+)
 .eq("id", myUserId)
 .maybeSingle();
 
 if (pErr) console.error(pErr);
 setMyProfile((p as ProfileRow) ?? null);
 
-const { count: followers, error: fErr } = await supabase
+const { count: followers } = await supabase
 .from("follows")
 .select("*", { count: "exact", head: true })
 .eq("following_id", myUserId);
 
-if (fErr) console.error(fErr);
 setFollowersCount(followers ?? 0);
 
-const { count: friends, error: frErr } = await supabase
+const { count: friends } = await supabase
 .from("friends")
 .select("*", { count: "exact", head: true })
 .eq("user_id", myUserId);
 
-if (frErr) console.error(frErr);
 setFriendsCount(friends ?? 0);
 
-const { count: following, error: foErr } = await supabase
+const { count: following } = await supabase
 .from("follows")
 .select("*", { count: "exact", head: true })
 .eq("follower_id", myUserId);
 
-if (foErr) console.error(foErr);
 setFollowingCount(following ?? 0);
 })();
 }, [supabase, myUserId]);
@@ -190,10 +187,8 @@ setModalType(type);
 setModalOpen(true);
 }
 
-// 3) Load users for Followers/Following/Friends modal
 useEffect(() => {
-if (!modalOpen) return;
-if (!myUserId) return;
+if (!modalOpen || !myUserId) return;
 
 (async () => {
 setModalLoading(true);
@@ -201,34 +196,20 @@ setModalUsers([]);
 
 try {
 if (modalType === "friends") {
-const { data: rows, error: rowsErr } = await supabase
+const { data: rows } = await supabase
 .from("friends")
 .select("friend_id")
 .eq("user_id", myUserId);
 
-if (rowsErr) {
-console.error(rowsErr);
-setModalUsers([]);
-return;
-}
-
 const ids = (rows ?? []).map((r: any) => r.friend_id).filter(Boolean);
+if (!ids.length) return;
 
-if (ids.length === 0) {
-setModalUsers([]);
-return;
-}
-
-const { data: profiles, error: profErr } = await supabase
+const { data: profiles } = await supabase
 .from("profiles")
-.select("id, username, display_name, designation, bio, avatar_url, city, state, country, is_admin")
+.select(
+"id, username, display_name, designation, bio, avatar_url, city, state, country, is_admin"
+)
 .in("id", ids);
-
-if (profErr) {
-console.error(profErr);
-setModalUsers([]);
-return;
-}
 
 setModalUsers((profiles ?? []) as ProfileRow[]);
 return;
@@ -236,37 +217,24 @@ return;
 
 const isFollowers = modalType === "followers";
 
-const { data: rows, error: rowsErr } = await supabase
+const { data: rows } = await supabase
 .from("follows")
 .select(isFollowers ? "follower_id" : "following_id")
 .eq(isFollowers ? "following_id" : "follower_id", myUserId);
-
-if (rowsErr) {
-console.error(rowsErr);
-setModalUsers([]);
-return;
-}
 
 const ids =
 (rows ?? []).map((r: any) =>
 isFollowers ? r.follower_id : r.following_id
 ) ?? [];
 
-if (ids.length === 0) {
-setModalUsers([]);
-return;
-}
+if (!ids.length) return;
 
-const { data: profiles, error: profErr } = await supabase
+const { data: profiles } = await supabase
 .from("profiles")
-.select("id, username, display_name, designation, bio, avatar_url, city, state, country, is_admin")
+.select(
+"id, username, display_name, designation, bio, avatar_url, city, state, country, is_admin"
+)
 .in("id", ids);
-
-if (profErr) {
-console.error(profErr);
-setModalUsers([]);
-return;
-}
 
 setModalUsers((profiles ?? []) as ProfileRow[]);
 } finally {
@@ -276,7 +244,6 @@ setModalLoading(false);
 }, [modalOpen, modalType, myUserId, supabase]);
 
 const title = myProfile?.display_name || myProfile?.username || "My Profile";
-const subtitle = myProfile?.username ? `@${myProfile.username}` : "";
 const locationLine = [myProfile?.city, myProfile?.state, myProfile?.country]
 .filter(Boolean)
 .join(", ");
@@ -324,12 +291,6 @@ sub: {
 marginTop: 6,
 fontSize: 14,
 color: "rgba(255,255,255,0.65)",
-} as const,
-
-bio: {
-marginTop: 10,
-fontSize: 14,
-color: "rgba(255,255,255,0.70)",
 } as const,
 
 btnRow: {
@@ -557,17 +518,11 @@ fontSize: 18,
 Edit Profile
 </Link>
 
-
-
-
-
 {isAdmin ? (
 <Link href="/admin/reports" style={S.btn}>
 Admin Dashboard
 </Link>
 ) : null}
-
-
 
 <button type="button" style={S.btn} onClick={shareProfile}>
 Share Profile
@@ -603,47 +558,13 @@ onClick={() => openModal("followers")}
 <div style={S.statLabel}>Following</div>
 </div>
 </div>
+</div>
 
 <div
 style={{
 width: "100%",
 maxWidth: 520,
 margin: "16px auto 0",
-borderRadius: 18,
-border: "1px solid rgba(236,72,153,0.35)",
-background: "rgba(0,0,0,0.45)",
-backdropFilter: "blur(14px)",
-padding: 18,
-boxShadow: "0 0 18px rgba(236,72,153,0.12)",
-}}
->
-<div
-style={{
-fontSize: 22,
-fontWeight: 900,
-marginBottom: 12,
-color: "rgba(255,235,250,0.96)",
-textShadow: "0 0 12px rgba(236,72,153,0.45)",
-}}
->
-About Me
-</div>
-
-<div
-style={{
-fontSize: 15,
-lineHeight: 1.55,
-color: "rgba(255,255,255,0.78)",
-whiteSpace: "pre-wrap",
-}}
->
-{myProfile?.bio ? myProfile.bio : "No about me added yet."}
-</div>
-</div>
-
-<div
-style={{
-marginTop: 16,
 padding: 14,
 borderRadius: 14,
 border: "1px solid rgba(236,72,153,0.35)",
@@ -674,12 +595,10 @@ Edit
 {kinks.length === 0 ? "No kinks added yet." : `${kinks.length} saved`}
 </div>
 </div>
-</div>
 
-{/* ✅ MY POSTS ON PROFILE */}
 {myUserId ? <ProfileFeedClient /> : null}
 
-{modalOpen && (
+{modalOpen ? (
 <div style={S.modalBackdrop} onClick={() => setModalOpen(false)}>
 <div style={S.modal} onClick={(e) => e.stopPropagation()}>
 <div style={S.modalHeader}>
@@ -731,9 +650,17 @@ justifyContent: "space-between",
 }}
 onClick={() => setModalOpen(false)}
 >
-<div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
+<div
+style={{
+display: "flex",
+alignItems: "center",
+gap: 10,
+minWidth: 0,
+}}
+>
 <div style={S.userAvatar}>
 {u.avatar_url ? (
+// eslint-disable-next-line @next/next/no-img-element
 <img
 src={u.avatar_url}
 alt=""
@@ -779,7 +706,8 @@ background: "rgba(236,72,153,0.16)",
 color: "white",
 fontWeight: 900,
 fontSize: 13,
-}}>
+}}
+>
 View
 </div>
 </Link>
@@ -789,7 +717,7 @@ View
 )}
 </div>
 </div>
-)}
+) : null}
 
 {kinksOpen ? (
 <div
@@ -837,11 +765,16 @@ marginBottom: 14,
 Kinks & Interests
 </div>
 <div style={{ opacity: 0.72, fontSize: 13, marginTop: 4 }}>
-This opens in a privacy blur so your face and list are not visible together.
+This opens in a privacy blur so your face and list are not
+visible together.
 </div>
 </div>
 
-<button type="button" style={S.closeBtn} onClick={() => setKinksOpen(false)}>
+<button
+type="button"
+style={S.closeBtn}
+onClick={() => setKinksOpen(false)}
+>
 Close
 </button>
 </div>
@@ -877,7 +810,9 @@ outline: "none",
 <select
 value={newInterest}
 onChange={(e) =>
-setNewInterest(e.target.value as "into" | "curious" | "limit")
+setNewInterest(
+e.target.value as "into" | "curious" | "limit"
+)
 }
 style={{
 flex: "1 1 160px",
@@ -898,7 +833,11 @@ padding: "0 12px",
 value={newRole}
 onChange={(e) =>
 setNewRole(
-e.target.value as "giving" | "receiving" | "both" | "watching"
+e.target.value as
+| "giving"
+| "receiving"
+| "both"
+| "watching"
 )
 }
 style={{

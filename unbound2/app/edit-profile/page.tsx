@@ -22,6 +22,11 @@ const [designation, setDesignation] = useState("");
 const [city, setCity] = useState("");
 const [stateName, setStateName] = useState("");
 const [country, setCountry] = useState("");
+const [relationshipStatus, setRelationshipStatus] = useState("");
+const [orientation, setOrientation] = useState("");
+const [pronouns, setPronouns] = useState("");
+const [lookingFor, setLookingFor] = useState("");
+const [dsRelationship, setDsRelationship] = useState("");
 
 const [status, setStatus] = useState<string>("");
 const [connectingStripe, setConnectingStripe] = useState(false);
@@ -44,7 +49,7 @@ setUserId(userId)
 
 const { data: profile } = await supabase
 .from("profiles")
-.select("display_name, designation, bio, avatar_url, city, state, country")
+.select("display_name, designation, bio, avatar_url, city, state, country, relationship_status, orientation, pronouns, looking_for, ds_relationship")
 .eq("id", userId)
 .single();
 
@@ -55,6 +60,11 @@ setBio(profile.bio ?? "");
 setCity(profile.city ?? "");
 setStateName(profile.state ?? "");
 setCountry(profile.country ?? "");
+setRelationshipStatus(profile.relationship_status ?? "");
+setOrientation(profile.orientation ?? "");
+setPronouns(profile.pronouns ?? "");
+setLookingFor(profile.looking_for ?? "");
+setDsRelationship(profile.ds_relationship ?? "");
 setAvatarUrl(profile.avatar_url ? `${profile.avatar_url}?t=${Date.now()}` : "");
 }
 
@@ -187,6 +197,7 @@ const params = new URLSearchParams({
 city: cleanCity,
 state: cleanState,
 country: cleanCountry,
+
 });
 
 const geoRes = await fetch(`/api/geocode?${params.toString()}`, {
@@ -223,6 +234,11 @@ bio,
 city: cleanCity || null,
 state: cleanState || null,
 country: cleanCountry || null,
+relationship_status: relationshipStatus.trim() || null,
+orientation: orientation.trim() || null,
+pronouns: pronouns.trim() || null,
+looking_for: lookingFor.trim() || null,
+ds_relationship: dsRelationship.trim() || null,
 latitude,
 longitude,
 })
@@ -408,7 +424,110 @@ marginBottom: 12,
 }}
 />
 </label>
+<label>
+<div style={{ fontSize: 12, opacity: 0.8, marginBottom: 6 }}>
+Relationship Status
+</div>
+<input
+value={relationshipStatus}
+onChange={(e) => setRelationshipStatus(e.target.value)}
+disabled={loading}
+placeholder="Single, partnered, open relationship, poly, etc."
+style={{
+width: "100%",
+padding: "10px 12px",
+borderRadius: 10,
+border: "1px solid rgba(255,255,255,0.15)",
+background: "rgba(0,0,0,0.35)",
+color: "white",
+marginBottom: 12,
+}}
+/>
+</label>
 
+<label>
+<div style={{ fontSize: 12, opacity: 0.8, marginBottom: 6 }}>
+Orientation
+</div>
+<input
+value={orientation}
+onChange={(e) => setOrientation(e.target.value)}
+disabled={loading}
+placeholder="Straight, bi, pansexual, gay, lesbian, etc."
+style={{
+width: "100%",
+padding: "10px 12px",
+borderRadius: 10,
+border: "1px solid rgba(255,255,255,0.15)",
+background: "rgba(0,0,0,0.35)",
+color: "white",
+marginBottom: 12,
+}}
+/>
+</label>
+
+<label>
+<div style={{ fontSize: 12, opacity: 0.8, marginBottom: 6 }}>
+Pronouns
+</div>
+<input
+value={pronouns}
+onChange={(e) => setPronouns(e.target.value)}
+disabled={loading}
+placeholder="She/Her, He/Him, They/Them, etc."
+style={{
+width: "100%",
+padding: "10px 12px",
+borderRadius: 10,
+border: "1px solid rgba(255,255,255,0.15)",
+background: "rgba(0,0,0,0.35)",
+color: "white",
+marginBottom: 12,
+}}
+/>
+</label>
+
+<label>
+<div style={{ fontSize: 12, opacity: 0.8, marginBottom: 6 }}>
+Looking For
+</div>
+<input
+value={lookingFor}
+onChange={(e) => setLookingFor(e.target.value)}
+disabled={loading}
+placeholder="Friendship, play partner, relationship, events, community"
+style={{
+width: "100%",
+padding: "10px 12px",
+borderRadius: 10,
+border: "1px solid rgba(255,255,255,0.15)",
+background: "rgba(0,0,0,0.35)",
+color: "white",
+marginBottom: 12,
+}}
+/>
+</label>
+
+<label>
+<div style={{ fontSize: 12, opacity: 0.8, marginBottom: 6 }}>
+D/s Relationship
+</div>
+<input
+value={dsRelationship}
+onChange={(e) => setDsRelationship(e.target.value)}
+disabled={loading}
+placeholder="Owned by, collared by, Daddy/little, Dom/sub dynamic, etc."
+style={{
+width: "100%",
+padding: "10px 12px",
+borderRadius: 10,
+border: "1px solid rgba(255,255,255,0.15)",
+background: "rgba(0,0,0,0.35)",
+color: "white",
+marginBottom: 12,
+}}
+/>
+</label>
 <label>
 <div style={{ fontSize: 12, opacity: 0.8, marginBottom: 6 }}>Bio</div>
 <textarea
