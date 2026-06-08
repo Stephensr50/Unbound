@@ -36,7 +36,9 @@ const rawId = typeof params?.id === "string" ? params.id : "";
 const [mounted, setMounted] = useState(false);
 const [me, setMe] = useState<string | null>(null);
 
+
 const [conversationId, setConversationId] = useState<number | null>(null);
+const [conversationTitle, setConversationTitle] = useState("Conversation");
 const [loading, setLoading] = useState(true);
 
 const [msgs, setMsgs] = useState<MsgRow[]>([]);
@@ -179,6 +181,42 @@ console.warn("markConversationRead failed:", e?.message ?? e);
 } finally {
 markInFlightRef.current = false;
 }
+}
+
+async function loadConversationTitle(convId: number) {
+if (!me) return;
+
+const { data: members, error: memErr } = await supabase
+.from("conversation_members")
+.select("user_id")
+.eq("conversation_id", convId);
+
+if (memErr || !members) {
+setConversationTitle("Conversation");
+return;
+}
+
+const otherId =
+members.map((m: any) => m.user_id as string).find((id) => id && id !== me) ??
+null;
+
+if (!otherId) {
+setConversationTitle("Conversation");
+return;
+}
+
+const { data: profile } = await supabase
+.from("profiles")
+.select("display_name, username")
+.eq("id", otherId)
+.maybeSingle();
+
+const title =
+profile?.display_name?.trim() ||
+profile?.username?.trim() ||
+"Conversation";
+
+setConversationTitle(title);
 }
 
 async function loadOtherReadPointer(convId: number) {
@@ -349,7 +387,10 @@ const { data, error } = await supabase
 if (error) throw error;
 
 const rows = (data ?? []) as MsgRow[];
-if (!cancelled) setMsgs(rows);
+if (!cancelled) {
+setMsgs(rows);
+await loadConversationTitle(conversationId);
+}
 // auto-send initial message from URL (ONLY ONCE)
 if (typeof window !== "undefined") {
   const params = new URLSearchParams(window.location.search);
@@ -622,9 +663,7 @@ return () => {};
 return (
 <div style={{ padding: 18, paddingTop: 15 }}>
     <div style={{ height: 96}} />
-<div style={{ opacity: 0.85, marginBottom: 10, fontFamily: '"Gloock", serif' }}>
-{mounted && me ? `ME: ${me.slice(0, 4)}…${me.slice(-4)}` : "ME: …"}
-</div>
+
 
 <button
 onClick={() => router.push("/messages")}
@@ -644,7 +683,7 @@ marginBottom: 14,
 </button>
 
 <div style={{ fontFamily: '"Gloock", serif', fontSize: 22, marginBottom: 8 }}>
-{loading ? "Conversation…" : conversationId ? `Conversation #${conversationId}` : "Conversation"}
+{loading ? "Conversation…" : conversationTitle}
 </div>
 
 {err ? (
