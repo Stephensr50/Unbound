@@ -451,6 +451,7 @@ zIndex: 1000000,
 <Link href="/terms" style={menuItemStyle}>Terms of Service</Link>
 <Link href="/guidelines" style={menuItemStyle}>Community Guidelines</Link>
 <Link href="/privacy" style={menuItemStyle}>Privacy Policy</Link>
+<Link href="/legal/dmca" style={menuItemStyle}>DMCA Policy</Link>
 </div>
 )}
 </div>
