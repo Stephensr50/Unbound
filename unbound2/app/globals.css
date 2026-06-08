@@ -693,3 +693,16 @@ padding-left: 0 !important;
 padding-right: 0 !important;
 }
 }
+/* Unbound media protection: blocks iPhone long-press save/copy/share menu */
+img,
+video,
+.protected-media {
+-webkit-touch-callout: none;
+-webkit-user-select: none;
+user-select: none;
+-webkit-user-drag: none;
+}
+
+.protected-media {
+pointer-events: auto;
+}
