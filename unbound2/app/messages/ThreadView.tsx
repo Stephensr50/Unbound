@@ -8,8 +8,10 @@ type MsgRow = {
 id: number;
 conversation_id: number;
 sender_id: string;
-body: string;
+body: string | null;
 created_at: string;
+media_url: string | null;
+media_type: string | null;
 };
 
 function getSupabase() {
@@ -71,6 +73,8 @@ return last;
 const showSeen = lastMineId > 0 && otherLastReadId >= lastMineId;
 
 const bottomRef = useRef<HTMLDivElement | null>(null);
+const fileInputRef = useRef<HTMLInputElement | null>(null);
+const [uploadingImage, setUploadingImage] = useState(false);
 
 // prevents spamming mark-read calls
 const markInFlightRef = useRef(false);
@@ -380,7 +384,7 @@ let cancelled = false;
 try {
 const { data, error } = await supabase
 .from("messages")
-.select("id, conversation_id, sender_id, body, created_at")
+.select("id, conversation_id, sender_id, body, created_at, media_url, media_type")
 .eq("conversation_id", conversationId)
 .order("id", { ascending: true });
 
@@ -406,7 +410,7 @@ const { data: inserted, error } = await supabase
     sender_id: me,
     body: firstMsg,
   })
-  .select("id, conversation_id, sender_id, body, created_at")
+.select("id, conversation_id, sender_id, body, created_at, media_url, media_type")
   .single();
 
 if (!error && inserted) {
@@ -631,6 +635,54 @@ setErr(e?.message ?? "Send failed.");
 setSending(false);
 }
 }
+async function sendImage(file: File) {
+if (!conversationId) return;
+if (!me) return;
+if (uploadingImage) return;
+
+setUploadingImage(true);
+setErr(null);
+
+try {
+if (!file.type.startsWith("image/")) {
+setErr("Please choose an image file.");
+return;
+}
+
+const ext = file.name.split(".").pop() || "jpg";
+const path = `${conversationId}/${me}-${Date.now()}.${ext}`;
+
+const { error: uploadError } = await supabase.storage
+.from("message-media")
+.upload(path, file, {
+contentType: file.type,
+upsert: false,
+});
+
+if (uploadError) throw uploadError;
+
+const { data: publicData } = supabase.storage
+.from("message-media")
+.getPublicUrl(path);
+
+const publicUrl = publicData.publicUrl;
+
+const { error: insertError } = await supabase.from("messages").insert({
+conversation_id: conversationId,
+sender_id: me,
+body: "",
+media_url: publicUrl,
+media_type: "image",
+});
+
+if (insertError) throw insertError;
+} catch (e: any) {
+setErr(e?.message ?? "Image upload failed.");
+} finally {
+setUploadingImage(false);
+if (fileInputRef.current) fileInputRef.current.value = "";
+}
+}
 // typing: send broadcasts based on local input
 useEffect(() => {
 if (!conversationId || !me) return;
@@ -748,7 +800,25 @@ background: mine ? "rgba(169, 85, 247, 0.28)" : "rgba(215, 118, 228, 0.14)",
 }}
 >
 <div style={{ fontSize: 12, opacity: 0.75, marginBottom: 6 }}></div>
+{m.media_type === "image" && m.media_url ? (
+<img
+src={m.media_url}
+alt="Message attachment"
+draggable={false}
+style={{
+display: "block",
+maxWidth: "100%",
+maxHeight: 280,
+borderRadius: 12,
+objectFit: "cover",
+marginBottom: m.body ? 8 : 0,
+}}
+/>
+) : null}
+
+{m.body ? (
 <div style={{ whiteSpace: "pre-wrap" }}>{m.body}</div>
+) : null}
 {mine && idx === msgs.length - 1 && showSeen ? (
 <div style={{ fontSize: 12, opacity: 0.7, marginTop: 6 }}>
 Seen
@@ -799,6 +869,36 @@ Typing
 </div>
 
 <div style={{ display: "flex", gap: 10, marginTop: 12 }}>
+<input
+ref={fileInputRef}
+type="file"
+accept="image/*"
+style={{ display: "none" }}
+onChange={(e) => {
+const file = e.target.files?.[0];
+if (file) sendImage(file);
+}}
+/>
+
+<button
+type="button"
+onClick={() => fileInputRef.current?.click()}
+disabled={!conversationId || sending || uploadingImage}
+style={{
+width: 44,
+height: 44,
+borderRadius: 999,
+border: "1px solid rgba(168,85,247,0.35)",
+background: "rgba(168,85,247,0.20)",
+color: "white",
+fontWeight: 900,
+cursor: "pointer",
+flexShrink: 0,
+}}
+>
+{uploadingImage ? "…" : "📷"}
+</button>
+
 <input
 value={text}
 onChange={(e) => setText(e.target.value)}
