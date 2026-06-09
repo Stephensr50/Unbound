@@ -885,7 +885,7 @@ type="button"
 onClick={() => fileInputRef.current?.click()}
 disabled={!conversationId || sending || uploadingImage}
 style={{
-width: 44,
+width: uploadingImage ? 96 : 44,
 height: 44,
 borderRadius: 999,
 border: "1px solid rgba(168,85,247,0.35)",
@@ -896,7 +896,7 @@ cursor: "pointer",
 flexShrink: 0,
 }}
 >
-{uploadingImage ? "…" : "📷"}
+{uploadingImage ? "Sending…" : "📷"}
 </button>
 
 <input
@@ -941,7 +941,20 @@ Send
 </button>
 </div>
 
-<div style={{ fontSize: 12, opacity: 0.6, marginTop: 8 }}></div>
+{uploadingImage ? (
+<div
+style={{
+fontSize: 13,
+opacity: 0.8,
+marginTop: 8,
+paddingLeft: 8,
+color: "rgba(255,255,255,0.85)",
+fontWeight: 700,
+}}
+>
+Uploading photo…
+</div>
+) : null}
 </div>
 );
 }
