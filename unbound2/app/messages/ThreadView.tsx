@@ -908,9 +908,9 @@ marginBottom: m.body ? 8 : 0,
 ) : m.media_type === "audio" && m.media_url ? (
 <div
 style={{
-width: 200,
+width: 230,
 maxWidth: "100%",
-minWidth: 180,
+minWidth: 210,
 }}
 >
 <audio
