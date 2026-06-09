@@ -882,6 +882,7 @@ if (file) sendImage(file);
 
 <button
 type="button"
+className={uploadingImage ? "unbound-upload-pulse" : ""}
 onClick={() => fileInputRef.current?.click()}
 disabled={!conversationId || sending || uploadingImage}
 style={{

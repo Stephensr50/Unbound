@@ -706,3 +706,21 @@ user-select: none;
 .protected-media {
 pointer-events: auto;
 }
+@keyframes unboundUploadPulse {
+0% {
+transform: scale(1);
+box-shadow: 0 0 10px rgba(168, 85, 247, 0.35);
+}
+50% {
+transform: scale(1.08);
+box-shadow: 0 0 24px rgba(236, 72, 153, 0.85);
+}
+100% {
+transform: scale(1);
+box-shadow: 0 0 10px rgba(168, 85, 247, 0.35);
+}
+}
+
+.unbound-upload-pulse {
+animation: unboundUploadPulse 0.8s ease-in-out infinite;
+}
