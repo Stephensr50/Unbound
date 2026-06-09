@@ -906,15 +906,24 @@ marginBottom: m.body ? 8 : 0,
 }}
 />
 ) : m.media_type === "audio" && m.media_url ? (
+<div
+style={{
+width: 240,
+maxWidth: "100%",
+minWidth: 220,
+}}
+>
 <audio
 controls
 src={m.media_url}
 style={{
 display: "block",
 width: "100%",
+height: 40,
 marginBottom: m.body ? 8 : 0,
 }}
 />
+</div>
 ) : null}
 
 {m.body ? (
