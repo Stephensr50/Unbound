@@ -75,6 +75,11 @@ const showSeen = lastMineId > 0 && otherLastReadId >= lastMineId;
 const bottomRef = useRef<HTMLDivElement | null>(null);
 const fileInputRef = useRef<HTMLInputElement | null>(null);
 const [uploadingImage, setUploadingImage] = useState(false);
+const [recording, setRecording] = useState(false);
+const [uploadingAudio, setUploadingAudio] = useState(false);
+
+const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+const audioChunksRef = useRef<Blob[]>([]);
 
 // prevents spamming mark-read calls
 const markInFlightRef = useRef(false);
@@ -683,6 +688,92 @@ setUploadingImage(false);
 if (fileInputRef.current) fileInputRef.current.value = "";
 }
 }
+async function uploadVoiceNote(audioBlob: Blob) {
+if (!conversationId) return;
+if (!me) return;
+if (uploadingAudio) return;
+
+setUploadingAudio(true);
+setErr(null);
+
+try {
+const path = `${conversationId}/${me}-${Date.now()}.webm`;
+
+const { error: uploadError } = await supabase.storage
+.from("message-audio")
+.upload(path, audioBlob, {
+contentType: audioBlob.type || "audio/webm",
+upsert: false,
+});
+
+if (uploadError) throw uploadError;
+
+const { data: publicData } = supabase.storage
+.from("message-audio")
+.getPublicUrl(path);
+
+const { error: insertError } = await supabase.from("messages").insert({
+conversation_id: conversationId,
+sender_id: me,
+body: "",
+media_url: publicData.publicUrl,
+media_type: "audio",
+});
+
+if (insertError) throw insertError;
+} catch (e: any) {
+setErr(e?.message ?? "Voice note upload failed.");
+} finally {
+setUploadingAudio(false);
+}
+}
+async function toggleVoiceRecording() {
+if (recording) {
+mediaRecorderRef.current?.stop();
+return;
+}
+
+if (!navigator.mediaDevices?.getUserMedia) {
+setErr("Voice recording is not supported on this device.");
+return;
+}
+
+try {
+setErr(null);
+
+const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+const recorder = new MediaRecorder(stream);
+
+audioChunksRef.current = [];
+
+recorder.ondataavailable = (event) => {
+if (event.data.size > 0) {
+audioChunksRef.current.push(event.data);
+}
+};
+
+recorder.onstop = async () => {
+stream.getTracks().forEach((track) => track.stop());
+setRecording(false);
+
+const audioBlob = new Blob(audioChunksRef.current, {
+type: recorder.mimeType || "audio/webm",
+});
+
+if (audioBlob.size > 0) {
+await uploadVoiceNote(audioBlob);
+}
+};
+
+mediaRecorderRef.current = recorder;
+recorder.start();
+setRecording(true);
+} catch (e: any) {
+setRecording(false);
+setErr(e?.message ?? "Could not start voice recording.");
+}
+}
+
 // typing: send broadcasts based on local input
 useEffect(() => {
 if (!conversationId || !me) return;
@@ -814,6 +905,16 @@ objectFit: "cover",
 marginBottom: m.body ? 8 : 0,
 }}
 />
+) : m.media_type === "audio" && m.media_url ? (
+<audio
+controls
+src={m.media_url}
+style={{
+display: "block",
+width: "100%",
+marginBottom: m.body ? 8 : 0,
+}}
+/>
 ) : null}
 
 {m.body ? (
@@ -899,7 +1000,24 @@ flexShrink: 0,
 >
 {uploadingImage ? "Sending…" : "📷"}
 </button>
-
+<button
+type="button"
+onClick={toggleVoiceRecording}
+disabled={!conversationId || sending || uploadingImage || uploadingAudio}
+style={{
+width: recording ? 96 : 44,
+height: 44,
+borderRadius: 999,
+border: "1px solid rgba(168,85,247,0.35)",
+background: recording ? "rgba(236,72,153,0.35)" : "rgba(168,85,247,0.20)",
+color: "white",
+fontWeight: 900,
+cursor: "pointer",
+flexShrink: 0,
+}}
+>
+{recording ? "Stop" : uploadingAudio ? "…" : "🎤"}
+</button>
 <input
 value={text}
 onChange={(e) => setText(e.target.value)}
@@ -942,7 +1060,33 @@ Send
 </button>
 </div>
 
-{uploadingImage ? (
+{recording ? (
+<div
+style={{
+fontSize: 13,
+opacity: 0.9,
+marginTop: 8,
+paddingLeft: 8,
+color: "rgba(255,255,255,0.95)",
+fontWeight: 700,
+}}
+>
+🎤 Recording...
+</div>
+) : uploadingAudio ? (
+<div
+style={{
+fontSize: 13,
+opacity: 0.9,
+marginTop: 8,
+paddingLeft: 8,
+color: "rgba(255,255,255,0.95)",
+fontWeight: 700,
+}}
+>
+Uploading voice note...
+</div>
+) : uploadingImage ? (
 <div
 style={{
 fontSize: 13,
@@ -953,7 +1097,7 @@ color: "rgba(255,255,255,0.85)",
 fontWeight: 700,
 }}
 >
-Uploading photo…
+Uploading photo...
 </div>
 ) : null}
 </div>
