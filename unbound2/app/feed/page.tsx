@@ -1556,17 +1556,27 @@ background: "rgba(0,0,0,0.5)",
 if (isImage) {
 return (
 <div
+onClick={() => setViewer({ url: p.media_url!, type: "image" })}
+onContextMenu={(e) => e.preventDefault()}
+onDragStart={(e) => e.preventDefault()}
 style={{
 width: "100%",
 display: "flex",
 justifyContent: "center",
 marginBottom: 10,
+position: "relative",
+userSelect: "none",
+WebkitUserSelect: "none",
+WebkitTouchCallout: "none",
+cursor: "pointer",
 }}
 >
-
 <img
 src={p.media_url}
 alt=""
+draggable={false}
+onContextMenu={(e) => e.preventDefault()}
+onDragStart={(e) => e.preventDefault()}
 style={{
 display: "block",
 width: "100%",
@@ -1575,10 +1585,24 @@ height: "auto",
 borderRadius: 14,
 border: "1px solid rgba(180,120,255,0.14)",
 objectFit: "contain",
-cursor: "pointer",
 boxSizing: "border-box",
+pointerEvents: "none",
+userSelect: "none",
+WebkitUserSelect: "none",
+WebkitTouchCallout: "none",
 }}
-onClick={() => setViewer({ url: p.media_url!, type: "image" })}
+/>
+
+<div
+aria-hidden="true"
+onContextMenu={(e) => e.preventDefault()}
+onDragStart={(e) => e.preventDefault()}
+style={{
+position: "absolute",
+inset: 0,
+borderRadius: 14,
+background: "transparent",
+}}
 />
 </div>
 );
@@ -2432,7 +2456,44 @@ padding: 12,
 }}
 >
 {viewer.type === "image" ? (
-<img src={viewer.url} alt="" style={{ width: "100%", borderRadius: 12 }} />
+<div
+onContextMenu={(e) => e.preventDefault()}
+onDragStart={(e) => e.preventDefault()}
+style={{
+position: "relative",
+width: "100%",
+userSelect: "none",
+WebkitUserSelect: "none",
+WebkitTouchCallout: "none",
+}}
+>
+
+<img
+src={viewer.url}
+alt=""
+draggable={false}
+onContextMenu={(e) => e.preventDefault()}
+onDragStart={(e) => e.preventDefault()}
+style={{
+display: "block",
+width: "100%",
+borderRadius: 12,
+pointerEvents: "none",
+userSelect: "none",
+WebkitUserSelect: "none",
+WebkitTouchCallout: "none",
+}}
+/>
+<div
+aria-hidden="true"
+style={{
+position: "absolute",
+inset: 0,
+borderRadius: 12,
+background: "transparent",
+}}
+/>
+</div>
 ) : (
 <video src={viewer.url} controls style={{ width: "100%", borderRadius: 12 }} />
 )}
