@@ -34,7 +34,7 @@ box-sizing: border-box;
 min-height: 100vh;
 background-color: #000;
 background-image: url("/rope-bg.jpg");
-background-repeat: repeat-y;
+background-repeat: repeat;
 background-position: center top -5px;
 background-size: 950px auto;
 color: #fff;
