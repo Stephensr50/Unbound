@@ -130,7 +130,7 @@ const tag = part.slice(1).toLowerCase();
 return (
 <Link
 key={`${part}-${index}`}
-href={`/explore?search=${encodeURIComponent(tag)}`}
+href={`/explore?tag=${encodeURIComponent(tag)}`}
 style={{
 color: "#ff4fd8",
 textDecoration: "none",
