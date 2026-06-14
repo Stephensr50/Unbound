@@ -35,8 +35,8 @@ min-height: 100vh;
 background-color: #000;
 background-image: url("/rope-bg.jpg");
 background-repeat: repeat-y;
-background-position: center top -15px;
-background-size: 700px auto;
+background-position: center top -5px;
+background-size: 950px auto;
 color: #fff;
 
 /* IMPORTANT: do not clip glows */
