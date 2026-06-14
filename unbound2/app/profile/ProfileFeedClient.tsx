@@ -939,14 +939,22 @@ title={p.body || (mode === "photos" ? "Open photo" : "Open video")}
 >
 {mode === "photos" ? (
 // eslint-disable-next-line @next/next/no-img-element
+// eslint-disable-next-line @next/next/no-img-element
 <img
 src={media}
 alt=""
+draggable={false}
+onContextMenu={(e) => e.preventDefault()}
+onDragStart={(e) => e.preventDefault()}
 style={{
 width: "100%",
 height: "100%",
 objectFit: "contain",
 display: "block",
+pointerEvents: "none",
+userSelect: "none",
+WebkitUserSelect: "none",
+WebkitTouchCallout: "none",
 }}
 />
 ) : (
@@ -1264,12 +1272,47 @@ onClick={() => openGalleryForPost(p.id, "videos")}
 />
 ) : (
 // eslint-disable-next-line @next/next/no-img-element
+<div
+onClick={() => openGalleryForPost(p.id, "photos")}
+onContextMenu={(e) => e.preventDefault()}
+onDragStart={(e) => e.preventDefault()}
+style={{
+position: "relative",
+width: "100%",
+marginTop: 12,
+userSelect: "none",
+WebkitUserSelect: "none",
+WebkitTouchCallout: "none",
+cursor: "pointer",
+}}
+>
+
+{/* eslint-disable-next-line @next/next/no-img-element */}
 <img
 src={media}
 alt=""
-style={{ ...mediaStyle, cursor: "pointer" }}
-onClick={() => openGalleryForPost(p.id, "photos")}
+draggable={false}
+onContextMenu={(e) => e.preventDefault()}
+onDragStart={(e) => e.preventDefault()}
+style={{
+...mediaStyle,
+marginTop: 0,
+pointerEvents: "none",
+userSelect: "none",
+WebkitUserSelect: "none",
+WebkitTouchCallout: "none",
+}}
 />
+<div
+aria-hidden="true"
+style={{
+position: "absolute",
+inset: 0,
+borderRadius: 14,
+background: "transparent",
+}}
+/>
+</div>
 )
 ) : null}
 
@@ -1591,12 +1634,26 @@ Close
 </button>
 </div>
 </div>
-
 {currentGalleryItem.type === "image" ? (
-// eslint-disable-next-line @next/next/no-img-element
+<div
+onContextMenu={(e) => e.preventDefault()}
+onDragStart={(e) => e.preventDefault()}
+style={{
+position: "relative",
+width: "100%",
+userSelect: "none",
+WebkitUserSelect: "none",
+WebkitTouchCallout: "none",
+}}
+>
+
+{/* eslint-disable-next-line @next/next/no-img-element */}
 <img
 src={currentGalleryItem.url}
 alt=""
+draggable={false}
+onContextMenu={(e) => e.preventDefault()}
+onDragStart={(e) => e.preventDefault()}
 style={{
 width: "100%",
 borderRadius: 12,
@@ -1604,8 +1661,23 @@ maxHeight: "58vh",
 objectFit: "contain",
 display: "block",
 margin: "0 auto",
+pointerEvents: "none",
+userSelect: "none",
+WebkitUserSelect: "none",
+WebkitTouchCallout: "none",
 }}
 />
+
+<div
+aria-hidden="true"
+style={{
+position: "absolute",
+inset: 0,
+borderRadius: 12,
+background: "transparent",
+}}
+/>
+</div>
 ) : (
 <video
 src={currentGalleryItem.url}

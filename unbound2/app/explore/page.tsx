@@ -379,18 +379,47 @@ display: "block",
 }}
 />
 ) : (
-// eslint-disable-next-line @next/next/no-img-element
+<div
+onContextMenu={(e) => e.preventDefault()}
+onDragStart={(e) => e.preventDefault()}
+style={{
+position: "relative",
+width: "100%",
+height: "100%",
+userSelect: "none",
+WebkitUserSelect: "none",
+WebkitTouchCallout: "none",
+}}
+>
+{/* eslint-disable-next-line @next/next/no-img-element */}
 <img
 src={post.media_url}
 alt={post.body || label}
+draggable={false}
 className="exploreMedia"
+onContextMenu={(e) => e.preventDefault()}
+onDragStart={(e) => e.preventDefault()}
 style={{
 width: "100%",
 height: "100%",
 objectFit: "cover",
 display: "block",
+pointerEvents: "none",
+userSelect: "none",
+WebkitUserSelect: "none",
+WebkitTouchCallout: "none",
 }}
 />
+
+<div
+aria-hidden="true"
+style={{
+position: "absolute",
+inset: 0,
+background: "transparent",
+}}
+/>
+</div>
 )
 ) : null}
 </div>

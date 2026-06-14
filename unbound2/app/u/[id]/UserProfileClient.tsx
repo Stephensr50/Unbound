@@ -1286,16 +1286,46 @@ marginBottom: 4,
 <div style={{ fontSize: 12, opacity: 0.78 }}>$1.49 unlock</div>
 </div>
 ) : mode === "photos" ? (
+<div
+onContextMenu={(e) => e.preventDefault()}
+onDragStart={(e) => e.preventDefault()}
+style={{
+position: "relative",
+width: "100%",
+height: "100%",
+userSelect: "none",
+WebkitUserSelect: "none",
+WebkitTouchCallout: "none",
+}}
+>
+
+{/* eslint-disable-next-line @next/next/no-img-element */}
 <img
 src={media}
 alt=""
+draggable={false}
+onContextMenu={(e) => e.preventDefault()}
+onDragStart={(e) => e.preventDefault()}
 style={{
 width: "100%",
 height: "100%",
 objectFit: "contain",
 display: "block",
+pointerEvents: "none",
+userSelect: "none",
+WebkitUserSelect: "none",
+WebkitTouchCallout: "none",
 }}
 />
+<div
+aria-hidden="true"
+style={{
+position: "absolute",
+inset: 0,
+background: "transparent",
+}}
+/>
+</div>
 ) : (
 <video
 src={media}
@@ -2000,11 +2030,45 @@ style={mediaStyle}
 />
 ) : (
 // eslint-disable-next-line @next/next/no-img-element
+<div
+onContextMenu={(e) => e.preventDefault()}
+onDragStart={(e) => e.preventDefault()}
+style={{
+position: "relative",
+width: "100%",
+marginTop: 12,
+userSelect: "none",
+WebkitUserSelect: "none",
+WebkitTouchCallout: "none",
+}}
+>
+
+{/* eslint-disable-next-line @next/next/no-img-element */}
 <img
 src={media}
 alt=""
-style={mediaStyle}
+draggable={false}
+onContextMenu={(e) => e.preventDefault()}
+onDragStart={(e) => e.preventDefault()}
+style={{
+...mediaStyle,
+marginTop: 0,
+pointerEvents: "none",
+userSelect: "none",
+WebkitUserSelect: "none",
+WebkitTouchCallout: "none",
+}}
 />
+<div
+aria-hidden="true"
+style={{
+position: "absolute",
+inset: 0,
+borderRadius: 14,
+background: "transparent",
+}}
+/>
+</div>
 )
 ) : null}
 

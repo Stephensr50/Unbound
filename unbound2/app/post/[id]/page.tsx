@@ -544,19 +544,49 @@ background: "rgba(0,0,0,0.5)",
 
 if (isImage) {
 return (
-// eslint-disable-next-line @next/next/no-img-element
+<div
+onContextMenu={(e) => e.preventDefault()}
+onDragStart={(e) => e.preventDefault()}
+style={{
+position: "relative",
+width: "100%",
+marginBottom: 10,
+userSelect: "none",
+WebkitUserSelect: "none",
+WebkitTouchCallout: "none",
+}}
+>
+{/* eslint-disable-next-line @next/next/no-img-element */}
 <img
 src={p.media_url}
 alt=""
+draggable={false}
+onContextMenu={(e) => e.preventDefault()}
+onDragStart={(e) => e.preventDefault()}
 style={{
+display: "block",
 width: "100%",
 borderRadius: 14,
 border: "1px solid rgba(180,120,255,0.14)",
-marginBottom: 10,
 objectFit: "contain",
 maxHeight: 520,
+pointerEvents: "none",
+userSelect: "none",
+WebkitUserSelect: "none",
+WebkitTouchCallout: "none",
 }}
 />
+
+<div
+aria-hidden="true"
+style={{
+position: "absolute",
+inset: 0,
+borderRadius: 14,
+background: "transparent",
+}}
+/>
+</div>
 );
 }
 
