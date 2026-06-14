@@ -120,6 +120,33 @@ return (
 (!!media && /\.(jpg|jpeg|png|gif|webp)(\?|$)/i.test(media))
 );
 }
+function renderBodyWithClickableHashtags(body: string) {
+const parts = body.split(/(#[A-Za-z0-9_]+)/g);
+
+return parts.map((part, index) => {
+if (part.startsWith("#")) {
+const tag = part.slice(1).toLowerCase();
+
+return (
+<Link
+key={`${part}-${index}`}
+href={`/explore?search=${encodeURIComponent(tag)}`}
+style={{
+color: "#ff4fd8",
+textDecoration: "none",
+fontWeight: 900,
+textShadow:
+"0 0 8px rgba(236,72,153,0.85), 0 0 18px rgba(192,38,211,0.55)",
+}}
+>
+{part}
+</Link>
+);
+}
+
+return <span key={`${part}-${index}`}>{part}</span>;
+});
+}
 
 export default function UserProfileClient({ profile }: { profile: ProfileRow }) {
 const supabase = useMemo(() => getSupabase(), []);
@@ -1922,11 +1949,7 @@ border: "1px solid rgba(255,255,255,0.18)",
 </div>
 ) : null}
 
-{p.body ? (
-<div style={{ fontSize: 16, lineHeight: 1.4, whiteSpace: "pre-wrap" }}>
-{p.body}
-</div>
-) : null}
+
 
 {media && (isPhoto || isVideo) ? (
 false ? (
@@ -2070,6 +2093,20 @@ background: "transparent",
 />
 </div>
 )
+) : null}
+
+{p.body ? (
+<div
+style={{
+fontSize: 16,
+lineHeight: 1.45,
+whiteSpace: "pre-wrap",
+marginTop: media ? 12 : 0,
+color: "rgba(255,255,255,0.92)",
+}}
+>
+{renderBodyWithClickableHashtags(p.body)}
+</div>
 ) : null}
 
 {!isMine ? (
