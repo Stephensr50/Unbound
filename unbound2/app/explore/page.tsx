@@ -369,7 +369,7 @@ isVideo ? (
 src={post.media_url}
 muted
 playsInline
-preload="metadata"
+preload="auto"
 className="exploreMedia"
 style={{
 width: "100%",
