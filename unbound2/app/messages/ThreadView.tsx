@@ -697,12 +697,12 @@ setUploadingAudio(true);
 setErr(null);
 
 try {
-const path = `${conversationId}/${me}-${Date.now()}.webm`;
+const path = `${conversationId}/${me}-${Date.now()}.mp4`;
 
 const { error: uploadError } = await supabase.storage
 .from("message-audio")
 .upload(path, audioBlob, {
-contentType: audioBlob.type || "audio/webm",
+contentType: audioBlob.type || "audio/mp4",
 upsert: false,
 });
 
@@ -757,7 +757,7 @@ stream.getTracks().forEach((track) => track.stop());
 setRecording(false);
 
 const audioBlob = new Blob(audioChunksRef.current, {
-type: recorder.mimeType || "audio/webm",
+type: recorder.mimeType || "audio/mp4",
 });
 
 if (audioBlob.size > 0) {
