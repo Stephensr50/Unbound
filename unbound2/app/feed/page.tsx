@@ -980,10 +980,33 @@ setBanner(error.message);
 return;
 }
 
+const rows = (data ?? []) as CommentRow[];
+
 setCommentsByPost((m) => ({
 ...m,
-[postId]: (data ?? []) as CommentRow[],
+[postId]: rows,
 }));
+
+const commenterIds = Array.from(
+new Set(rows.map((c) => c.user_id).filter(Boolean))
+).filter((id) => !profilesById[id]);
+
+if (commenterIds.length) {
+const { data: profs } = await supabase
+.from("profiles")
+.select("id,username,display_name,avatar_url")
+.in("id", commenterIds);
+
+if (profs?.length) {
+setProfilesById((m) => {
+const next = { ...m };
+for (const profile of profs as ProfileRow[]) {
+next[profile.id] = profile;
+}
+return next;
+});
+}
+}
 }
 
 async function addComment(postId: number) {
@@ -2373,27 +2396,90 @@ flexDirection: "column",
 gap: 10,
 }}
 >
-{(commentsByPost[p.id] ?? []).map((c) => (
+{(commentsByPost[p.id] ?? []).map((c) => {
+const name = authorName(c.user_id);
+const avatar = authorAvatar(c.user_id);
+const initial = authorInitial(c.user_id);
+
+return (
 <div
 key={c.id}
 id={`comment-${c.id}`}
 style={{
 background: "rgba(0,0,0,0.35)",
-border: "1px solid #222",
+border: "1px solid rgba(180,120,255,0.18)",
 borderRadius: 14,
 padding: 10,
+display: "flex",
+gap: 10,
+alignItems: "flex-start",
 }}
 >
+{avatar ? (
+<img
+src={avatar}
+alt=""
+onClick={() => router.push(`/u/${c.user_id}`)}
+style={{
+width: 34,
+height: 34,
+borderRadius: 999,
+objectFit: "cover",
+cursor: "pointer",
+flex: "0 0 auto",
+border: "1px solid rgba(180,120,255,0.24)",
+}}
+/>
+) : (
+<div
+onClick={() => router.push(`/u/${c.user_id}`)}
+style={{
+width: 34,
+height: 34,
+borderRadius: 999,
+display: "grid",
+placeItems: "center",
+cursor: "pointer",
+flex: "0 0 auto",
+fontWeight: 800,
+background: "rgba(168,85,247,0.18)",
+border: "1px solid rgba(180,120,255,0.24)",
+}}
+>
+{initial}
+</div>
+)}
+
+<div style={{ flex: 1, minWidth: 0 }}>
 <div
 style={{
-opacity: 0.6,
-fontSize: 12,
-marginBottom: 6,
+display: "flex",
+gap: 8,
+alignItems: "center",
+marginBottom: 5,
 }}
 >
+
+<span
+onClick={() => router.push(`/u/${c.user_id}`)}
+style={{
+fontWeight: 850,
+cursor: "pointer",
+}}
+>
+
+{name}
+</span>
+
+<span style={{ opacity: 0.6, fontSize: 12 }}>
 {timeAgo(c.created_at)}
+</span>
 </div>
-<div style={{ whiteSpace: "pre-wrap" }}>{c.body}</div>
+
+<div style={{ whiteSpace: "pre-wrap", lineHeight: 1.35 }}>
+{c.body}
+</div>
+
 <ReportCommentButton
 commentId={c.id}
 commentBody={c.body}
@@ -2402,7 +2488,9 @@ myUserId={myUserId}
 onReported={setBanner}
 />
 </div>
-))}
+</div>
+);
+})}
 
 {(commentsByPost[p.id] ?? []).length === 0 ? (
 <div style={{ opacity: 0.6, fontSize: 13, marginTop: 6 }}>

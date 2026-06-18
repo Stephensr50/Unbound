@@ -184,6 +184,8 @@ const [openComments, setOpenComments] = useState<Record<number, boolean>>({});
 const [commentsByPost, setCommentsByPost] = useState<Record<number, CommentRow[]>>(
 {}
 );
+
+const [commentProfilesById, setCommentProfilesById] = useState<Record<string, ProfileRow>>({});
 const [commentDraft, setCommentDraft] = useState<Record<number, string>>({});
 
 const [relationshipCounts, setRelationshipCounts] = useState({
@@ -962,10 +964,33 @@ setBanner(error.message);
 return;
 }
 
+const rows = (data ?? []) as CommentRow[];
+
 setCommentsByPost((m) => ({
 ...m,
-[postId]: (data ?? []) as CommentRow[],
+[postId]: rows,
 }));
+
+const commenterIds = Array.from(
+new Set(rows.map((c) => c.user_id).filter(Boolean))
+).filter((id) => !commentProfilesById[id]);
+
+if (commenterIds.length) {
+const { data: profs } = await supabase
+.from("profiles")
+.select("id,username,display_name,avatar_url")
+.in("id", commenterIds);
+
+if (profs?.length) {
+setCommentProfilesById((m) => {
+const next = { ...m };
+for (const profile of profs as ProfileRow[]) {
+next[profile.id] = profile;
+}
+return next;
+});
+}
+}
 }
 
 async function unlockPost(post: PostRow) {
@@ -2224,20 +2249,45 @@ flexDirection: "column",
 gap: 10,
 }}
 >
-{(commentsByPost[p.id] ?? []).map((c) => (
+{(commentsByPost[p.id] ?? []).map((c) => {
+const commenter = commentProfilesById[c.user_id];
+const name = commenter?.display_name || commenter?.username || "User";
+const avatar = commenter?.avatar_url || "/default-avatar.png";
+
+return (
 <div
 key={c.id}
+id={`comment-${c.id}`}
 style={{
 background: "rgba(0,0,0,0.35)",
-border: "1px solid #222",
+border: "1px solid rgba(180,120,255,0.18)",
 borderRadius: 14,
 padding: 10,
+display: "flex",
+gap: 10,
+alignItems: "flex-start",
 }}
 >
-<div style={{ opacity: 0.6, fontSize: 12, marginBottom: 6 }}>
-{timeAgo(c.created_at)}
+<img
+src={avatar}
+alt=""
+style={{
+width: 34,
+height: 34,
+borderRadius: 999,
+objectFit: "cover",
+flex: "0 0 auto",
+}}
+/>
+
+<div style={{ flex: 1, minWidth: 0 }}>
+<div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 5 }}>
+<span style={{ fontWeight: 850 }}>{name}</span>
+<span style={{ opacity: 0.6, fontSize: 12 }}>{timeAgo(c.created_at)}</span>
 </div>
-<div style={{ whiteSpace: "pre-wrap" }}>{c.body}</div>
+
+<div style={{ whiteSpace: "pre-wrap", lineHeight: 1.35 }}>{c.body}</div>
+
 <ReportCommentButton
 commentId={c.id}
 commentBody={c.body}
@@ -2246,7 +2296,11 @@ myUserId={myUserId}
 onReported={setBanner}
 />
 </div>
-))}
+</div>
+);
+})}
+
+
 
 {(commentsByPost[p.id] ?? []).length === 0 ? (
 <div style={{ opacity: 0.6, fontSize: 13, marginTop: 6 }}>
