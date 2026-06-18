@@ -545,49 +545,7 @@ color: "white",
 />
 </label>
 
-<button
-onClick={async () => {
-try {
-setConnectingStripe(true);
 
-const res = await fetch("/api/connect/create-account", {
-method: "POST",
-headers: {
-"Content-Type": "application/json",
-},
-body: JSON.stringify({
-userId,
-}),
-});
-
-const data = await res.json();
-
-if (!res.ok) {
-throw new Error(data.error || "Could not connect Stripe.");
-}
-
-window.location.href = data.url;
-} catch (err: any) {
-setStatus(err.message || "Stripe connection failed.");
-} finally {
-setConnectingStripe(false);
-}
-}}
-disabled={connectingStripe}
-style={{
-width: "100%",
-padding: "12px 14px",
-borderRadius: 12,
-border: "1px solid rgba(255,255,255,0.15)",
-background: "#6d28d9",
-color: "white",
-fontWeight: 700,
-cursor: "pointer",
-marginTop: 14,
-}}
->
-{connectingStripe ? "Connecting..." : "Set Up Payouts"}
-</button>
 
 <button
 onClick={saveProfile}
