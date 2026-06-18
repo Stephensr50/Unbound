@@ -43,7 +43,7 @@ Questions regarding this notice may be directed to:
 <p>
 Unbound Social LLC
 <br />
-legal@YOURDOMAIN.com
+legal@yourunbound.com
 </p>
 
 <p>

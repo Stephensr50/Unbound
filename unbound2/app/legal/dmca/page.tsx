@@ -62,9 +62,9 @@ DMCA notices may be submitted to:
 </p>
 
 <p>
-<strong>Unbound DMCA Agent</strong>
+<strong>Unbound Social LLC</strong>
 <br />
-Email: dmca@joinunbound.com
+Email: legal@yourunbound.com
 </p>
 
 <h2 style={{ marginTop: 40 }}>Counter-Notification Procedure</h2>
