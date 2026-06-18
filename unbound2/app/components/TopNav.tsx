@@ -452,6 +452,7 @@ zIndex: 1000000,
 <Link href="/guidelines" style={menuItemStyle}>Community Guidelines</Link>
 <Link href="/privacy" style={menuItemStyle}>Privacy Policy</Link>
 <Link href="/legal/dmca" style={menuItemStyle}>DMCA Policy</Link>
+<Link href="/2257" style={menuItemStyle}>2257 Record-Keeping Statement</Link>
 </div>
 )}
 </div>
