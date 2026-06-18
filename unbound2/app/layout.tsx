@@ -21,6 +21,9 @@ subsets: ["latin"],
 export const metadata: Metadata = {
 title: "Unbound",
 description: "Unbound",
+verification: {
+google:"XngmY73g4KWXjhuX0mcQYjjuc_2b3HU4DXsxrHd1XnA",
+},
 };
 
 export default function RootLayout({
