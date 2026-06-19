@@ -45,6 +45,9 @@ media_url?: string | null;
 image_url?: string | null;
 file_url?: string | null;
 media_type?: string | null;
+media_bucket?: string | null;
+media_path?: string | null;
+signed_url?: string | null;
 group_id?: number | null;
 is_locked: boolean | null;
 };
@@ -649,7 +652,7 @@ setBanner(null);
 
 const { data, error } = await supabase
 .from("posts")
-.select("id,user_id,body,kind,created_at,media_url,media_type,group_id,is_locked")
+.select("id,user_id,body,kind,created_at,media_url,media_type,media_bucket,media_path,group_id,is_locked")
 .eq("user_id", targetUserId)
 .order("created_at", { ascending: false })
 .limit(100);
@@ -660,7 +663,34 @@ setPosts([]);
 return;
 }
 
-const rows = (data ?? []) as PostRow[];
+let rows = (data ?? []) as PostRow[];
+const rowsNeedingSignedUrls = rows.filter(
+(p) => p.media_bucket && p.media_path
+);
+
+if (rowsNeedingSignedUrls.length) {
+const signedRows = await Promise.all(
+rowsNeedingSignedUrls.map(async (p) => {
+const { data: signedData } = await supabase.storage
+.from(p.media_bucket!)
+.createSignedUrl(p.media_path!, 60 * 60);
+
+return {
+id: p.id,
+signed_url: signedData?.signedUrl ?? null,
+};
+})
+);
+
+const signedMap = new Map(
+signedRows.map((row) => [row.id, row.signed_url])
+);
+
+rows = rows.map((p) => ({
+...p,
+signed_url: signedMap.get(p.id) ?? null,
+}));
+}
 let unlockedMap: Record<number, boolean> = {};
 
 if (viewerId) {
@@ -1189,7 +1219,7 @@ const videoPosts = posts.filter((p) => isVideoPost(p));
 function makeGalleryItems(items: PostRow[], mode: "photos" | "videos"): GalleryItem[] {
 return items
 .map((p) => {
-const media = getPostMedia(p);
+const media = p.signed_url || getPostMedia(p);
 if (!media) return null;
 return {
 postId: p.id,
