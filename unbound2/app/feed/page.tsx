@@ -1162,7 +1162,12 @@ upsert: false,
 if (upErr) throw new Error(upErr.message);
 
 const { data } = supabase.storage.from("media").getPublicUrl(path);
-return { publicUrl: data.publicUrl, mediaType: f.type };
+return {
+publicUrl: data.publicUrl,
+mediaType: f.type,
+bucket: "media",
+path,
+};
 }
 
 async function ensureCanInteract() {
@@ -1260,6 +1265,7 @@ const uid = await ensureCanInteract();
 
 let media_url: string | null = null;
 let media_type: string | null = null;
+let media_path: string | null = null;
 let kind = "text";
 
 if (file) {
@@ -1273,6 +1279,7 @@ size: file.size,
 url: up.publicUrl,
 });
 media_url = up.publicUrl;
+media_path = up.path;
 media_type = up.mediaType;
 kind = media_type.startsWith("video/") ? "video" : "image";
 setUploading(false);
@@ -1316,6 +1323,8 @@ body: trimmed || null,
 kind,
 media_url,
 media_type,
+media_bucket: file ? "media" : null,
+media_path,
 is_locked: false,
 })
 .select("id")
