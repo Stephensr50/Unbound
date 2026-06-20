@@ -22,7 +22,7 @@ export const metadata: Metadata = {
 title: "Unbound",
 description: "Unbound",
 icons: {
-apple: "/apple-touch-icon.png",
+apple: "/apple-touch-icon2.png",
 },
 verification: {
 google: "XngmY73g4KwXjhuX0mcQYjjuc_2b3HU4DXsxrHd1XnA",
