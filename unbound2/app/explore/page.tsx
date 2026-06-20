@@ -17,6 +17,8 @@ body: string | null;
 kind: string;
 created_at: string;
 media_url: string | null;
+media_bucket: string | null;
+media_path: string | null;
 media_type: string | null;
 };
 
@@ -79,7 +81,7 @@ setBanner(null);
 
 const { data, error } = await supabase
 .from("posts")
-.select("id,user_id,body,kind,created_at,media_url,media_type")
+.select("id,user_id,body,kind,created_at,media_url,media_path,media_type")
 .not("media_url", "is", null)
 .or("is_locked.eq.false,is_locked.is.null")
 .order("created_at", { ascending: false })
@@ -101,7 +103,39 @@ if (seen.has(key)) continue;
 seen.add(key);
 rows.push(post);
 }
+const rowsNeedingSignedUrls = rows.filter(
+(p) => p.media_bucket && p.media_path
+);
 
+if (rowsNeedingSignedUrls.length) {
+const signedRows = await Promise.all(
+rowsNeedingSignedUrls.map(async (p) => {
+const { data: signedData } = await supabase.storage
+.from(p.media_bucket!)
+.createSignedUrl(p.media_path!, 60 * 60);
+
+return {
+id: p.id,
+signed_url: signedData?.signedUrl ?? null,
+};
+})
+);
+
+const signedMap = new Map(
+signedRows.map((row) => [row.id, row.signed_url])
+);
+
+for (let i = 0; i < rows.length; i++) {
+const signedUrl = signedMap.get(rows[i].id);
+
+if (signedUrl) {
+rows[i] = {
+...rows[i],
+media_url: signedUrl,
+};
+}
+}
+}
 const userIds = Array.from(
 new Set(rows.map((p) => p.user_id).filter(Boolean))
 );
