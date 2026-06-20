@@ -21,8 +21,11 @@ subsets: ["latin"],
 export const metadata: Metadata = {
 title: "Unbound",
 description: "Unbound",
+icons: {
+apple: "/apple-touch-icon.png",
+},
 verification: {
-google:"XngmY73g4KWXjhuX0mcQYjjuc_2b3HU4DXsxrHd1XnA",
+google: "XngmY73g4KwXjhuX0mcQYjjuc_2b3HU4DXsxrHd1XnA",
 },
 };
 
