@@ -11,6 +11,7 @@ id: string;
 username: string | null;
 display_name: string | null;
 designation?: string | null;
+age?: number | null;
 is_admin?: boolean | null;
 bio: string | null;
 avatar_url: string | null;
@@ -151,7 +152,7 @@ if (!myUserId) return;
 const { data: p, error: pErr } = await supabase
 .from("profiles")
 .select(
-"id, username, display_name, designation, bio, avatar_url, city, state, country, is_admin"
+"id, username, display_name, designation,age, bio, avatar_url, city, state, country, is_admin"
 )
 .eq("id", myUserId)
 .maybeSingle();
@@ -506,8 +507,10 @@ fontSize: 18,
 
 <div style={{ minWidth: 0, flex: 1 }}>
 <h1 style={S.name}>{title}</h1>
-{myProfile?.designation ? (
-<div style={S.sub}>{myProfile.designation}</div>
+{myProfile?.designation || myProfile?.age ? (
+<div style={S.sub}>
+{[myProfile?.designation, myProfile?.age].filter(Boolean).join(" • ")}
+</div>
 ) : null}
 {locationLine ? <div style={S.sub}>{locationLine}</div> : null}
 </div>

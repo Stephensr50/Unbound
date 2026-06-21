@@ -20,6 +20,7 @@ id: string;
 username: string | null;
 display_name: string | null;
 designation?: string | null;
+age?: number | null;
 founder_badge?: string | null;
 bio: string | null;
 avatar_url: string | null;
@@ -1581,9 +1582,9 @@ flex: "0 0 auto",
 {profile.display_name || profile.username || "Unknown"}
 </div>
 
-{profile.designation ? (
+{(profile.designation || profile.age) ? (
 <div style={{ opacity: 0.9, marginTop: 4, fontWeight: 750 }}>
-{profile.designation}
+{[profile.designation, profile.age].filter(Boolean).join(" • ")}
 </div>
 ) : null}
 

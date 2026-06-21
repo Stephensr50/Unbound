@@ -27,7 +27,7 @@ const [orientation, setOrientation] = useState("");
 const [pronouns, setPronouns] = useState("");
 const [lookingFor, setLookingFor] = useState("");
 const [dsRelationship, setDsRelationship] = useState("");
-
+const [age, setAge] = useState("");
 const [status, setStatus] = useState<string>("");
 const [connectingStripe, setConnectingStripe] = useState(false);
 const [userId, setUserId] = useState("");
@@ -49,13 +49,14 @@ setUserId(userId)
 
 const { data: profile } = await supabase
 .from("profiles")
-.select("display_name, designation, bio, avatar_url, city, state, country, relationship_status, orientation, pronouns, looking_for, ds_relationship")
+.select("display_name, designation,age, bio, avatar_url, city, state, country, relationship_status, orientation, pronouns, looking_for, ds_relationship")
 .eq("id", userId)
 .single();
 
 if (profile) {
 setDisplayName(profile.display_name ?? "");
 setDesignation(profile.designation || "");
+setAge(profile.age ? String(profile.age) : "");
 setBio(profile.bio ?? "");
 setCity(profile.city ?? "");
 setStateName(profile.state ?? "");
@@ -229,6 +230,7 @@ const { error } = await supabase
 .from("profiles")
 .update({
 display_name: displayName.trim(),
+age: age.trim() ? Number(age) : null,
 designation: designation.trim() || null,
 bio,
 city: cleanCity || null,
@@ -340,6 +342,30 @@ style={{ display: "none" }}
 <input
 value={displayName}
 onChange={(e) => setDisplayName(e.target.value)}
+disabled={loading}
+style={{
+width: "100%",
+padding: "10px 12px",
+borderRadius: 10,
+border: "1px solid rgba(255,255,255,0.15)",
+background: "rgba(0,0,0,0.35)",
+color: "white",
+marginBottom: 12,
+}}
+/>
+</label>
+
+<label>
+<div style={{ fontSize: 12, opacity: 0.8, marginBottom: 6 }}>
+Age
+</div>
+
+<input
+type="number"
+min="18"
+max="99"
+value={age}
+onChange={(e) => setAge(e.target.value)}
 disabled={loading}
 style={{
 width: "100%",

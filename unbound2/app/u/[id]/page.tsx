@@ -16,6 +16,8 @@ type ProfileRow = {
 
   display_name: string | null;
 
+  age?: number | null;
+
   designation?: string | null;
 
   founder_badge?: string | null;
@@ -152,7 +154,7 @@ export default async function PublicProfilePage({
 
     .select(
 
-      "id, username, display_name, designation, founder_badge, bio, avatar_url, buy_me_a_coffee_url, city, state, country, relationship_status, orientation, pronouns, looking_for, ds_relationship, moderation_status"
+     "id, username, display_name, designation, age, founder_badge, bio, avatar_url, buy_me_a_coffee_url, city, state, country, relationship_status, orientation, pronouns, looking_for, ds_relationship, moderation_status"
 
     )
 
