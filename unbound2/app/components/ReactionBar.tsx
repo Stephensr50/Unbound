@@ -94,7 +94,7 @@ background: iSpanked
 title="Spank"
 >
 <span style={{ fontSize: 16, lineHeight: 1, display: "inline-flex" }}>
-{iSpanked ? REACTIONS[myReaction || "devil"] : "👿"}
+{iSpanked ? REACTIONS[myReaction || "devil"] : "😈"}
 </span>
 
 <span>
