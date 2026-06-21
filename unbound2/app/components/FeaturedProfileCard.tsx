@@ -39,9 +39,12 @@ data: { user },
 let query = supabase
 .from("profiles")
 .select(
-"id, username, display_name, avatar_url, bio, moderation_status"
+"id, username, display_name, avatar_url, bio, city, state, moderation_status"
 )
-.eq("moderation_status", "active");
+.eq("moderation_status", "active")
+.not("avatar_url", "is", null)
+.not("display_name", "is", null)
+.not("bio", "is", null);
 if (user?.id) {
 query = query.neq("id", user.id);
 }
@@ -56,7 +59,28 @@ setLoading(false);
 return;
 }
 
-const picked = data[Math.floor(Math.random() * data.length)];
+const eligibleProfiles = data.filter((p) => {
+const name = (p.display_name || "").trim().toLowerCase();
+const bio = (p.bio || "").trim();
+
+return (
+p.avatar_url &&
+bio.length > 0 &&
+name.length > 0 &&
+name !== "user" &&
+name !== "unbound member"
+);
+});
+
+if (eligibleProfiles.length === 0) {
+setProfile(null);
+setLoading(false);
+return;
+}
+
+const picked =
+eligibleProfiles[Math.floor(Math.random() * eligibleProfiles.length)];
+
 setProfile(picked);
 setLoading(false);
 }
