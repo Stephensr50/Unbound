@@ -6,7 +6,9 @@ import { useEffect, useMemo, useRef, useState } from "react";
 type Story = {
 id: string;
 user_id: string;
-media_url: string;
+media_url: string | null;
+media_bucket?: string | null;
+media_path?: string | null;
 caption?: string | null;
 created_at?: string;
 };
@@ -30,6 +32,25 @@ function getSupabase() {
 const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
 return createClient(url, key);
+}
+
+async function getSignedStoryUrl(story: Story) {
+const supabase = getSupabase();
+
+if (!story.media_bucket || !story.media_path) {
+return story.media_url || "";
+}
+
+const { data, error } = await supabase.storage
+.from(story.media_bucket)
+.createSignedUrl(story.media_path, 60 * 60);
+
+if (error || !data?.signedUrl) {
+console.error("Story signed URL error:", error);
+return story.media_url || "";
+}
+
+return data.signedUrl;
 }
 
 export default function StoryModal({
@@ -60,6 +81,7 @@ return Math.min(Math.max(0, n), maxIndex);
 const [idx, setIdx] = useState<number>(initialIndex);
 const [progressKey, setProgressKey] = useState(0);
 const [storyViewers, setStoryViewers] = useState<StoryViewerRow[]>([]);
+const [signedMediaUrl, setSignedMediaUrl] = useState("");
 
 const timerRef = useRef<number | null>(null);
 const recordedViewRef = useRef<string | null>(null);
@@ -121,12 +143,36 @@ return () => window.removeEventListener("keydown", onKey);
 
 const current = safeStories[idx] ?? null;
 useEffect(() => {
+let cancelled = false;
+
+async function loadSignedMediaUrl() {
+if (!open || !current) {
+setSignedMediaUrl("");
+return;
+}
+
+const url = await getSignedStoryUrl(current);
+
+if (!cancelled) {
+setSignedMediaUrl(url);
+}
+}
+
+loadSignedMediaUrl();
+
+return () => {
+cancelled = true;
+};
+}, [open, current?.id, current?.media_bucket, current?.media_path, current?.media_url]);
+useEffect(() => {
 if (!open) return;
 if (!current) return;
 onStoryChange?.(current);
 }, [open, current?.id, onStoryChange]);
+const mediaForDisplay = signedMediaUrl || current?.media_url || "";
+
 const isVideo =
-!!current?.media_url && /\.(mp4|webm|mov)(\?|$)/i.test(current.media_url);
+!!mediaForDisplay && /\.(mp4|webm|mov)(\?|$)/i.test(mediaForDisplay);
 
 const isMine =
 !!myUserId && !!current?.user_id && myUserId === current.user_id;
@@ -357,19 +403,19 @@ aria-label="Next story"
 
 <div style={mediaWrap}>
 
-{current?.media_url && !isVideo ? (
+{mediaForDisplay && !isVideo ? (
 <img
-src={current.media_url}
+src={mediaForDisplay}
 alt=""
 style={mediaBlurBg}
 />
 ) : null}
 
-{current?.media_url ? (
+{mediaForDisplay ? (
 isVideo ? (
 <video
-key={current.media_url}
-src={current.media_url}
+key={mediaForDisplay}
+src={mediaForDisplay}
 controls
 autoPlay
 playsInline
@@ -378,8 +424,8 @@ style={media}
 />
 ) : (
 <img
-key={current.media_url}
-src={current.media_url}
+key={mediaForDisplay}
+src={mediaForDisplay}
 alt=""
 style={media}
 />
