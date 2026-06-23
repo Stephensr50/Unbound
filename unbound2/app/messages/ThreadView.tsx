@@ -12,6 +12,8 @@ body: string | null;
 created_at: string;
 media_url: string | null;
 media_type: string | null;
+media_bucket: string | null;
+media_path: string | null;
 };
 
 function getSupabase() {
@@ -25,6 +27,25 @@ function isUuid(s: string) {
 return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
 s
 );
+}
+async function getSignedMessageUrl(
+supabase: ReturnType<typeof getSupabase>,
+msg: MsgRow
+) {
+if (!msg.media_bucket || !msg.media_path) {
+return msg.media_url || "";
+}
+
+const { data, error } = await supabase.storage
+.from(msg.media_bucket)
+.createSignedUrl(msg.media_path, 60 * 60);
+
+if (error || !data?.signedUrl) {
+console.error("Message signed URL error:", error);
+return msg.media_url || "";
+}
+
+return data.signedUrl;
 }
 
 export default function ThreadView() {
@@ -44,6 +65,7 @@ const [conversationTitle, setConversationTitle] = useState("Conversation");
 const [loading, setLoading] = useState(true);
 
 const [msgs, setMsgs] = useState<MsgRow[]>([]);
+const [signedMediaUrls, setSignedMediaUrls] = useState<Record<number, string>>({});
 const [text, setText] = useState("");
 const [sending, setSending] = useState(false);
 const [err, setErr] = useState<string | null>(null);
@@ -389,7 +411,7 @@ let cancelled = false;
 try {
 const { data, error } = await supabase
 .from("messages")
-.select("id, conversation_id, sender_id, body, created_at, media_url, media_type")
+.select("id, conversation_id, sender_id, body, created_at, media_url, media_type, media_bucket, media_path")
 .eq("conversation_id", conversationId)
 .order("id", { ascending: true });
 
@@ -415,7 +437,7 @@ const { data: inserted, error } = await supabase
     sender_id: me,
     body: firstMsg,
   })
-.select("id, conversation_id, sender_id, body, created_at, media_url, media_type")
+.select("id, conversation_id, sender_id, body, created_at, media_url, media_type, media_bucket, media_path")
   .single();
 
 if (!error && inserted) {
@@ -454,7 +476,35 @@ cancelled = true;
 };
 // eslint-disable-next-line react-hooks/exhaustive-deps
 }, [conversationId, supabase]);
+useEffect(() => {
+let cancelled = false;
 
+async function loadSignedMessageUrls() {
+const mediaMessages = msgs.filter((m) => m.media_url || m.media_path);
+
+if (mediaMessages.length === 0) {
+setSignedMediaUrls({});
+return;
+}
+
+const entries = await Promise.all(
+mediaMessages.map(async (m) => {
+const url = await getSignedMessageUrl(supabase, m);
+return [m.id, url] as const;
+})
+);
+
+if (!cancelled) {
+setSignedMediaUrls(Object.fromEntries(entries));
+}
+}
+
+loadSignedMessageUrls();
+
+return () => {
+cancelled = true;
+};
+}, [msgs, supabase]);
 // 4) Realtime: messages + typing indicator (broadcast)
 useEffect(() => {
 if (!conversationId) return;
@@ -666,18 +716,14 @@ upsert: false,
 
 if (uploadError) throw uploadError;
 
-const { data: publicData } = supabase.storage
-.from("message-media")
-.getPublicUrl(path);
-
-const publicUrl = publicData.publicUrl;
-
 const { error: insertError } = await supabase.from("messages").insert({
 conversation_id: conversationId,
 sender_id: me,
 body: "",
-media_url: publicUrl,
+media_url: null,
 media_type: "image",
+media_bucket: "message-media",
+media_path: path,
 });
 
 if (insertError) throw insertError;
@@ -708,16 +754,14 @@ upsert: false,
 
 if (uploadError) throw uploadError;
 
-const { data: publicData } = supabase.storage
-.from("message-audio")
-.getPublicUrl(path);
-
 const { error: insertError } = await supabase.from("messages").insert({
 conversation_id: conversationId,
 sender_id: me,
 body: "",
-media_url: publicData.publicUrl,
+media_url: null,
 media_type: "audio",
+media_bucket: "message-audio",
+media_path: path,
 });
 
 if (insertError) throw insertError;
@@ -869,7 +913,8 @@ mine &&
 lastMineId !== null &&
 mid === lastMineId &&
 otherLastReadId >= lastMineId;
-
+const mediaForDisplay =
+signedMediaUrls[m.id] || m.media_url || "";
 return (
 <div
 key={m.id}
@@ -891,9 +936,9 @@ background: mine ? "rgba(169, 85, 247, 0.28)" : "rgba(215, 118, 228, 0.14)",
 }}
 >
 <div style={{ fontSize: 12, opacity: 0.75, marginBottom: 6 }}></div>
-{m.media_type === "image" && m.media_url ? (
+{m.media_type === "image" && mediaForDisplay ? (
 <img
-src={m.media_url}
+src={mediaForDisplay}
 alt="Message attachment"
 draggable={false}
 style={{
@@ -905,7 +950,7 @@ objectFit: "cover",
 marginBottom: m.body ? 8 : 0,
 }}
 />
-) : m.media_type === "audio" && m.media_url ? (
+) : m.media_type === "audio" && mediaForDisplay ? (
 <div
 style={{
 width: 230,
@@ -915,7 +960,7 @@ minWidth: 210,
 >
 <audio
 controls
-src={m.media_url}
+src={mediaForDisplay}
 style={{
 display: "block",
 width: "100%",
