@@ -1757,7 +1757,7 @@ marginBottom: 12,
 src="/unbound-logo1.png"
 alt="Unbound"
 style={{
-width: 120,
+width: 90,
 height: "auto",
 filter:
 "drop-shadow(0 0 22px rgba(255,60,200,.95)) drop-shadow(0 0 42px rgba(140,80,255,.75))",

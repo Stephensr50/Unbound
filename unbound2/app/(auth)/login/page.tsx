@@ -46,14 +46,7 @@ return (
 <img
 src="/unbound-logo1.png"
 alt="Unbound logo"
-style={{
-width: 360,
-height: "auto",
-objectFit: "contain",
-marginBottom: -55,
-filter:
-"drop-shadow(0 0 18px rgba(255,60,200,1)) drop-shadow(0 0 28px rgba(180,60,255,1))",
-}}
+style={logo}
 />
 
 <div style={brand}>UNBOUND</div>
@@ -69,9 +62,7 @@ Account created. Check your email and click the verification link before logging
 ) : null}
 
 {verified ? (
-<div style={successText}>
-Email verified. You can log in now.
-</div>
+<div style={successText}>Email verified. You can log in now.</div>
 ) : null}
 
 {mounted ? (
@@ -136,6 +127,16 @@ alignItems: "center",
 justifyContent: "center",
 padding: 24,
 overflow: "hidden",
+transform: "translateY(-35px)",
+};
+
+const logo: CSSProperties = {
+width: 320,
+height: "auto",
+objectFit: "contain",
+marginBottom: -8,
+filter:
+"drop-shadow(0 0 18px rgba(255,60,200,1)) drop-shadow(0 0 28px rgba(130,0,255,.9))",
 };
 
 const brand: CSSProperties = {
