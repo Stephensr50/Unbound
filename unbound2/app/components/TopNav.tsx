@@ -255,17 +255,15 @@ style={{
 position: "fixed",
 top: 8,
 left: -185,
-
 width: 120,
 height: 120,
-
-borderRadius: "50%",
-objectFit: "cover",
-
+objectFit: "contain",
 border: "none",
+filter:
+"drop-shadow(0 0 4px rgba(255,60,200,.8)) drop-shadow(0 0 18px rgba(140,80,255,.7))",
 
-boxShadow:
-"0 0 4px rgba(255,60,200,.8), 0 0 35px rgba(140,80,255,.7)",
+
+
 
 zIndex: 49,
 pointerEvents: "none",
