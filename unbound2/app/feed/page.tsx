@@ -1759,10 +1759,9 @@ alt="Unbound"
 style={{
 width: 70,
 height: 70,
-borderRadius: "50%",
-objectFit: "cover",
-border: "2px solid rgba(255,60,200,.7)",
-background: "rgba(0,0,0,.45)",
+objectFit: "contain",
+border: "none",
+background: "transparent",
 filter:
 "drop-shadow(0 0 22px rgba(255,60,200,.95)) drop-shadow(0 0 42px rgba(140,80,255,.75))",
 }}
