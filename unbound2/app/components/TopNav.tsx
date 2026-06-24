@@ -265,7 +265,7 @@ objectFit: "cover",
 border: "none",
 
 boxShadow:
-"0 0 18px rgba(255,60,200,.8), 0 0 35px rgba(140,80,255,.7)",
+"0 0 4px rgba(255,60,200,.8), 0 0 35px rgba(140,80,255,.7)",
 
 zIndex: 49,
 pointerEvents: "none",
@@ -282,12 +282,12 @@ width: "100%",
 overflow: "visible",
 boxSizing: "border-box",
 borderRadius: 999,
-background: "rgba(0,0,0,0.40)",
-backdropFilter: "blur(12px)",
-WebkitBackdropFilter: "blur(12px)",
+
+backdropFilter: "blur(3px)",
+WebkitBackdropFilter: "blur(6px)",
 boxShadow:
 "0 18px 55px rgba(0,0,0,0.55), 0 0 28px rgba(168,85,247,0.22)",
-border: "1px solid rgba(168,85,247,0.22)",
+border: "1px solid rgba(169, 85, 247, 0.1)",
 }}
 >
 {!isMobile && (
