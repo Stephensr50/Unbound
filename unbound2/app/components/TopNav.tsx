@@ -253,14 +253,22 @@ src="/unbound-logo1.png"
 alt="Unbound"
 style={{
 position: "fixed",
-top: -8,
-left: -200,
-width: 145,
-height: "auto",
+top: 8,
+left: -185,
+
+width: 120,
+height: 120,
+
+borderRadius: "50%",
+objectFit: "cover",
+
+border: "none",
+
+boxShadow:
+"0 0 18px rgba(255,60,200,.8), 0 0 35px rgba(140,80,255,.7)",
+
 zIndex: 49,
 pointerEvents: "none",
-filter:
-"drop-shadow(0 0 22px rgba(255,60,200,.85)) drop-shadow(0 0 36px rgba(140,80,255,.55))",
 }}
 />
 <div
