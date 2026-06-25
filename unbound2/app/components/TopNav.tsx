@@ -307,6 +307,14 @@ Messages
 {unread > 0 && <span style={badgeStyle}>{msgBadgeText}</span>}
 </Link>
 
+<Link href="/reels" style={tabStyle(isActive("/reels"))}>
+Reels
+</Link>
+
+<Link href="/reels" style={tabStyle(isActive("/reels"))}>
+Reels
+</Link>
+
 <Link href="/signals" style={tabStyle(isActive("/signals"))}>
 Signals
 {signalUnread > 0 && (

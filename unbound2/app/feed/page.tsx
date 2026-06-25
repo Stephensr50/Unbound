@@ -127,6 +127,7 @@ const [posts, setPosts] = useState<PostRow[]>([]);
 const [text, setText] = useState("");
 
 const [file, setFile] = useState<File | null>(null);
+const [postAsReel, setPostAsReel] = useState(false);
 const [wantsLocked, setWantsLocked] = useState(false);
 const [uploading, setUploading] = useState(false);
 
@@ -571,6 +572,7 @@ const { data, error } = await supabase
 .from("posts")
 .select("id,user_id,body,kind,created_at,media_url,media_type,media_bucket,media_path,group_id,is_locked")
 .in("user_id", visibleAllowedIds)
+.eq("is_reel", false)
 .order("created_at", { ascending: false })
 .limit(200);
 
@@ -1356,6 +1358,7 @@ media_type,
 media_bucket: file ? "media" : null,
 media_path,
 is_locked: false,
+is_reel: postAsReel,
 })
 .select("id")
 .single();
@@ -1368,6 +1371,7 @@ await savePostHashtags(supabase, insertedPost.id, trimmed);
 
 setText("");
 setFile(null);
+setPostAsReel(false);
 
 await loadPosts();
 } catch (e: any) {
@@ -1864,7 +1868,16 @@ setFile(f);
 />
 {file ? "Change media" : "Add photo/video"}
 </label>
-
+{file?.type?.startsWith("video/") && (
+<label style={{ display: "flex", alignItems: "center", gap: 8, color: "white" }}>
+<input
+type="checkbox"
+checked={postAsReel}
+onChange={(e) => setPostAsReel(e.target.checked)}
+/>
+Post as Reel
+</label>
+)}
 
 
 
