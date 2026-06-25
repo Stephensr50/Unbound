@@ -2,6 +2,12 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { createClient } from "@supabase/supabase-js";
+
+const supabase = createClient(
+process.env.NEXT_PUBLIC_SUPABASE_URL!,
+process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+);
 
 export default function CameraPage() {
 const videoRef = useRef<HTMLVideoElement>(null);
@@ -14,15 +20,15 @@ const router = useRouter();
 
 const [facingMode, setFacingMode] = useState<"user" | "environment">("user");
 const [recording, setRecording] = useState(false);
+const [posting, setPosting] = useState(false);
+const [status, setStatus] = useState("");
 const [previewUrl, setPreviewUrl] = useState<string | null>(null);
 const [previewType, setPreviewType] = useState<"image" | "video" | null>(null);
+const [capturedBlob, setCapturedBlob] = useState<Blob | null>(null);
 
 useEffect(() => {
 startCamera();
-
-return () => {
-stopCamera();
-};
+return () => stopCamera();
 }, [facingMode]);
 
 async function startCamera() {
@@ -41,6 +47,7 @@ videoRef.current.srcObject = stream;
 }
 } catch (err) {
 console.error(err);
+setStatus("Could not open camera.");
 }
 }
 
@@ -66,9 +73,18 @@ if (!ctx) return;
 
 ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
 
-const imageUrl = canvas.toDataURL("image/jpeg", 0.92);
-setPreviewUrl(imageUrl);
+canvas.toBlob(
+(blob) => {
+if (!blob) return;
+
+const url = URL.createObjectURL(blob);
+setCapturedBlob(blob);
+setPreviewUrl(url);
 setPreviewType("image");
+},
+"image/jpeg",
+0.92
+);
 }
 
 function startRecording() {
@@ -81,14 +97,14 @@ const recorder = new MediaRecorder(stream);
 recorderRef.current = recorder;
 
 recorder.ondataavailable = (event) => {
-if (event.data.size > 0) {
-chunksRef.current.push(event.data);
-}
+if (event.data.size > 0) chunksRef.current.push(event.data);
 };
 
 recorder.onstop = () => {
 const blob = new Blob(chunksRef.current, { type: "video/webm" });
 const url = URL.createObjectURL(blob);
+
+setCapturedBlob(blob);
 setPreviewUrl(url);
 setPreviewType("video");
 setRecording(false);
@@ -123,30 +139,74 @@ takePhoto();
 }
 }
 
+async function postCaptured(asReel: boolean) {
+try {
+if (!capturedBlob || !previewType) return;
+
+setPosting(true);
+setStatus("Posting...");
+
+const { data: authData, error: authError } = await supabase.auth.getUser();
+if (authError) throw authError;
+
+const uid = authData.user?.id;
+if (!uid) throw new Error("You must be logged in.");
+
+const ext = previewType === "image" ? ".jpg" : ".webm";
+const mediaType = previewType === "image" ? "image/jpeg" : "video/webm";
+const name = `${Date.now()}-${crypto.randomUUID()}${ext}`;
+const path = `posts/${uid}/${name}`;
+
+const file = new File([capturedBlob], name, { type: mediaType });
+
+const { error: uploadError } = await supabase.storage
+.from("media")
+.upload(path, file, {
+contentType: mediaType,
+cacheControl: "3600",
+upsert: false,
+});
+
+if (uploadError) throw uploadError;
+
+const { data } = supabase.storage.from("media").getPublicUrl(path);
+
+const { error: insertError } = await supabase.from("posts").insert({
+user_id: uid,
+body: null,
+kind: previewType,
+media_url: data.publicUrl,
+media_type: mediaType,
+media_bucket: "media",
+media_path: path,
+is_locked: false,
+is_reel: asReel,
+});
+
+if (insertError) throw insertError;
+
+router.push(asReel ? "/reels" : "/feed");
+} catch (e: any) {
+setStatus(e.message || "Post failed.");
+setPosting(false);
+}
+}
+
 if (previewUrl && previewType) {
 return (
 <main style={{ position: "fixed", inset: 0, background: "black", color: "white" }}>
 {previewType === "image" ? (
-<img
-src={previewUrl}
-alt="Preview"
-style={{ width: "100%", height: "100%", objectFit: "cover" }}
-/>
+<img src={previewUrl} alt="Preview" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
 ) : (
-<video
-src={previewUrl}
-controls
-autoPlay
-loop
-playsInline
-style={{ width: "100%", height: "100%", objectFit: "cover" }}
-/>
+<video src={previewUrl} controls autoPlay loop playsInline style={{ width: "100%", height: "100%", objectFit: "cover" }} />
 )}
 
 <button
 onClick={() => {
 setPreviewUrl(null);
 setPreviewType(null);
+setCapturedBlob(null);
+setStatus("");
 }}
 style={topLeftButton}
 >
@@ -154,9 +214,19 @@ style={topLeftButton}
 </button>
 
 <div style={bottomPanel}>
-<button style={actionButton}>Post to Feed</button>
-<button style={actionButton}>Post as Reel</button>
-<button style={actionButton}>Post Story</button>
+{status && <div style={{ textAlign: "center" }}>{status}</div>}
+
+<button disabled={posting} onClick={() => postCaptured(false)} style={actionButton}>
+Post to Feed
+</button>
+
+<button disabled={posting} onClick={() => postCaptured(true)} style={actionButton}>
+Post as Reel
+</button>
+
+<button disabled style={{ ...actionButton, opacity: 0.45 }}>
+Post Story
+</button>
 </div>
 </main>
 );
@@ -169,24 +239,13 @@ ref={videoRef}
 autoPlay
 playsInline
 muted
-style={{
-width: "100%",
-height: "100%",
-objectFit: "cover",
-}}
+style={{ width: "100%", height: "100%", objectFit: "cover" }}
 />
 
-<button onClick={() => router.back()} style={topLeftButton}>
-×
-</button>
+<button onClick={() => router.back()} style={topLeftButton}>×</button>
+<button onClick={flipCamera} style={topRightButton}>↻</button>
 
-<button onClick={flipCamera} style={topRightButton}>
-↻
-</button>
-
-<div style={hintStyle}>
-Tap for photo · Hold for video
-</div>
+<div style={hintStyle}>Tap for photo · Hold for video</div>
 
 <div style={shutterWrap}>
 <button
