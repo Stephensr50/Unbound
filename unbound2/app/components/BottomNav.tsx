@@ -67,7 +67,7 @@ Feed
 Explore
 </Link>
 
-<Link href="/feed" style={itemStyle(false)}>
+<Link href="/feed?create=1" style={itemStyle(false)}>
 <span
 style={{
 width: 52,

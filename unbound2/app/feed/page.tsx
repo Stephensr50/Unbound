@@ -186,6 +186,7 @@ const [focusPostId, setFocusPostId] = useState<number | null>(null);
 const [flashPostId, setFlashPostId] = useState<number | null>(null);
 const flashTimerRef = useRef<number | null>(null);
 const didAutoScrollRef = useRef(false);
+const fileInputRef = useRef<HTMLInputElement>(null);
 
 useEffect(() => {
 const raw =
@@ -199,7 +200,13 @@ setFocusPostId(n);
 setFocusPostId(null);
 }
 }, [searchParams?.toString()]);
-
+useEffect(() => {
+if (searchParams?.get("create") === "1") {
+setTimeout(() => {
+fileInputRef.current?.click();
+}, 300);
+}
+}, [searchParams]);
 async function refreshAuth() {
 const { data } = await supabase.auth.getSession();
 const uid = data.session?.user?.id ?? null;
@@ -1858,6 +1865,7 @@ userSelect: "none",
 }}
 >
 <input
+ref={fileInputRef}
 type="file"
 accept="image/*,video/*"
 style={{ display: "none" }}
