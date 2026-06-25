@@ -67,7 +67,7 @@ Feed
 Explore
 </Link>
 
-<Link href="/create" style={itemStyle(false)}>
+<Link href="/camera" style={itemStyle(false)}>
 <span
 style={{
 width: 52,
