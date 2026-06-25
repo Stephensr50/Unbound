@@ -1,23 +1,40 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 
 export default function CameraPage() {
 const videoRef = useRef<HTMLVideoElement>(null);
+const streamRef = useRef<MediaStream | null>(null);
+const recorderRef = useRef<MediaRecorder | null>(null);
+const chunksRef = useRef<Blob[]>([]);
+const pressTimerRef = useRef<number | null>(null);
+
 const router = useRouter();
 
+const [facingMode, setFacingMode] = useState<"user" | "environment">("user");
+const [recording, setRecording] = useState(false);
+const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+const [previewType, setPreviewType] = useState<"image" | "video" | null>(null);
+
 useEffect(() => {
-let stream: MediaStream | null = null;
+startCamera();
+
+return () => {
+stopCamera();
+};
+}, [facingMode]);
 
 async function startCamera() {
 try {
-stream = await navigator.mediaDevices.getUserMedia({
-video: {
-facingMode: "user",
-},
+stopCamera();
+
+const stream = await navigator.mediaDevices.getUserMedia({
+video: { facingMode },
 audio: true,
 });
+
+streamRef.current = stream;
 
 if (videoRef.current) {
 videoRef.current.srcObject = stream;
@@ -27,40 +44,173 @@ console.error(err);
 }
 }
 
-startCamera();
+function stopCamera() {
+streamRef.current?.getTracks().forEach((track) => track.stop());
+streamRef.current = null;
+}
 
-return () => {
-stream?.getTracks().forEach((track) => track.stop());
+function flipCamera() {
+setFacingMode((current) => (current === "user" ? "environment" : "user"));
+}
+
+function takePhoto() {
+const video = videoRef.current;
+if (!video) return;
+
+const canvas = document.createElement("canvas");
+canvas.width = video.videoWidth;
+canvas.height = video.videoHeight;
+
+const ctx = canvas.getContext("2d");
+if (!ctx) return;
+
+ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+const imageUrl = canvas.toDataURL("image/jpeg", 0.92);
+setPreviewUrl(imageUrl);
+setPreviewType("image");
+}
+
+function startRecording() {
+const stream = streamRef.current;
+if (!stream) return;
+
+chunksRef.current = [];
+
+const recorder = new MediaRecorder(stream);
+recorderRef.current = recorder;
+
+recorder.ondataavailable = (event) => {
+if (event.data.size > 0) {
+chunksRef.current.push(event.data);
+}
 };
-}, []);
+
+recorder.onstop = () => {
+const blob = new Blob(chunksRef.current, { type: "video/webm" });
+const url = URL.createObjectURL(blob);
+setPreviewUrl(url);
+setPreviewType("video");
+setRecording(false);
+};
+
+recorder.start();
+setRecording(true);
+}
+
+function stopRecording() {
+if (recorderRef.current && recorderRef.current.state !== "inactive") {
+recorderRef.current.stop();
+}
+}
+
+function handlePressStart() {
+pressTimerRef.current = window.setTimeout(() => {
+startRecording();
+}, 350);
+}
+
+function handlePressEnd() {
+if (pressTimerRef.current) {
+clearTimeout(pressTimerRef.current);
+pressTimerRef.current = null;
+}
+
+if (recording) {
+stopRecording();
+} else {
+takePhoto();
+}
+}
+
+if (previewUrl && previewType) {
+return (
+<main style={{ position: "fixed", inset: 0, background: "black", color: "white" }}>
+{previewType === "image" ? (
+<img
+src={previewUrl}
+alt="Preview"
+style={{ width: "100%", height: "100%", objectFit: "cover" }}
+/>
+) : (
+<video
+src={previewUrl}
+controls
+autoPlay
+loop
+playsInline
+style={{ width: "100%", height: "100%", objectFit: "cover" }}
+/>
+)}
+
+<button
+onClick={() => {
+setPreviewUrl(null);
+setPreviewType(null);
+}}
+style={topLeftButton}
+>
+×
+</button>
+
+<div style={bottomPanel}>
+<button style={actionButton}>Post to Feed</button>
+<button style={actionButton}>Post as Reel</button>
+<button style={actionButton}>Post Story</button>
+</div>
+</main>
+);
+}
 
 return (
-<main
-style={{
-position: "fixed",
-inset: 0,
-background: "black",
-display: "flex",
-flexDirection: "column",
-}}
->
+<main style={{ position: "fixed", inset: 0, background: "black" }}>
 <video
 ref={videoRef}
 autoPlay
 playsInline
 muted
 style={{
-flex: 1,
 width: "100%",
+height: "100%",
 objectFit: "cover",
 }}
 />
 
+<button onClick={() => router.back()} style={topLeftButton}>
+×
+</button>
+
+<button onClick={flipCamera} style={topRightButton}>
+↻
+</button>
+
+<div style={hintStyle}>
+Tap for photo · Hold for video
+</div>
+
+<div style={shutterWrap}>
 <button
-onClick={() => router.back()}
+onMouseDown={handlePressStart}
+onMouseUp={handlePressEnd}
+onTouchStart={handlePressStart}
+onTouchEnd={handlePressEnd}
 style={{
+width: recording ? 92 : 82,
+height: recording ? 92 : 82,
+borderRadius: "50%",
+background: recording ? "#ff2b6d" : "white",
+border: "6px solid #ff4fd8",
+boxShadow: "0 0 24px rgba(255,79,216,.75)",
+}}
+/>
+</div>
+</main>
+);
+}
+
+const topLeftButton: React.CSSProperties = {
 position: "absolute",
-top: 20,
+top: 24,
 left: 20,
 width: 48,
 height: 48,
@@ -68,33 +218,62 @@ borderRadius: "50%",
 border: "2px solid white",
 background: "rgba(0,0,0,.5)",
 color: "white",
-fontSize: 24,
+fontSize: 28,
 cursor: "pointer",
-}}
->
-×
-</button>
+zIndex: 10,
+};
 
-<div
-style={{
+const topRightButton: React.CSSProperties = {
 position: "absolute",
-bottom: 50,
+top: 24,
+right: 20,
+width: 48,
+height: 48,
+borderRadius: "50%",
+border: "2px solid white",
+background: "rgba(0,0,0,.5)",
+color: "white",
+fontSize: 28,
+cursor: "pointer",
+zIndex: 10,
+};
+
+const shutterWrap: React.CSSProperties = {
+position: "absolute",
+bottom: 110,
 left: 0,
 right: 0,
 display: "flex",
 justifyContent: "center",
-}}
->
-<button
-style={{
-width: 82,
-height: 82,
-borderRadius: "50%",
-background: "white",
-border: "6px solid #ff4fd8",
-}}
-/>
-</div>
-</main>
-);
-}
+zIndex: 10,
+};
+
+const hintStyle: React.CSSProperties = {
+position: "absolute",
+bottom: 210,
+left: 0,
+right: 0,
+textAlign: "center",
+color: "white",
+fontSize: 14,
+textShadow: "0 2px 8px black",
+};
+
+const bottomPanel: React.CSSProperties = {
+position: "absolute",
+left: 16,
+right: 16,
+bottom: 90,
+display: "grid",
+gap: 10,
+};
+
+const actionButton: React.CSSProperties = {
+padding: "14px 16px",
+borderRadius: 18,
+border: "1px solid rgba(255,79,216,.7)",
+background: "rgba(255,79,216,.18)",
+color: "white",
+fontSize: 16,
+fontWeight: 700,
+};
