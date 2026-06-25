@@ -5,6 +5,7 @@ import TopNav from "./components/TopNav";
 import ModerationGate from "./components/ModerationGate";
 import AgeGate from "./components/AgeGate";
 import { Gloock } from "next/font/google";
+import BottomNav from "./components/BottomNav";
 
 export const dynamic = "force-dynamic";
 
@@ -43,6 +44,7 @@ className={`unbound-bg ${gloock.className}`}
 <AgeGate>
 <Suspense fallback={null}>
 <TopNav />
+<BottomNav />
 </Suspense>
 
 <ModerationGate />
