@@ -121,6 +121,7 @@ setMenuOpen(false);
 const hideOn = new Set([
 "/login",
 "/signup",
+"/camera",
 "/forgot-password",
 "/reset-password",
 ]);
