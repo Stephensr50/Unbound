@@ -201,7 +201,57 @@ setStatus(e.message || "Post failed.");
 setPosting(false);
 }
 }
+async function postStory() {
+try {
+if (!capturedBlob || !previewType) return;
 
+setPosting(true);
+setStatus("Posting story...");
+
+const { data: authData, error: authError } = await supabase.auth.getUser();
+if (authError) throw authError;
+
+const uid = authData.user?.id;
+if (!uid) throw new Error("You must be logged in.");
+
+const isImage = previewType === "image";
+const isMp4 = capturedBlob.type.includes("mp4");
+
+const ext = isImage ? "jpg" : isMp4 ? "mp4" : "webm";
+const mediaType = isImage ? "image/jpeg" : capturedBlob.type || "video/mp4";
+const filePath = `${uid}/${crypto.randomUUID()}.${ext}`;
+
+const file = new File([capturedBlob], `story.${ext}`, { type: mediaType });
+
+const { error: uploadError } = await supabase.storage
+.from("stories")
+.upload(filePath, file, {
+contentType: mediaType,
+upsert: false,
+});
+
+if (uploadError) throw uploadError;
+
+const { data: pub } = supabase.storage.from("stories").getPublicUrl(filePath);
+const publicUrl = pub?.publicUrl;
+
+if (!publicUrl) throw new Error("Could not get story URL.");
+
+const { error: insertError } = await supabase.from("stories").insert({
+user_id: uid,
+media_url: publicUrl,
+caption: null,
+});
+
+if (insertError) throw insertError;
+
+router.push("/feed");
+router.refresh();
+} catch (e: any) {
+setStatus(e.message || "Story failed.");
+setPosting(false);
+}
+}
 if (previewUrl && previewType) {
 return (
 <main style={{ position: "fixed", inset: 0, background: "black", color: "white" }}>
@@ -230,11 +280,17 @@ style={topLeftButton}
 Post to Feed
 </button>
 
+{previewType === "video" && (
 <button disabled={posting} onClick={() => postCaptured(true)} style={actionButton}>
 Post as Reel
 </button>
+)}
 
-<button disabled style={{ ...actionButton, opacity: 0.45 }}>
+<button
+disabled={posting}
+onClick={postStory}
+style={actionButton}
+>
 Post Story
 </button>
 </div>
