@@ -307,31 +307,6 @@ Messages
 {unread > 0 && <span style={badgeStyle}>{msgBadgeText}</span>}
 </Link>
 
-<Link href="/reels" style={tabStyle(isActive("/reels"))}>
-Reels
-</Link>
-
-<Link href="/reels" style={tabStyle(isActive("/reels"))}>
-Reels
-</Link>
-
-<Link href="/signals" style={tabStyle(isActive("/signals"))}>
-Signals
-{signalUnread > 0 && (
-<span style={badgeStyle}>{signalBadgeText}</span>
-)}
-</Link>
-
-<Link
-href="/notifications"
-style={tabStyle(isActive("/notifications"))}
->
-Notifications
-{notifUnread > 0 && (
-<span style={badgeStyle}>{notifBadgeText}</span>
-)}
-</Link>
-
 <form onSubmit={onSubmit} style={{ flex: 1 }}>
 <div
 style={{
@@ -363,6 +338,29 @@ fontFamily: '"Gloock", serif',
 />
 </div>
 </form>
+
+<Link href="/reels" style={tabStyle(isActive("/reels"))}>
+Reels
+</Link>
+
+<Link href="/signals" style={tabStyle(isActive("/signals"))}>
+Signals
+{signalUnread > 0 && (
+<span style={badgeStyle}>{signalBadgeText}</span>
+)}
+</Link>
+
+<Link
+href="/notifications"
+style={tabStyle(isActive("/notifications"))}
+>
+Notifications
+{notifUnread > 0 && (
+<span style={badgeStyle}>{notifBadgeText}</span>
+)}
+</Link>
+
+
 </>
 )}
 
