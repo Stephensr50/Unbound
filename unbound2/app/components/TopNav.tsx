@@ -307,7 +307,13 @@ Messages
 {unread > 0 && <span style={badgeStyle}>{msgBadgeText}</span>}
 </Link>
 
-<form onSubmit={onSubmit} style={{ flex: 1 }}>
+<form
+onSubmit={onSubmit}
+style={{
+flex: "0 0 190px",
+minWidth: 190,
+}}
+>
 <div
 style={{
 display: "flex",
