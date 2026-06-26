@@ -279,7 +279,7 @@ boxShadow: "0 0 24px rgba(255,79,216,.75)",
 
 const topLeftButton: React.CSSProperties = {
 position: "absolute",
-top: 24,
+top: 120,
 left: 20,
 width: 48,
 height: 48,
@@ -294,7 +294,7 @@ zIndex: 10,
 
 const topRightButton: React.CSSProperties = {
 position: "absolute",
-top: 24,
+top: 120,
 right: 20,
 width: 48,
 height: 48,
