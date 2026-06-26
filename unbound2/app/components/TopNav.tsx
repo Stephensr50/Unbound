@@ -311,7 +311,7 @@ Messages
 onSubmit={onSubmit}
 style={{
 flex: "0 0 190px",
-minWidth: 190,
+minWidth: 160,
 }}
 >
 <div
