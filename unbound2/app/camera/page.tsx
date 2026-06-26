@@ -9,6 +9,31 @@ process.env.NEXT_PUBLIC_SUPABASE_URL!,
 process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 );
 
+type CameraFilter = "none" | "soft" | "noir" | "warm" | "unbound";
+
+const cameraFilters: Record<CameraFilter, { label: string; css: string }> = {
+none: {
+label: "Normal",
+css: "none",
+},
+soft: {
+label: "Soft",
+css: "brightness(1.08) contrast(0.92) saturate(1.12) blur(0.4px)",
+},
+noir: {
+label: "Noir",
+css: "grayscale(1) contrast(1.25) brightness(0.92)",
+},
+warm: {
+label: "Warm",
+css: "sepia(0.18) saturate(1.25) brightness(1.05)",
+},
+unbound: {
+label: "Unbound",
+css: "contrast(1.08) saturate(1.45) hue-rotate(285deg) brightness(1.05)",
+},
+};
+
 export default function CameraPage() {
 const videoRef = useRef<HTMLVideoElement>(null);
 const streamRef = useRef<MediaStream | null>(null);
@@ -25,6 +50,7 @@ const [status, setStatus] = useState("");
 const [previewUrl, setPreviewUrl] = useState<string | null>(null);
 const [previewType, setPreviewType] = useState<"image" | "video" | null>(null);
 const [capturedBlob, setCapturedBlob] = useState<Blob | null>(null);
+const [activeFilter, setActiveFilter] = useState<CameraFilter>("none");
 
 useEffect(() => {
 startCamera();
@@ -71,7 +97,9 @@ canvas.height = video.videoHeight;
 const ctx = canvas.getContext("2d");
 if (!ctx) return;
 
+ctx.filter = cameraFilters[activeFilter].css;
 ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+ctx.filter = "none";
 
 canvas.toBlob(
 (blob) => {
@@ -154,7 +182,8 @@ if (!capturedBlob || !previewType) return;
 setPosting(true);
 setStatus("Posting...");
 
-const { data: authData, error: authError } = await supabase.auth.getUser();
+const { data: authData, error: authError } =
+await supabase.auth.getUser();
 if (authError) throw authError;
 
 const uid = authData.user?.id;
@@ -163,7 +192,9 @@ if (!uid) throw new Error("You must be logged in.");
 const isMp4 = capturedBlob.type.includes("mp4");
 const ext = previewType === "image" ? ".jpg" : isMp4 ? ".mp4" : ".webm";
 const mediaType =
-previewType === "image" ? "image/jpeg" : capturedBlob.type || "video/mp4";
+previewType === "image"
+? "image/jpeg"
+: capturedBlob.type || "video/mp4";
 const name = `${Date.now()}-${crypto.randomUUID()}${ext}`;
 const path = `posts/${uid}/${name}`;
 
@@ -201,6 +232,7 @@ setStatus(e.message || "Post failed.");
 setPosting(false);
 }
 }
+
 async function postStory() {
 try {
 if (!capturedBlob || !previewType) return;
@@ -208,7 +240,8 @@ if (!capturedBlob || !previewType) return;
 setPosting(true);
 setStatus("Posting story...");
 
-const { data: authData, error: authError } = await supabase.auth.getUser();
+const { data: authData, error: authError } =
+await supabase.auth.getUser();
 if (authError) throw authError;
 
 const uid = authData.user?.id;
@@ -218,10 +251,14 @@ const isImage = previewType === "image";
 const isMp4 = capturedBlob.type.includes("mp4");
 
 const ext = isImage ? "jpg" : isMp4 ? "mp4" : "webm";
-const mediaType = isImage ? "image/jpeg" : capturedBlob.type || "video/mp4";
+const mediaType = isImage
+? "image/jpeg"
+: capturedBlob.type || "video/mp4";
 const filePath = `${uid}/${crypto.randomUUID()}.${ext}`;
 
-const file = new File([capturedBlob], `story.${ext}`, { type: mediaType });
+const file = new File([capturedBlob], `story.${ext}`, {
+type: mediaType,
+});
 
 const { error: uploadError } = await supabase.storage
 .from("stories")
@@ -232,7 +269,9 @@ upsert: false,
 
 if (uploadError) throw uploadError;
 
-const { data: pub } = supabase.storage.from("stories").getPublicUrl(filePath);
+const { data: pub } = supabase.storage
+.from("stories")
+.getPublicUrl(filePath);
 const publicUrl = pub?.publicUrl;
 
 if (!publicUrl) throw new Error("Could not get story URL.");
@@ -252,13 +291,32 @@ setStatus(e.message || "Story failed.");
 setPosting(false);
 }
 }
+
 if (previewUrl && previewType) {
 return (
-<main style={{ position: "fixed", inset: 0, background: "black", color: "white" }}>
+<main
+style={{
+position: "fixed",
+inset: 0,
+background: "black",
+color: "white",
+}}
+>
 {previewType === "image" ? (
-<img src={previewUrl} alt="Preview" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+<img
+src={previewUrl}
+alt="Preview"
+style={{ width: "100%", height: "100%", objectFit: "cover" }}
+/>
 ) : (
-<video src={previewUrl} controls autoPlay loop playsInline style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+<video
+src={previewUrl}
+controls
+autoPlay
+loop
+playsInline
+style={{ width: "100%", height: "100%", objectFit: "cover" }}
+/>
 )}
 
 <button
@@ -276,21 +334,25 @@ style={topLeftButton}
 <div style={bottomPanel}>
 {status && <div style={{ textAlign: "center" }}>{status}</div>}
 
-<button disabled={posting} onClick={() => postCaptured(false)} style={actionButton}>
+<button
+disabled={posting}
+onClick={() => postCaptured(false)}
+style={actionButton}
+>
 Post to Feed
 </button>
 
 {previewType === "video" && (
-<button disabled={posting} onClick={() => postCaptured(true)} style={actionButton}>
+<button
+disabled={posting}
+onClick={() => postCaptured(true)}
+style={actionButton}
+>
 Post as Reel
 </button>
 )}
 
-<button
-disabled={posting}
-onClick={postStory}
-style={actionButton}
->
+<button disabled={posting} onClick={postStory} style={actionButton}>
 Post Story
 </button>
 </div>
@@ -305,13 +367,37 @@ ref={videoRef}
 autoPlay
 playsInline
 muted
-style={{ width: "100%", height: "100%", objectFit: "cover" }}
+style={{
+width: "100%",
+height: "100%",
+objectFit: "cover",
+filter: cameraFilters[activeFilter].css,
+}}
 />
 
-<button onClick={() => router.back()} style={topLeftButton}>×</button>
-<button onClick={flipCamera} style={topRightButton}>↻</button>
+<button onClick={() => router.back()} style={topLeftButton}>
+×
+</button>
+<button onClick={flipCamera} style={topRightButton}>
+↻
+</button>
 
 <div style={hintStyle}>Tap for photo · Hold for video</div>
+
+<div style={filterBarStyle}>
+{(Object.keys(cameraFilters) as CameraFilter[]).map((filter) => (
+<button
+key={filter}
+onClick={() => setActiveFilter(filter)}
+style={{
+...filterButtonStyle,
+...(activeFilter === filter ? activeFilterButtonStyle : {}),
+}}
+>
+{cameraFilters[filter].label}
+</button>
+))}
+</div>
 
 <div style={shutterWrap}>
 <button
@@ -382,6 +468,36 @@ textAlign: "center",
 color: "white",
 fontSize: 14,
 textShadow: "0 2px 8px black",
+};
+
+const filterBarStyle: React.CSSProperties = {
+position: "absolute",
+bottom: 250,
+left: 12,
+right: 12,
+display: "flex",
+justifyContent: "center",
+gap: 8,
+overflowX: "auto",
+zIndex: 10,
+paddingBottom: 4,
+};
+
+const filterButtonStyle: React.CSSProperties = {
+padding: "9px 14px",
+borderRadius: 999,
+border: "1px solid rgba(255,255,255,.35)",
+background: "rgba(0,0,0,.45)",
+color: "white",
+fontSize: 13,
+fontWeight: 700,
+whiteSpace: "nowrap",
+};
+
+const activeFilterButtonStyle: React.CSSProperties = {
+border: "1px solid rgba(255,79,216,.9)",
+background: "rgba(255,79,216,.25)",
+boxShadow: "0 0 16px rgba(255,79,216,.45)",
 };
 
 const bottomPanel: React.CSSProperties = {
