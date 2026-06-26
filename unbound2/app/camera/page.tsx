@@ -9,29 +9,40 @@ process.env.NEXT_PUBLIC_SUPABASE_URL!,
 process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 );
 
-type CameraFilter = "none" | "soft" | "noir" | "warm" | "unbound";
+type CameraFilter =
+| "none"
+| "soft"
+| "noir"
+| "warm"
+| "unbound"
+| "glow"
+| "rose"
+| "golden"
+| "cinema"
+| "dream"
+| "vintage"
+| "moonlight"
+| "highContrast"
+| "muted"
+| "frost";
 
 const cameraFilters: Record<CameraFilter, { label: string; css: string }> = {
-none: {
-label: "Normal",
-css: "none",
-},
-soft: {
-label: "Soft",
-css: "brightness(1.08) contrast(0.92) saturate(1.12) blur(0.4px)",
-},
-noir: {
-label: "Noir",
-css: "grayscale(1) contrast(1.25) brightness(0.92)",
-},
-warm: {
-label: "Warm",
-css: "sepia(0.18) saturate(1.25) brightness(1.05)",
-},
-unbound: {
-label: "Unbound",
-css: "contrast(1.08) saturate(1.45) hue-rotate(285deg) brightness(1.05)",
-},
+none: { label: "Normal", css: "none" },
+soft: { label: "Soft", css: "brightness(1.08) contrast(0.92) saturate(1.12) blur(0.4px)" },
+noir: { label: "Noir", css: "grayscale(1) contrast(1.25) brightness(0.92)" },
+warm: { label: "Warm", css: "sepia(0.18) saturate(1.25) brightness(1.05)" },
+unbound: { label: "Unbound", css: "contrast(1.08) saturate(1.45) hue-rotate(285deg) brightness(1.05)" },
+
+glow: { label: "Glow", css: "brightness(1.12) contrast(0.95) saturate(1.25) blur(0.25px)" },
+rose: { label: "Rose", css: "sepia(0.08) saturate(1.45) hue-rotate(315deg) brightness(1.08)" },
+golden: { label: "Golden", css: "sepia(0.28) saturate(1.35) brightness(1.08) contrast(0.98)" },
+cinema: { label: "Cinema", css: "contrast(1.22) saturate(1.15) brightness(0.92)" },
+dream: { label: "Dream", css: "brightness(1.14) contrast(0.85) saturate(1.3) blur(0.7px)" },
+vintage: { label: "Vintage", css: "sepia(0.38) contrast(0.95) saturate(0.9) brightness(1.03)" },
+moonlight: { label: "Moonlight", css: "brightness(0.92) contrast(1.08) saturate(0.9) hue-rotate(190deg)" },
+highContrast: { label: "Drama", css: "contrast(1.45) saturate(1.15) brightness(0.95)" },
+muted: { label: "Muted", css: "saturate(0.65) contrast(1.05) brightness(1.02)" },
+frost: { label: "Frost", css: "brightness(1.1) contrast(0.95) saturate(0.8) hue-rotate(170deg)" },
 };
 
 export default function CameraPage() {
@@ -476,7 +487,7 @@ bottom: 250,
 left: 12,
 right: 12,
 display: "flex",
-justifyContent: "center",
+justifyContent: "flex-start",
 gap: 8,
 overflowX: "auto",
 zIndex: 10,
