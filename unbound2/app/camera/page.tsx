@@ -93,7 +93,13 @@ if (!stream) return;
 
 chunksRef.current = [];
 
-const recorder = new MediaRecorder(stream);
+const mimeType = MediaRecorder.isTypeSupported("video/mp4")
+? "video/mp4"
+: MediaRecorder.isTypeSupported("video/webm;codecs=vp8")
+? "video/webm;codecs=vp8"
+: "video/webm";
+
+const recorder = new MediaRecorder(stream, { mimeType });
 recorderRef.current = recorder;
 
 recorder.ondataavailable = (event) => {
@@ -101,7 +107,9 @@ if (event.data.size > 0) chunksRef.current.push(event.data);
 };
 
 recorder.onstop = () => {
-const blob = new Blob(chunksRef.current, { type: "video/webm" });
+const blob = new Blob(chunksRef.current, {
+type: recorder.mimeType || "video/mp4",
+});
 const url = URL.createObjectURL(blob);
 
 setCapturedBlob(blob);
@@ -152,8 +160,10 @@ if (authError) throw authError;
 const uid = authData.user?.id;
 if (!uid) throw new Error("You must be logged in.");
 
-const ext = previewType === "image" ? ".jpg" : ".webm";
-const mediaType = previewType === "image" ? "image/jpeg" : "video/webm";
+const isMp4 = capturedBlob.type.includes("mp4");
+const ext = previewType === "image" ? ".jpg" : isMp4 ? ".mp4" : ".webm";
+const mediaType =
+previewType === "image" ? "image/jpeg" : capturedBlob.type || "video/mp4";
 const name = `${Date.now()}-${crypto.randomUUID()}${ext}`;
 const path = `posts/${uid}/${name}`;
 
