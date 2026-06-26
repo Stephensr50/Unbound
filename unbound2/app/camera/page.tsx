@@ -112,6 +112,8 @@ ctx.filter = cameraFilters[activeFilter].css;
 ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
 ctx.filter = "none";
 
+applyCanvasFilter(ctx, canvas.width, canvas.height, activeFilter);
+
 canvas.toBlob(
 (blob) => {
 if (!blob) return;
@@ -122,8 +124,113 @@ setPreviewUrl(url);
 setPreviewType("image");
 },
 "image/jpeg",
-0.92
+0.94
 );
+}
+
+function applyCanvasFilter(
+ctx: CanvasRenderingContext2D,
+width: number,
+height: number,
+filter: CameraFilter
+) {
+if (filter === "none") return;
+
+const imageData = ctx.getImageData(0, 0, width, height);
+const data = imageData.data;
+
+const settings: Record<
+CameraFilter,
+{
+contrast: number;
+saturation: number;
+brightness: number;
+warmth: number;
+fade: number;
+noir?: boolean;
+vignette?: boolean;
+grain?: number;
+}
+> = {
+none: { contrast: 1, saturation: 1, brightness: 1, warmth: 0, fade: 0 },
+soft: { contrast: 0.92, saturation: 1.08, brightness: 1.08, warmth: 4, fade: 8 },
+noir: { contrast: 1.35, saturation: 0, brightness: 0.96, warmth: 0, fade: 0, noir: true, vignette: true },
+warm: { contrast: 1.08, saturation: 1.18, brightness: 1.04, warmth: 18, fade: 4 },
+unbound: { contrast: 1.18, saturation: 1.35, brightness: 1.04, warmth: 6, fade: 0, vignette: true, grain: 5 },
+glow: { contrast: 0.9, saturation: 1.2, brightness: 1.12, warmth: 8, fade: 12 },
+rose: { contrast: 1.05, saturation: 1.35, brightness: 1.07, warmth: 12, fade: 5 },
+golden: { contrast: 1.12, saturation: 1.28, brightness: 1.06, warmth: 28, fade: 4, vignette: true },
+cinema: { contrast: 1.45, saturation: 1.12, brightness: 0.92, warmth: 2, fade: 0, vignette: true, grain: 7 },
+dream: { contrast: 0.82, saturation: 1.25, brightness: 1.14, warmth: 10, fade: 18 },
+vintage: { contrast: 0.95, saturation: 0.82, brightness: 1.02, warmth: 20, fade: 18, grain: 8 },
+moonlight: { contrast: 1.12, saturation: 0.85, brightness: 0.94, warmth: -18, fade: 6, vignette: true },
+highContrast: { contrast: 1.6, saturation: 1.15, brightness: 0.96, warmth: 0, fade: 0, vignette: true },
+muted: { contrast: 1.04, saturation: 0.55, brightness: 1.02, warmth: 0, fade: 10 },
+frost: { contrast: 0.98, saturation: 0.72, brightness: 1.1, warmth: -22, fade: 12 },
+};
+
+const s = settings[filter];
+
+for (let i = 0; i < data.length; i += 4) {
+let r = data[i];
+let g = data[i + 1];
+let b = data[i + 2];
+
+if (s.noir) {
+const gray = r * 0.299 + g * 0.587 + b * 0.114;
+r = gray;
+g = gray;
+b = gray;
+}
+
+r += s.warmth;
+b -= s.warmth;
+
+r = ((r - 128) * s.contrast + 128) * s.brightness;
+g = ((g - 128) * s.contrast + 128) * s.brightness;
+b = ((b - 128) * s.contrast + 128) * s.brightness;
+
+const avg = (r + g + b) / 3;
+r = avg + (r - avg) * s.saturation;
+g = avg + (g - avg) * s.saturation;
+b = avg + (b - avg) * s.saturation;
+
+if (s.fade > 0) {
+r = r + (255 - r) * (s.fade / 100);
+g = g + (255 - g) * (s.fade / 100);
+b = b + (255 - b) * (s.fade / 100);
+}
+
+if (s.grain) {
+const grain = (Math.random() - 0.5) * s.grain;
+r += grain;
+g += grain;
+b += grain;
+}
+
+data[i] = Math.max(0, Math.min(255, r));
+data[i + 1] = Math.max(0, Math.min(255, g));
+data[i + 2] = Math.max(0, Math.min(255, b));
+}
+
+ctx.putImageData(imageData, 0, 0);
+
+if (s.vignette) {
+const gradient = ctx.createRadialGradient(
+width / 2,
+height / 2,
+width * 0.25,
+width / 2,
+height / 2,
+width * 0.75
+);
+
+gradient.addColorStop(0, "rgba(0,0,0,0)");
+gradient.addColorStop(1, "rgba(0,0,0,0.38)");
+
+ctx.fillStyle = gradient;
+ctx.fillRect(0, 0, width, height);
+}
 }
 
 function startRecording() {
