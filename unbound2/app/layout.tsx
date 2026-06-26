@@ -22,6 +22,7 @@ subsets: ["latin"],
 export const metadata: Metadata = {
 title: "Unbound",
 description: "Unbound",
+manifest: "/manifest.json",
 icons: {
 apple: "/apple-touch-icon2.png",
 },

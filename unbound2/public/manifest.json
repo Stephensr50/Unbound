@@ -1,0 +1,16 @@
+{
+"name": "Unbound",
+"short_name": "Unbound",
+"start_url": "/",
+"scope": "/",
+"display": "standalone",
+"background_color": "#050005",
+"theme_color": "#050005",
+"icons": [
+{
+"src": "/apple-touch-icon2.png",
+"sizes": "180x180",
+"type": "image/png"
+}
+]
+}
