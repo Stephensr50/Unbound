@@ -128,6 +128,7 @@ const [text, setText] = useState("");
 
 const [file, setFile] = useState<File | null>(null);
 const [postAsReel, setPostAsReel] = useState(false);
+const [showOnExplore, setShowOnExplore] = useState(true);
 const [wantsLocked, setWantsLocked] = useState(false);
 const [uploading, setUploading] = useState(false);
 
@@ -1366,6 +1367,7 @@ media_bucket: file ? "media" : null,
 media_path,
 is_locked: false,
 is_reel: postAsReel,
+show_on_explore: showOnExplore,
 })
 .select("id")
 .single();
@@ -1379,6 +1381,7 @@ await savePostHashtags(supabase, insertedPost.id, trimmed);
 setText("");
 setFile(null);
 setPostAsReel(false);
+setShowOnExplore(true);
 
 await loadPosts();
 } catch (e: any) {
@@ -1887,7 +1890,16 @@ Post as Reel
 </label>
 )}
 
-
+{file && (
+<label style={{ display: "flex", alignItems: "center", gap: 8 }}>
+<input
+type="checkbox"
+checked={showOnExplore}
+onChange={(e) => setShowOnExplore(e.target.checked)}
+/>
+Show on Explore
+</label>
+)}
 
 
 {file ? (

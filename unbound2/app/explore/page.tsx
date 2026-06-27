@@ -81,8 +81,9 @@ setBanner(null);
 
 const { data, error } = await supabase
 .from("posts")
-.select("id,user_id,body,kind,created_at,media_url,media_path,media_type")
+.select("id,user_id,body,kind,created_at,media_url,media_path,media_type,media_bucket,is_locked")
 .not("media_url", "is", null)
+.eq("show_on_explore", true)
 .or("is_locked.eq.false,is_locked.is.null")
 .order("created_at", { ascending: false })
 .limit(200);
