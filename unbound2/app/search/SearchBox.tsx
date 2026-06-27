@@ -548,6 +548,8 @@ opacity: 0;
 `}</style>
 
 <input
+type="text"
+inputMode="text"
 style={inputStyle}
 value={q}
 onChange={(e) => setQ(e.target.value)}
@@ -563,6 +565,8 @@ autoCapitalize="none"
 
 <div style={filterRow}>
 <input
+type="text"
+inputMode="text"
 style={smallInput}
 value={locationText}
 onChange={(e) => setLocationText(e.target.value)}
