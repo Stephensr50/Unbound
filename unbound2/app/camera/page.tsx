@@ -23,6 +23,24 @@ type CameraFilter =
 | "frost"
 | "drama";
 
+type EditSettings = {
+brightness: number;
+contrast: number;
+saturation: number;
+warmth: number;
+fade: number;
+vignette: number;
+};
+
+const defaultEditSettings: EditSettings = {
+brightness: 1,
+contrast: 1,
+saturation: 1,
+warmth: 0,
+fade: 0,
+vignette: 0,
+};
+
 const cameraFilters: Record<
 CameraFilter,
 { label: string; icon: string; css: string }
@@ -102,11 +120,20 @@ const [previewUrl, setPreviewUrl] = useState<string | null>(null);
 const [previewType, setPreviewType] = useState<"image" | "video" | null>(null);
 const [capturedBlob, setCapturedBlob] = useState<Blob | null>(null);
 const [activeFilter, setActiveFilter] = useState<CameraFilter>("none");
+const [originalPhotoUrl, setOriginalPhotoUrl] = useState<string | null>(null);
+const [editSettings, setEditSettings] =
+useState<EditSettings>(defaultEditSettings);
 
 useEffect(() => {
 startCamera();
 return () => stopCamera();
 }, [facingMode]);
+
+useEffect(() => {
+if (originalPhotoUrl && previewType === "image") {
+renderEditedPhoto(originalPhotoUrl, activeFilter, editSettings);
+}
+}, [originalPhotoUrl, activeFilter, editSettings, previewType]);
 
 async function startCamera() {
 try {
@@ -149,7 +176,31 @@ const ctx = canvas.getContext("2d");
 if (!ctx) return;
 
 ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-applyCanvasFilter(ctx, canvas.width, canvas.height, activeFilter);
+
+const rawUrl = canvas.toDataURL("image/jpeg", 0.94);
+
+setOriginalPhotoUrl(rawUrl);
+setPreviewType("image");
+setEditSettings(defaultEditSettings);
+}
+
+function renderEditedPhoto(
+sourceUrl: string,
+filter: CameraFilter,
+edits: EditSettings
+) {
+const img = new Image();
+
+img.onload = () => {
+const canvas = document.createElement("canvas");
+canvas.width = img.naturalWidth;
+canvas.height = img.naturalHeight;
+
+const ctx = canvas.getContext("2d");
+if (!ctx) return;
+
+ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+applyCanvasFilter(ctx, canvas.width, canvas.height, filter, edits);
 
 canvas.toBlob(
 (blob) => {
@@ -157,19 +208,35 @@ if (!blob) return;
 
 const url = URL.createObjectURL(blob);
 setCapturedBlob(blob);
-setPreviewUrl(url);
-setPreviewType("image");
+setPreviewUrl((oldUrl) => {
+if (oldUrl?.startsWith("blob:")) URL.revokeObjectURL(oldUrl);
+return url;
+});
 },
 "image/jpeg",
 0.94
 );
+};
+
+img.src = sourceUrl;
+}
+
+function updateEdit<K extends keyof EditSettings>(
+key: K,
+value: EditSettings[K]
+) {
+setEditSettings((current) => ({
+...current,
+[key]: value,
+}));
 }
 
 function applyCanvasFilter(
 ctx: CanvasRenderingContext2D,
 width: number,
 height: number,
-filter: CameraFilter
+filter: CameraFilter,
+edits: EditSettings
 ) {
 const imageData = ctx.getImageData(0, 0, width, height);
 const data = imageData.data;
@@ -189,20 +256,109 @@ vignette?: number;
 }
 > = {
 none: { contrast: 1, saturation: 1, brightness: 1, warmth: 0, fade: 0 },
-beauty: { contrast: .88, saturation: 1.08, brightness: 1.12, warmth: 6, fade: 10 },
-hdr: { contrast: 1.45, saturation: 1.45, brightness: 1.08, warmth: 4, fade: 0, vignette: .18 },
-noir: { contrast: 1.75, saturation: 0, brightness: .92, warmth: 0, fade: 0, noir: true, vignette: .34 },
-golden: { contrast: 1.18, saturation: 1.42, brightness: 1.08, warmth: 34, fade: 3, vignette: .18 },
-unbound: { contrast: 1.28, saturation: 1.75, brightness: 1.06, warmth: 8, fade: 0, grain: 4, vignette: .25 },
-comic: { contrast: 1.9, saturation: 2.2, brightness: 1.06, warmth: 5, fade: 0, posterize: 42 },
-pop: { contrast: 1.35, saturation: 2.5, brightness: 1.08, warmth: 0, fade: 0, posterize: 30 },
-film: { contrast: 1.02, saturation: .72, brightness: .98, warmth: 22, fade: 16, grain: 10, vignette: .22 },
-cyber: { contrast: 1.38, saturation: 2.05, brightness: 1.02, warmth: -18, fade: 0, posterize: 22 },
-frost: { contrast: 1.02, saturation: .62, brightness: 1.14, warmth: -30, fade: 12 },
-drama: { contrast: 1.85, saturation: 1.05, brightness: .88, warmth: 0, fade: 0, grain: 5, vignette: .4 },
+beauty: {
+contrast: 0.88,
+saturation: 1.08,
+brightness: 1.12,
+warmth: 6,
+fade: 10,
+},
+hdr: {
+contrast: 1.45,
+saturation: 1.45,
+brightness: 1.08,
+warmth: 4,
+fade: 0,
+vignette: 0.18,
+},
+noir: {
+contrast: 1.75,
+saturation: 0,
+brightness: 0.92,
+warmth: 0,
+fade: 0,
+noir: true,
+vignette: 0.34,
+},
+golden: {
+contrast: 1.18,
+saturation: 1.42,
+brightness: 1.08,
+warmth: 34,
+fade: 3,
+vignette: 0.18,
+},
+unbound: {
+contrast: 1.28,
+saturation: 1.75,
+brightness: 1.06,
+warmth: 8,
+fade: 0,
+grain: 4,
+vignette: 0.25,
+},
+comic: {
+contrast: 1.9,
+saturation: 2.2,
+brightness: 1.06,
+warmth: 5,
+fade: 0,
+posterize: 42,
+},
+pop: {
+contrast: 1.35,
+saturation: 2.5,
+brightness: 1.08,
+warmth: 0,
+fade: 0,
+posterize: 30,
+},
+film: {
+contrast: 1.02,
+saturation: 0.72,
+brightness: 0.98,
+warmth: 22,
+fade: 16,
+grain: 10,
+vignette: 0.22,
+},
+cyber: {
+contrast: 1.38,
+saturation: 2.05,
+brightness: 1.02,
+warmth: -18,
+fade: 0,
+posterize: 22,
+},
+frost: {
+contrast: 1.02,
+saturation: 0.62,
+brightness: 1.14,
+warmth: -30,
+fade: 12,
+},
+drama: {
+contrast: 1.85,
+saturation: 1.05,
+brightness: 0.88,
+warmth: 0,
+fade: 0,
+grain: 5,
+vignette: 0.4,
+},
 };
 
 const s = settings[filter];
+
+const finalBrightness = s.brightness * edits.brightness;
+const finalContrast = s.contrast * edits.contrast;
+const finalSaturation = s.saturation * edits.saturation;
+const finalWarmth = s.warmth + edits.warmth;
+const finalFade = Math.max(0, Math.min(60, s.fade + edits.fade));
+const finalVignette = Math.max(
+0,
+Math.min(0.7, (s.vignette || 0) + edits.vignette)
+);
 
 for (let i = 0; i < data.length; i += 4) {
 let r = data[i];
@@ -216,17 +372,17 @@ g = gray;
 b = gray;
 }
 
-r += s.warmth;
-b -= s.warmth;
+r += finalWarmth;
+b -= finalWarmth;
 
-r = ((r - 128) * s.contrast + 128) * s.brightness;
-g = ((g - 128) * s.contrast + 128) * s.brightness;
-b = ((b - 128) * s.contrast + 128) * s.brightness;
+r = ((r - 128) * finalContrast + 128) * finalBrightness;
+g = ((g - 128) * finalContrast + 128) * finalBrightness;
+b = ((b - 128) * finalContrast + 128) * finalBrightness;
 
 const avg = (r + g + b) / 3;
-r = avg + (r - avg) * s.saturation;
-g = avg + (g - avg) * s.saturation;
-b = avg + (b - avg) * s.saturation;
+r = avg + (r - avg) * finalSaturation;
+g = avg + (g - avg) * finalSaturation;
+b = avg + (b - avg) * finalSaturation;
 
 if (s.posterize) {
 r = Math.round(r / s.posterize) * s.posterize;
@@ -234,10 +390,10 @@ g = Math.round(g / s.posterize) * s.posterize;
 b = Math.round(b / s.posterize) * s.posterize;
 }
 
-if (s.fade > 0) {
-r += (255 - r) * (s.fade / 100);
-g += (255 - g) * (s.fade / 100);
-b += (255 - b) * (s.fade / 100);
+if (finalFade > 0) {
+r += (255 - r) * (finalFade / 100);
+g += (255 - g) * (finalFade / 100);
+b += (255 - b) * (finalFade / 100);
 }
 
 if (s.grain) {
@@ -254,7 +410,7 @@ data[i + 2] = Math.max(0, Math.min(255, b));
 
 ctx.putImageData(imageData, 0, 0);
 
-if (s.vignette) {
+if (finalVignette > 0) {
 const gradient = ctx.createRadialGradient(
 width / 2,
 height / 2,
@@ -265,7 +421,7 @@ width * 0.8
 );
 
 gradient.addColorStop(0, "rgba(0,0,0,0)");
-gradient.addColorStop(1, `rgba(0,0,0,${s.vignette})`);
+gradient.addColorStop(1, `rgba(0,0,0,${finalVignette})`);
 
 ctx.fillStyle = gradient;
 ctx.fillRect(0, 0, width, height);
@@ -355,7 +511,8 @@ if (!capturedBlob || !previewType) return;
 setPosting(true);
 setStatus("Posting...");
 
-const { data: authData, error: authError } = await supabase.auth.getUser();
+const { data: authData, error: authError } =
+await supabase.auth.getUser();
 if (authError) throw authError;
 
 const uid = authData.user?.id;
@@ -364,7 +521,9 @@ if (!uid) throw new Error("You must be logged in.");
 const isMp4 = capturedBlob.type.includes("mp4");
 const ext = previewType === "image" ? ".jpg" : isMp4 ? ".mp4" : ".webm";
 const mediaType =
-previewType === "image" ? "image/jpeg" : capturedBlob.type || "video/mp4";
+previewType === "image"
+? "image/jpeg"
+: capturedBlob.type || "video/mp4";
 const name = `${Date.now()}-${crypto.randomUUID()}${ext}`;
 const path = `posts/${uid}/${name}`;
 
@@ -410,7 +569,8 @@ if (!capturedBlob || !previewType) return;
 setPosting(true);
 setStatus("Posting story...");
 
-const { data: authData, error: authError } = await supabase.auth.getUser();
+const { data: authData, error: authError } =
+await supabase.auth.getUser();
 if (authError) throw authError;
 
 const uid = authData.user?.id;
@@ -420,10 +580,14 @@ const isImage = previewType === "image";
 const isMp4 = capturedBlob.type.includes("mp4");
 
 const ext = isImage ? "jpg" : isMp4 ? "mp4" : "webm";
-const mediaType = isImage ? "image/jpeg" : capturedBlob.type || "video/mp4";
+const mediaType = isImage
+? "image/jpeg"
+: capturedBlob.type || "video/mp4";
 const filePath = `${uid}/${crypto.randomUUID()}.${ext}`;
 
-const file = new File([capturedBlob], `story.${ext}`, { type: mediaType });
+const file = new File([capturedBlob], `story.${ext}`, {
+type: mediaType,
+});
 
 const { error: uploadError } = await supabase.storage
 .from("stories")
@@ -434,7 +598,9 @@ upsert: false,
 
 if (uploadError) throw uploadError;
 
-const { data: pub } = supabase.storage.from("stories").getPublicUrl(filePath);
+const { data: pub } = supabase.storage
+.from("stories")
+.getPublicUrl(filePath);
 const publicUrl = pub?.publicUrl;
 
 if (!publicUrl) throw new Error("Could not get story URL.");
@@ -457,12 +623,23 @@ setPosting(false);
 
 if (previewUrl && previewType) {
 return (
-<main style={{ position: "fixed", inset: 0, background: "black", color: "white" }}>
+<main
+style={{
+position: "fixed",
+inset: 0,
+background: "black",
+color: "white",
+}}
+>
 {previewType === "image" ? (
 <img
 src={previewUrl}
 alt="Preview"
-style={{ width: "100%", height: "100%", objectFit: "cover" }}
+style={{
+width: "100%",
+height: "100%",
+objectFit: "cover",
+}}
 />
 ) : (
 <video
@@ -480,6 +657,8 @@ onClick={() => {
 setPreviewUrl(null);
 setPreviewType(null);
 setCapturedBlob(null);
+setOriginalPhotoUrl(null);
+setEditSettings(defaultEditSettings);
 setStatus("");
 setTimeout(() => startCamera(), 100);
 }}
@@ -488,15 +667,83 @@ style={topLeftButton}
 ×
 </button>
 
+{previewType === "image" && (
+<div style={editPanelStyle}>
+<SliderRow
+label="Bright"
+min={0.7}
+max={1.4}
+step={0.01}
+value={editSettings.brightness}
+onChange={(value) => updateEdit("brightness", value)}
+/>
+<SliderRow
+label="Contrast"
+min={0.6}
+max={1.8}
+step={0.01}
+value={editSettings.contrast}
+onChange={(value) => updateEdit("contrast", value)}
+/>
+<SliderRow
+label="Color"
+min={0}
+max={2.4}
+step={0.01}
+value={editSettings.saturation}
+onChange={(value) => updateEdit("saturation", value)}
+/>
+<SliderRow
+label="Warmth"
+min={-60}
+max={60}
+step={1}
+value={editSettings.warmth}
+onChange={(value) => updateEdit("warmth", value)}
+/>
+<SliderRow
+label="Fade"
+min={0}
+max={35}
+step={1}
+value={editSettings.fade}
+onChange={(value) => updateEdit("fade", value)}
+/>
+<SliderRow
+label="Vignette"
+min={0}
+max={0.45}
+step={0.01}
+value={editSettings.vignette}
+onChange={(value) => updateEdit("vignette", value)}
+/>
+
+<button
+onClick={() => setEditSettings(defaultEditSettings)}
+style={resetButtonStyle}
+>
+Reset edits
+</button>
+</div>
+)}
+
 <div style={bottomPanel}>
 {status && <div style={{ textAlign: "center" }}>{status}</div>}
 
-<button disabled={posting} onClick={() => postCaptured(false)} style={actionButton}>
+<button
+disabled={posting}
+onClick={() => postCaptured(false)}
+style={actionButton}
+>
 Post to Feed
 </button>
 
 {previewType === "video" && (
-<button disabled={posting} onClick={() => postCaptured(true)} style={actionButton}>
+<button
+disabled={posting}
+onClick={() => postCaptured(true)}
+style={actionButton}
+>
 Post as Reel
 </button>
 )}
@@ -569,6 +816,37 @@ boxShadow: "0 0 24px rgba(255,79,216,.75)",
 );
 }
 
+function SliderRow({
+label,
+min,
+max,
+step,
+value,
+onChange,
+}: {
+label: string;
+min: number;
+max: number;
+step: number;
+value: number;
+onChange: (value: number) => void;
+}) {
+return (
+<label style={sliderRowStyle}>
+<span style={sliderLabelStyle}>{label}</span>
+<input
+type="range"
+min={min}
+max={max}
+step={step}
+value={value}
+onChange={(e) => onChange(Number(e.target.value))}
+style={sliderInputStyle}
+/>
+</label>
+);
+}
+
 const topLeftButton: React.CSSProperties = {
 position: "absolute",
 top: 24,
@@ -581,7 +859,7 @@ background: "rgba(0,0,0,.5)",
 color: "white",
 fontSize: 28,
 cursor: "pointer",
-zIndex: 10,
+zIndex: 20,
 };
 
 const topRightButton: React.CSSProperties = {
@@ -596,7 +874,7 @@ background: "rgba(0,0,0,.5)",
 color: "white",
 fontSize: 28,
 cursor: "pointer",
-zIndex: 10,
+zIndex: 20,
 };
 
 const shutterWrap: React.CSSProperties = {
@@ -664,6 +942,49 @@ fontSize: 10,
 fontWeight: 800,
 };
 
+const editPanelStyle: React.CSSProperties = {
+position: "absolute",
+left: 12,
+right: 12,
+bottom: 255,
+padding: "12px",
+borderRadius: 22,
+background: "rgba(0,0,0,.58)",
+border: "1px solid rgba(255,255,255,.18)",
+display: "grid",
+gap: 8,
+zIndex: 12,
+};
+
+const sliderRowStyle: React.CSSProperties = {
+display: "grid",
+gridTemplateColumns: "72px 1fr",
+alignItems: "center",
+gap: 10,
+color: "white",
+fontSize: 12,
+fontWeight: 800,
+};
+
+const sliderLabelStyle: React.CSSProperties = {
+textShadow: "0 2px 8px black",
+};
+
+const sliderInputStyle: React.CSSProperties = {
+width: "100%",
+accentColor: "#ff4fd8",
+};
+
+const resetButtonStyle: React.CSSProperties = {
+marginTop: 4,
+padding: "9px 12px",
+borderRadius: 999,
+border: "1px solid rgba(255,255,255,.35)",
+background: "rgba(255,255,255,.12)",
+color: "white",
+fontWeight: 800,
+};
+
 const bottomPanel: React.CSSProperties = {
 position: "absolute",
 left: 16,
@@ -671,6 +992,7 @@ right: 16,
 bottom: 90,
 display: "grid",
 gap: 10,
+zIndex: 14,
 };
 
 const actionButton: React.CSSProperties = {
