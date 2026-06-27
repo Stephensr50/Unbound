@@ -88,7 +88,7 @@ media_type,
 media_bucket,
 media_path,
 created_at,
-profiles (
+profiles!posts_user_id_fkey (
 username,
 display_name,
 avatar_url
