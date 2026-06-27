@@ -11,38 +11,78 @@ process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 
 type CameraFilter =
 | "none"
-| "soft"
+| "beauty"
+| "hdr"
 | "noir"
-| "warm"
-| "unbound"
-| "glow"
-| "rose"
 | "golden"
-| "cinema"
-| "dream"
-| "vintage"
-| "moonlight"
-| "highContrast"
-| "muted"
-| "frost";
+| "unbound"
+| "comic"
+| "pop"
+| "film"
+| "cyber"
+| "frost"
+| "drama";
 
-const cameraFilters: Record<CameraFilter, { label: string; css: string }> = {
-none: { label: "Normal", css: "none" },
-soft: { label: "Soft", css: "brightness(1.08) contrast(0.92) saturate(1.12) blur(0.4px)" },
-noir: { label: "Noir", css: "grayscale(1) contrast(1.25) brightness(0.92)" },
-warm: { label: "Warm", css: "sepia(0.18) saturate(1.25) brightness(1.05)" },
-unbound: { label: "Unbound", css: "contrast(1.08) saturate(1.45) hue-rotate(285deg) brightness(1.05)" },
-
-glow: { label: "Glow", css: "brightness(1.12) contrast(0.95) saturate(1.25) blur(0.25px)" },
-rose: { label: "Rose", css: "sepia(0.08) saturate(1.45) hue-rotate(315deg) brightness(1.08)" },
-golden: { label: "Golden", css: "sepia(0.28) saturate(1.35) brightness(1.08) contrast(0.98)" },
-cinema: { label: "Cinema", css: "contrast(1.22) saturate(1.15) brightness(0.92)" },
-dream: { label: "Dream", css: "brightness(1.14) contrast(0.85) saturate(1.3) blur(0.7px)" },
-vintage: { label: "Vintage", css: "sepia(0.38) contrast(0.95) saturate(0.9) brightness(1.03)" },
-moonlight: { label: "Moonlight", css: "brightness(0.92) contrast(1.08) saturate(0.9) hue-rotate(190deg)" },
-highContrast: { label: "Drama", css: "contrast(1.45) saturate(1.15) brightness(0.95)" },
-muted: { label: "Muted", css: "saturate(0.65) contrast(1.05) brightness(1.02)" },
-frost: { label: "Frost", css: "brightness(1.1) contrast(0.95) saturate(0.8) hue-rotate(170deg)" },
+const cameraFilters: Record<
+CameraFilter,
+{ label: string; icon: string; css: string }
+> = {
+none: { label: "Normal", icon: "📷", css: "none" },
+beauty: {
+label: "Beauty",
+icon: "✨",
+css: "brightness(1.1) contrast(.9) saturate(1.08) blur(.35px)",
+},
+hdr: {
+label: "HDR",
+icon: "HDR",
+css: "contrast(1.35) saturate(1.35) brightness(1.05)",
+},
+noir: {
+label: "Noir",
+icon: "◐",
+css: "grayscale(1) contrast(1.65) brightness(.9)",
+},
+golden: {
+label: "Golden",
+icon: "🌅",
+css: "sepia(.45) saturate(1.55) contrast(1.15) brightness(1.08)",
+},
+unbound: {
+label: "Unbound",
+icon: "💜",
+css: "contrast(1.25) saturate(1.75) hue-rotate(285deg) brightness(1.06)",
+},
+comic: {
+label: "Comic",
+icon: "💥",
+css: "contrast(1.75) saturate(2.1) brightness(1.05)",
+},
+pop: {
+label: "Pop",
+icon: "🎨",
+css: "contrast(1.35) saturate(2.4) brightness(1.08)",
+},
+film: {
+label: "Film",
+icon: "🎞",
+css: "sepia(.35) contrast(1.05) saturate(.75) brightness(.98)",
+},
+cyber: {
+label: "Cyber",
+icon: "⚡",
+css: "contrast(1.35) saturate(2) hue-rotate(135deg) brightness(1.02)",
+},
+frost: {
+label: "Frost",
+icon: "❄️",
+css: "brightness(1.16) contrast(1.05) saturate(.65) hue-rotate(175deg)",
+},
+drama: {
+label: "Drama",
+icon: "🎬",
+css: "contrast(1.75) saturate(1.15) brightness(.88)",
+},
 };
 
 export default function CameraPage() {
@@ -108,10 +148,7 @@ canvas.height = video.videoHeight;
 const ctx = canvas.getContext("2d");
 if (!ctx) return;
 
-ctx.filter = cameraFilters[activeFilter].css;
 ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-ctx.filter = "none";
-
 applyCanvasFilter(ctx, canvas.width, canvas.height, activeFilter);
 
 canvas.toBlob(
@@ -134,8 +171,6 @@ width: number,
 height: number,
 filter: CameraFilter
 ) {
-if (filter === "none") return;
-
 const imageData = ctx.getImageData(0, 0, width, height);
 const data = imageData.data;
 
@@ -148,25 +183,23 @@ brightness: number;
 warmth: number;
 fade: number;
 noir?: boolean;
-vignette?: boolean;
+posterize?: number;
 grain?: number;
+vignette?: number;
 }
 > = {
 none: { contrast: 1, saturation: 1, brightness: 1, warmth: 0, fade: 0 },
-soft: { contrast: 0.92, saturation: 1.08, brightness: 1.08, warmth: 4, fade: 8 },
-noir: { contrast: 1.35, saturation: 0, brightness: 0.96, warmth: 0, fade: 0, noir: true, vignette: true },
-warm: { contrast: 1.08, saturation: 1.18, brightness: 1.04, warmth: 18, fade: 4 },
-unbound: { contrast: 1.18, saturation: 1.35, brightness: 1.04, warmth: 6, fade: 0, vignette: true, grain: 5 },
-glow: { contrast: 0.9, saturation: 1.2, brightness: 1.12, warmth: 8, fade: 12 },
-rose: { contrast: 1.05, saturation: 1.35, brightness: 1.07, warmth: 12, fade: 5 },
-golden: { contrast: 1.12, saturation: 1.28, brightness: 1.06, warmth: 28, fade: 4, vignette: true },
-cinema: { contrast: 1.45, saturation: 1.12, brightness: 0.92, warmth: 2, fade: 0, vignette: true, grain: 7 },
-dream: { contrast: 0.82, saturation: 1.25, brightness: 1.14, warmth: 10, fade: 18 },
-vintage: { contrast: 0.95, saturation: 0.82, brightness: 1.02, warmth: 20, fade: 18, grain: 8 },
-moonlight: { contrast: 1.12, saturation: 0.85, brightness: 0.94, warmth: -18, fade: 6, vignette: true },
-highContrast: { contrast: 1.6, saturation: 1.15, brightness: 0.96, warmth: 0, fade: 0, vignette: true },
-muted: { contrast: 1.04, saturation: 0.55, brightness: 1.02, warmth: 0, fade: 10 },
-frost: { contrast: 0.98, saturation: 0.72, brightness: 1.1, warmth: -22, fade: 12 },
+beauty: { contrast: .88, saturation: 1.08, brightness: 1.12, warmth: 6, fade: 10 },
+hdr: { contrast: 1.45, saturation: 1.45, brightness: 1.08, warmth: 4, fade: 0, vignette: .18 },
+noir: { contrast: 1.75, saturation: 0, brightness: .92, warmth: 0, fade: 0, noir: true, vignette: .34 },
+golden: { contrast: 1.18, saturation: 1.42, brightness: 1.08, warmth: 34, fade: 3, vignette: .18 },
+unbound: { contrast: 1.28, saturation: 1.75, brightness: 1.06, warmth: 8, fade: 0, grain: 4, vignette: .25 },
+comic: { contrast: 1.9, saturation: 2.2, brightness: 1.06, warmth: 5, fade: 0, posterize: 42 },
+pop: { contrast: 1.35, saturation: 2.5, brightness: 1.08, warmth: 0, fade: 0, posterize: 30 },
+film: { contrast: 1.02, saturation: .72, brightness: .98, warmth: 22, fade: 16, grain: 10, vignette: .22 },
+cyber: { contrast: 1.38, saturation: 2.05, brightness: 1.02, warmth: -18, fade: 0, posterize: 22 },
+frost: { contrast: 1.02, saturation: .62, brightness: 1.14, warmth: -30, fade: 12 },
+drama: { contrast: 1.85, saturation: 1.05, brightness: .88, warmth: 0, fade: 0, grain: 5, vignette: .4 },
 };
 
 const s = settings[filter];
@@ -195,10 +228,16 @@ r = avg + (r - avg) * s.saturation;
 g = avg + (g - avg) * s.saturation;
 b = avg + (b - avg) * s.saturation;
 
+if (s.posterize) {
+r = Math.round(r / s.posterize) * s.posterize;
+g = Math.round(g / s.posterize) * s.posterize;
+b = Math.round(b / s.posterize) * s.posterize;
+}
+
 if (s.fade > 0) {
-r = r + (255 - r) * (s.fade / 100);
-g = g + (255 - g) * (s.fade / 100);
-b = b + (255 - b) * (s.fade / 100);
+r += (255 - r) * (s.fade / 100);
+g += (255 - g) * (s.fade / 100);
+b += (255 - b) * (s.fade / 100);
 }
 
 if (s.grain) {
@@ -219,17 +258,33 @@ if (s.vignette) {
 const gradient = ctx.createRadialGradient(
 width / 2,
 height / 2,
-width * 0.25,
+width * 0.18,
 width / 2,
 height / 2,
-width * 0.75
+width * 0.8
 );
 
 gradient.addColorStop(0, "rgba(0,0,0,0)");
-gradient.addColorStop(1, "rgba(0,0,0,0.38)");
+gradient.addColorStop(1, `rgba(0,0,0,${s.vignette})`);
 
 ctx.fillStyle = gradient;
 ctx.fillRect(0, 0, width, height);
+}
+
+if (filter === "unbound" || filter === "beauty") {
+ctx.fillStyle = "rgba(255,79,216,0.08)";
+ctx.fillRect(0, 0, width, height);
+}
+
+if (filter === "comic") {
+ctx.strokeStyle = "rgba(0,0,0,0.22)";
+ctx.lineWidth = Math.max(1, width / 900);
+for (let y = 0; y < height; y += 12) {
+ctx.beginPath();
+ctx.moveTo(0, y);
+ctx.lineTo(width, y);
+ctx.stroke();
+}
 }
 }
 
@@ -300,8 +355,7 @@ if (!capturedBlob || !previewType) return;
 setPosting(true);
 setStatus("Posting...");
 
-const { data: authData, error: authError } =
-await supabase.auth.getUser();
+const { data: authData, error: authError } = await supabase.auth.getUser();
 if (authError) throw authError;
 
 const uid = authData.user?.id;
@@ -310,9 +364,7 @@ if (!uid) throw new Error("You must be logged in.");
 const isMp4 = capturedBlob.type.includes("mp4");
 const ext = previewType === "image" ? ".jpg" : isMp4 ? ".mp4" : ".webm";
 const mediaType =
-previewType === "image"
-? "image/jpeg"
-: capturedBlob.type || "video/mp4";
+previewType === "image" ? "image/jpeg" : capturedBlob.type || "video/mp4";
 const name = `${Date.now()}-${crypto.randomUUID()}${ext}`;
 const path = `posts/${uid}/${name}`;
 
@@ -358,8 +410,7 @@ if (!capturedBlob || !previewType) return;
 setPosting(true);
 setStatus("Posting story...");
 
-const { data: authData, error: authError } =
-await supabase.auth.getUser();
+const { data: authData, error: authError } = await supabase.auth.getUser();
 if (authError) throw authError;
 
 const uid = authData.user?.id;
@@ -369,14 +420,10 @@ const isImage = previewType === "image";
 const isMp4 = capturedBlob.type.includes("mp4");
 
 const ext = isImage ? "jpg" : isMp4 ? "mp4" : "webm";
-const mediaType = isImage
-? "image/jpeg"
-: capturedBlob.type || "video/mp4";
+const mediaType = isImage ? "image/jpeg" : capturedBlob.type || "video/mp4";
 const filePath = `${uid}/${crypto.randomUUID()}.${ext}`;
 
-const file = new File([capturedBlob], `story.${ext}`, {
-type: mediaType,
-});
+const file = new File([capturedBlob], `story.${ext}`, { type: mediaType });
 
 const { error: uploadError } = await supabase.storage
 .from("stories")
@@ -387,9 +434,7 @@ upsert: false,
 
 if (uploadError) throw uploadError;
 
-const { data: pub } = supabase.storage
-.from("stories")
-.getPublicUrl(filePath);
+const { data: pub } = supabase.storage.from("stories").getPublicUrl(filePath);
 const publicUrl = pub?.publicUrl;
 
 if (!publicUrl) throw new Error("Could not get story URL.");
@@ -412,14 +457,7 @@ setPosting(false);
 
 if (previewUrl && previewType) {
 return (
-<main
-style={{
-position: "fixed",
-inset: 0,
-background: "black",
-color: "white",
-}}
->
+<main style={{ position: "fixed", inset: 0, background: "black", color: "white" }}>
 {previewType === "image" ? (
 <img
 src={previewUrl}
@@ -443,6 +481,7 @@ setPreviewUrl(null);
 setPreviewType(null);
 setCapturedBlob(null);
 setStatus("");
+setTimeout(() => startCamera(), 100);
 }}
 style={topLeftButton}
 >
@@ -452,20 +491,12 @@ style={topLeftButton}
 <div style={bottomPanel}>
 {status && <div style={{ textAlign: "center" }}>{status}</div>}
 
-<button
-disabled={posting}
-onClick={() => postCaptured(false)}
-style={actionButton}
->
+<button disabled={posting} onClick={() => postCaptured(false)} style={actionButton}>
 Post to Feed
 </button>
 
 {previewType === "video" && (
-<button
-disabled={posting}
-onClick={() => postCaptured(true)}
-style={actionButton}
->
+<button disabled={posting} onClick={() => postCaptured(true)} style={actionButton}>
 Post as Reel
 </button>
 )}
@@ -500,22 +531,23 @@ filter: cameraFilters[activeFilter].css,
 ↻
 </button>
 
-<div style={hintStyle}>Tap for photo · Hold for video</div>
-
 <div style={filterBarStyle}>
 {(Object.keys(cameraFilters) as CameraFilter[]).map((filter) => (
 <button
 key={filter}
 onClick={() => setActiveFilter(filter)}
 style={{
-...filterButtonStyle,
-...(activeFilter === filter ? activeFilterButtonStyle : {}),
+...filterBubbleStyle,
+...(activeFilter === filter ? activeFilterBubbleStyle : {}),
 }}
 >
-{cameraFilters[filter].label}
+<span style={filterIconStyle}>{cameraFilters[filter].icon}</span>
+<span style={filterLabelStyle}>{cameraFilters[filter].label}</span>
 </button>
 ))}
 </div>
+
+<div style={hintStyle}>Tap for photo · Hold for video</div>
 
 <div style={shutterWrap}>
 <button
@@ -586,36 +618,50 @@ textAlign: "center",
 color: "white",
 fontSize: 14,
 textShadow: "0 2px 8px black",
+zIndex: 10,
 };
 
 const filterBarStyle: React.CSSProperties = {
 position: "absolute",
-bottom: 250,
-left: 12,
-right: 12,
+bottom: 245,
+left: 0,
+right: 0,
 display: "flex",
-justifyContent: "flex-start",
-gap: 8,
+gap: 12,
 overflowX: "auto",
 zIndex: 10,
-paddingBottom: 4,
+padding: "0 18px 8px",
 };
 
-const filterButtonStyle: React.CSSProperties = {
-padding: "9px 14px",
-borderRadius: 999,
-border: "1px solid rgba(255,255,255,.35)",
+const filterBubbleStyle: React.CSSProperties = {
+minWidth: 76,
+height: 76,
+borderRadius: "50%",
+border: "2px solid rgba(255,255,255,.45)",
 background: "rgba(0,0,0,.45)",
 color: "white",
-fontSize: 13,
-fontWeight: 700,
-whiteSpace: "nowrap",
+display: "grid",
+placeItems: "center",
+alignContent: "center",
+gap: 2,
+cursor: "pointer",
+flex: "0 0 auto",
 };
 
-const activeFilterButtonStyle: React.CSSProperties = {
-border: "1px solid rgba(255,79,216,.9)",
-background: "rgba(255,79,216,.25)",
-boxShadow: "0 0 16px rgba(255,79,216,.45)",
+const activeFilterBubbleStyle: React.CSSProperties = {
+border: "3px solid rgba(255,255,255,.95)",
+boxShadow: "0 0 0 4px rgba(255,79,216,.75), 0 0 22px rgba(255,79,216,.65)",
+background: "rgba(255,79,216,.22)",
+};
+
+const filterIconStyle: React.CSSProperties = {
+fontSize: 20,
+fontWeight: 900,
+};
+
+const filterLabelStyle: React.CSSProperties = {
+fontSize: 10,
+fontWeight: 800,
 };
 
 const bottomPanel: React.CSSProperties = {
