@@ -424,6 +424,13 @@ border: "1px solid rgba(255,255,255,0.20)",
 background: "rgba(0,0,0,0.35)",
 color: "white",
 fontSize: 16,
+
+WebkitAppearance: "none",
+appearance: "none",
+touchAction: "manipulation",
+pointerEvents: "auto",
+position: "relative",
+zIndex: 5,
 };
 
 const filterRow: React.CSSProperties = {
@@ -444,6 +451,13 @@ border: "1px solid rgba(255,255,255,0.18)",
 background: "rgba(0,0,0,0.30)",
 color: "white",
 fontSize: 15,
+
+WebkitAppearance: "none",
+appearance: "none",
+touchAction: "manipulation",
+pointerEvents: "auto",
+position: "relative",
+zIndex: 5,
 };
 
 const selectStyle: React.CSSProperties = {
