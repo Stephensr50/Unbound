@@ -14,6 +14,7 @@ const fileInputRef = useRef<HTMLInputElement | null>(null);
 const [loading, setLoading] = useState(true);
 const [saving, setSaving] = useState(false);
 const [uploading, setUploading] = useState(false);
+const [notificationsEnabled, setNotificationsEnabled] = useState(false);
 
 const [displayName, setDisplayName] = useState("");
 const [bio, setBio] = useState("");
@@ -31,7 +32,68 @@ const [age, setAge] = useState("");
 const [status, setStatus] = useState<string>("");
 const [connectingStripe, setConnectingStripe] = useState(false);
 const [userId, setUserId] = useState("");
+function urlBase64ToUint8Array(base64String: string) {
+const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
+const base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/");
+const rawData = window.atob(base64);
+return Uint8Array.from([...rawData].map((char) => char.charCodeAt(0)));
+}
 
+async function enablePushNotifications() {
+try {
+if (!("serviceWorker" in navigator) || !("PushManager" in window)) {
+alert("Push notifications are not supported on this device/browser.");
+return;
+}
+
+const permission = await Notification.requestPermission();
+
+alert(`Permission returned: ${permission}`);
+
+if (permission !== "granted") {
+return;
+}
+
+await navigator.serviceWorker.register("/sw.js");
+const registration = await navigator.serviceWorker.ready;
+
+const subscription = await registration.pushManager.subscribe({
+userVisibleOnly: true,
+applicationServerKey: urlBase64ToUint8Array(
+process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY || ""
+),
+});
+
+const {
+data: { session },
+} = await supabase.auth.getSession();
+
+if (!session) {
+alert("Please log in again.");
+return;
+}
+
+const res = await fetch("/api/push/subscribe", {
+method: "POST",
+headers: {
+"Content-Type": "application/json",
+Authorization: `Bearer ${session.access_token}`,
+},
+body: JSON.stringify(subscription),
+});
+
+if (!res.ok) {
+const data = await res.json().catch(() => null);
+throw new Error(data?.error || "Failed to save push subscription.");
+}
+
+setNotificationsEnabled(true);
+alert("Phone notifications are enabled.");
+} catch (err) {
+console.error(err);
+alert(err instanceof Error ? err.message : "Could not enable notifications.");
+}
+}
 useEffect(() => {
 const loadProfile = async () => {
 setLoading(true);
@@ -572,6 +634,69 @@ color: "white",
 </label>
 
 
+
+<button
+type="button"
+onClick={enablePushNotifications}
+disabled={notificationsEnabled}
+style={{
+marginTop: 14,
+width: "100%",
+padding: "12px 14px",
+borderRadius: 12,
+border: "1px solid rgba(168,85,247,0.45)",
+background: notificationsEnabled
+? "rgba(34,197,94,0.18)"
+: "rgba(168,85,247,0.22)",
+color: "white",
+fontWeight: 800,
+cursor: notificationsEnabled ? "default" : "pointer",
+}}
+>
+{notificationsEnabled ? "Phone notifications enabled ✅" : "Enable phone notifications"}
+</button>
+<button
+type="button"
+onClick={async () => {
+const {
+data: { session },
+} = await supabase.auth.getSession();
+
+if (!session) {
+alert("Please log in again.");
+return;
+}
+
+const res = await fetch("/api/push/test", {
+method: "POST",
+headers: {
+Authorization: `Bearer ${session.access_token}`,
+},
+});
+
+const data = await res.json().catch(() => null);
+
+if (!res.ok) {
+alert(data?.error || "Test notification failed.");
+return;
+}
+
+alert("Test notification sent.");
+}}
+style={{
+marginTop: 10,
+width: "100%",
+padding: "12px 14px",
+borderRadius: 12,
+border: "1px solid rgba(255,255,255,0.15)",
+background: "rgba(0,0,0,0.35)",
+color: "white",
+fontWeight: 700,
+cursor: "pointer",
+}}
+>
+Send test notification
+</button>
 
 <button
 onClick={saveProfile}

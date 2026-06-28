@@ -38,3 +38,4 @@ yarn-error.log*
 pnpm-lock.yaml.BAK
 package-lock.json.bak
 package-lock.json
+unbound2/vapid-keys.json
