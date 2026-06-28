@@ -377,7 +377,12 @@ cardRefs.current[index] = el;
 data-index={index}
 style={{
 position: "relative",
-height: "100dvh",
+height: "calc(100dvh - 76px)",
+display: "flex",
+alignItems: "center",
+justifyContent: "center",
+paddingTop: 76,
+boxSizing: "border-box",
 scrollSnapAlign: "start",
 scrollSnapStop: "always",
 background: "black",
@@ -414,7 +419,7 @@ ref={(el) => {
 reelRefs.current[index] = el;
 }}
 src={reel.signedUrl || ""}
-muted
+muted={false}
 playsInline
 controls={false}
 onEnded={() => scrollToNext(index)}
@@ -424,10 +429,12 @@ if (video.paused) video.play().catch(() => {});
 else video.pause();
 }}
 style={{
-width: "100%",
+width: "min(100vw, 430px)",
 height: "100%",
-objectFit: "cover",
+maxHeight: "calc(100dvh - 76px)",
+objectFit: "contain",
 display: "block",
+background: "black",
 }}
 />
 

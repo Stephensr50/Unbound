@@ -126,7 +126,7 @@ const [allowedAuthorIds, setAllowedAuthorIds] = useState<string[]>([]);
 const [posts, setPosts] = useState<PostRow[]>([]);
 const [text, setText] = useState("");
 
-const [file, setFile] = useState<File | null>(null);
+const [files, setFiles] = useState<File[]>([]);
 const [postAsReel, setPostAsReel] = useState(false);
 const [showOnExplore, setShowOnExplore] = useState(true);
 const [wantsLocked, setWantsLocked] = useState(false);
@@ -1295,7 +1295,7 @@ if (joinError) throw new Error(joinError.message);
 
 async function submitPost() {
 const trimmed = text.trim();
-if (!trimmed && !file) return;
+if (!trimmed && files.length === 0) return;
 
 setPosting(true);
 setBanner(null);
@@ -1303,29 +1303,36 @@ setBanner(null);
 try {
 const uid = await ensureCanInteract();
 
-let media_url: string | null = null;
-let media_type: string | null = null;
-let media_path: string | null = null;
-let kind = "text";
+if (files.length > 10) {
+setBanner("You can upload up to 10 photos/videos at once.");
+return;
+}
 
-if (file) {
+let uploads: {
+publicUrl: string;
+path: string;
+mediaType: string;
+}[] = [];
+
+if (files.length > 0) {
 setUploading(true);
-const up = await uploadToStorage(uid, file);
 
-console.log("UPLOAD DEBUG", {
-name: file.name,
-type: file.type,
-size: file.size,
-url: up.publicUrl,
-});
-media_url = up.publicUrl;
-media_path = up.path;
-media_type = up.mediaType;
-kind = media_type.startsWith("video/") ? "video" : "image";
+for (const f of files) {
+const up = await uploadToStorage(uid, f);
+uploads.push(up);
+}
+
 setUploading(false);
 }
 
-if (wantsLocked && file) {
+const firstUpload = uploads[0] ?? null;
+
+let kind = "text";
+if (firstUpload) {
+kind = firstUpload.mediaType.startsWith("video/") ? "video" : "image";
+}
+
+if (wantsLocked && files.length > 0) {
 const { count: totalMediaCount, error: totalMediaError } = await supabase
 .from("posts")
 .select("id", { count: "exact", head: true })
@@ -1342,10 +1349,10 @@ const { count: lockedMediaCount, error: lockedMediaError } = await supabase
 .in("kind", ["image", "photo", "video"]);
 
 if (lockedMediaError) throw new Error(lockedMediaError.message);
-const totalAfterThisPost = (totalMediaCount ?? 0) + 1;
-const lockedAfterThisPost = (lockedMediaCount ?? 0) + 1;
-const lockLimit = Math.ceil(totalAfterThisPost * 0.3);
 
+const totalAfterThisPost = (totalMediaCount ?? 0) + files.length;
+const lockedAfterThisPost = (lockedMediaCount ?? 0) + files.length;
+const lockLimit = Math.ceil(totalAfterThisPost * 0.3);
 
 if (lockedAfterThisPost > lockLimit) {
 setBanner(
@@ -1361,10 +1368,10 @@ const { data: insertedPost, error } = await supabase
 user_id: uid,
 body: trimmed || null,
 kind,
-media_url,
-media_type,
-media_bucket: file ? "media" : null,
-media_path,
+media_url: firstUpload?.publicUrl ?? null,
+media_type: firstUpload?.mediaType ?? null,
+media_bucket: firstUpload ? "media" : null,
+media_path: firstUpload?.path ?? null,
 is_locked: false,
 is_reel: postAsReel,
 show_on_explore: showOnExplore,
@@ -1374,12 +1381,30 @@ show_on_explore: showOnExplore,
 
 if (error) throw new Error(error.message);
 
+if (insertedPost?.id && uploads.length > 0) {
+const mediaRows = uploads.map((up, index) => ({
+post_id: insertedPost.id,
+user_id: uid,
+media_url: up.publicUrl,
+media_bucket: "media",
+media_path: up.path,
+media_type: up.mediaType,
+sort_order: index,
+}));
+
+const { error: mediaError } = await supabase
+.from("post_media")
+.insert(mediaRows);
+
+if (mediaError) throw new Error(mediaError.message);
+}
+
 if (insertedPost?.id && trimmed) {
 await savePostHashtags(supabase, insertedPost.id, trimmed);
 }
 
 setText("");
-setFile(null);
+setFiles([]);
 setPostAsReel(false);
 setShowOnExplore(true);
 
@@ -1871,15 +1896,16 @@ userSelect: "none",
 ref={fileInputRef}
 type="file"
 accept="image/*,video/*"
+multiple
 style={{ display: "none" }}
 onChange={(e) => {
-const f = e.target.files?.[0] || null;
-setFile(f);
+const selected = Array.from(e.target.files ?? []).slice(0, 10);
+setFiles(selected);
 }}
 />
-{file ? "Change media" : "Add photo/video"}
+{files.length ? "Change media" : "Add photo/video"}
 </label>
-{file?.type?.startsWith("video/") && (
+{files.length === 1 && files[0]?.type?.startsWith("video/") && (
 <label style={{ display: "flex", alignItems: "center", gap: 8, color: "white" }}>
 <input
 type="checkbox"
@@ -1890,7 +1916,7 @@ Post as Reel
 </label>
 )}
 
-{file && (
+{files.length > 0 && (
 <label style={{ display: "flex", alignItems: "center", gap: 8 }}>
 <input
 type="checkbox"
@@ -1902,7 +1928,7 @@ Show on Explore
 )}
 
 
-{file ? (
+{files.length ? (
 <div
 style={{
 opacity: 0.75,
@@ -1913,7 +1939,7 @@ whiteSpace: "nowrap",
 maxWidth: 260,
 }}
 >
-{file.name}
+{files.length === 1 ? files[0]?.name : `${files.length} files selected`}
 </div>
 ) : (
 <div style={{ opacity: 0.55, fontSize: 12 }}>Optional</div>

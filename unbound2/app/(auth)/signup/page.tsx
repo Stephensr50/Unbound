@@ -85,7 +85,7 @@ return;
 
 // If email confirmations are ON, Supabase may not create a session yet.
 // So we handle both cases cleanly.
-router.push("/login?check_email=1");
+router.push("/login?check_email=1&setup=1");
 return;
 }
 
