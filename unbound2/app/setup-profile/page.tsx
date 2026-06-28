@@ -34,7 +34,7 @@ setUserId(data.user.id);
 const { data: profile } = await supabase
 .from("profiles")
 .select("display_name, username")
-.eq("user_id", data.user.id)
+.eq("id", data.user.id)
 .single();
 
 if (profile?.display_name) setDisplayName(profile.display_name);
@@ -57,7 +57,7 @@ const { data, error } = await supabase
 .from("profiles")
 .select("id")
 .ilike("username", cleanUsername)
-.neq("user_id", userId || "")
+.neq("id", userId || "")
 .maybeSingle();
 
 setChecking(false);
@@ -104,7 +104,7 @@ display_name: displayName.trim(),
 username: cleanUsername,
 updated_at: new Date().toISOString(),
 })
-.eq("user_id", userId);
+.eq("id", userId);
 
 setSaving(false);
 
