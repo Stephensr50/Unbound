@@ -43,7 +43,7 @@ const { data: userData } = await supabase.auth.getUser();
 const { data: profile } = await supabase
 .from("profiles")
 .select("username, display_name")
-.eq("user_id", userData.user?.id)
+.eq("id", userData.user?.id)
 .maybeSingle();
 
 if (!profile?.username || !profile?.display_name) {
