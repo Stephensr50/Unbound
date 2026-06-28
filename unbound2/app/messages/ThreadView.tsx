@@ -681,7 +681,26 @@ sender_id: me,
 body,
 });
 
+
 if (error) throw error;
+
+if (otherUserId) {
+fetch("/api/push/send", {
+method: "POST",
+headers: {
+"Content-Type": "application/json",
+},
+body: JSON.stringify({
+recipientId: otherUserId,
+title: "Unbound",
+body: "You have a new message.",
+url: `/messages/${conversationId}`,
+}),
+}).catch((pushErr) => {
+console.error("Push notification failed:", pushErr);
+});
+}
+
 
 setText("");
 } catch (e: any) {
