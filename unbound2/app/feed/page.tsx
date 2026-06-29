@@ -599,7 +599,7 @@ const signedRows = await Promise.all(
 rowsNeedingSignedUrls.map(async (p) => {
 const { data: signedData } = await supabase.storage
 .from(p.media_bucket!)
-.createSignedUrl(p.media_path!, 60 * 60);
+.createSignedUrl(p.media_path!, 60 * 60 * 24);
 
 return {
 id: p.id,
@@ -1168,21 +1168,55 @@ const label = p?.display_name || p?.username || "U";
 return label.trim().charAt(0).toUpperCase();
 };
 
+async function compressImage(file: File): Promise<File> {
+if (!file.type.startsWith("image/")) return file;
+
+const imageBitmap = await createImageBitmap(file);
+
+const maxSide = 1400;
+const scale = Math.min(1, maxSide / Math.max(imageBitmap.width, imageBitmap.height));
+
+const width = Math.round(imageBitmap.width * scale);
+const height = Math.round(imageBitmap.height * scale);
+
+const canvas = document.createElement("canvas");
+canvas.width = width;
+canvas.height = height;
+
+const ctx = canvas.getContext("2d");
+if (!ctx) return file;
+
+ctx.drawImage(imageBitmap, 0, 0, width, height);
+
+const blob = await new Promise<Blob | null>((resolve) => {
+canvas.toBlob(resolve, "image/jpeg", 0.82);
+});
+
+if (!blob) return file;
+
+return new File(
+[blob],
+file.name.replace(/\.[^/.]+$/, ".jpg"),
+{ type: "image/jpeg" }
+);
+}
+
 async function uploadToStorage(uid: string, f: File) {
-
-
 const isImage = f.type.startsWith("image/");
 const isVideo = f.type.startsWith("video/");
+
 if (!isImage && !isVideo) {
 throw new Error("Please choose an image or video.");
 }
 
+const uploadFile = isImage ? await compressImage(f) : f;
+
 const maxMb = isVideo ? 60 : 15;
-if (f.size > maxMb * 1024 * 1024) {
+if (uploadFile.size > maxMb * 1024 * 1024) {
 throw new Error(`File too large. Max ${maxMb}MB for this upload.`);
 }
 
-const ext = (f.name.split(".").pop() || "").toLowerCase();
+const ext = (uploadFile.name.split(".").pop() || "").toLowerCase();
 const safeExt = ext ? `.${ext}` : isImage ? ".jpg" : ".mp4";
 
 const uuid =
@@ -1193,18 +1227,19 @@ typeof crypto !== "undefined" && "randomUUID" in crypto
 const name = `${Date.now()}-${uuid}${safeExt}`;
 const path = `posts/${uid}/${name}`;
 
-const { error: upErr } = await supabase.storage.from("media").upload(path, f, {
-contentType: f.type,
-cacheControl: "3600",
+const { error: upErr } = await supabase.storage.from("media").upload(path, uploadFile, {
+contentType: uploadFile.type,
+cacheControl: "86400",
 upsert: false,
 });
 
 if (upErr) throw new Error(upErr.message);
 
 const { data } = supabase.storage.from("media").getPublicUrl(path);
+
 return {
 publicUrl: data.publicUrl,
-mediaType: f.type,
+mediaType: uploadFile.type,
 bucket: "media",
 path,
 };
