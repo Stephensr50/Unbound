@@ -64,10 +64,36 @@ title: "Unbound",
 body: "Test notification from Unbound 🔔",
 url: "/feed",
 });
+const results = await Promise.all(
+subscriptions.map(async (row) => {
+try {
+await webpush.sendNotification(row.subscription, payload);
+return { id: row.id, ok: true };
+} catch (err: any) {
+console.error("Push test failed for subscription:", {
+id: row.id,
+statusCode: err?.statusCode,
+body: err?.body,
+message: err?.message,
+});
 
-await Promise.all(
-subscriptions.map((row) => webpush.sendNotification(row.subscription, payload))
+return {
+id: row.id,
+ok: false,
+statusCode: err?.statusCode,
+body: err?.body,
+message: err?.message,
+};
+}
+})
 );
+
+return NextResponse.json({
+ok: true,
+sent: results.filter((r) => r.ok).length,
+failed: results.filter((r) => !r.ok).length,
+results,
+});
 
 return NextResponse.json({ ok: true });
 } catch (err) {

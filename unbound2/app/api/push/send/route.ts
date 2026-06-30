@@ -46,15 +46,36 @@ body: body || "You have a new notification.",
 url: url || "/messages",
 });
 
-await Promise.all(
-subscriptions.map((row) =>
-webpush.sendNotification(row.subscription, payload).catch((err) => {
-console.error("Push failed:", err);
+const results = await Promise.all(
+subscriptions.map(async (row) => {
+try {
+await webpush.sendNotification(row.subscription, payload);
+return { id: row.id, ok: true };
+} catch (err: any) {
+console.error("Push failed:", {
+id: row.id,
+statusCode: err?.statusCode,
+body: err?.body,
+message: err?.message,
+});
+
+return {
+id: row.id,
+ok: false,
+statusCode: err?.statusCode,
+body: err?.body,
+message: err?.message,
+};
+}
 })
-)
 );
 
-return NextResponse.json({ ok: true, sent: subscriptions.length });
+return NextResponse.json({
+ok: true,
+sent: results.filter((r) => r.ok).length,
+failed: results.filter((r) => !r.ok).length,
+results,
+});
 } catch (err) {
 console.error("Push send failed:", err);
 
