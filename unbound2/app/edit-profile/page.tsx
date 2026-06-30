@@ -681,7 +681,19 @@ alert(data?.error || "Test notification failed.");
 return;
 }
 
-alert("Test notification sent.");
+alert(
+JSON.stringify(
+{
+ok: data?.ok,
+message: data?.message,
+sent: data?.sent,
+failed: data?.failed,
+results: data?.results,
+},
+null,
+2
+)
+);
 }}
 style={{
 marginTop: 10,
