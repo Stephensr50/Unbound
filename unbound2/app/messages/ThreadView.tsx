@@ -671,10 +671,7 @@ return;
 isFriendConversation = (friendRows ?? []).length > 0;
 }
 
-if (!conversation?.paid_unlocked && !isFriendConversation) {
-setErr("Please purchase this conversation before sending messages.");
-return;
-}
+
 const { error } = await supabase.from("messages").insert({
 conversation_id: conversationId,
 sender_id: me,

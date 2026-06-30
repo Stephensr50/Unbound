@@ -485,23 +485,7 @@ border: "1px solid rgba(255,255,255,0.25)",
 )}
 </div>
 
-<div
-style={{
-position: "absolute",
-right: 18,
-bottom: 118,
-zIndex: 10,
-display: "flex",
-flexDirection: "column",
-gap: 18,
-alignItems: "center",
-fontSize: 26,
-}}
->
-<div>❤️</div>
-<div>💬</div>
-<div>↗</div>
-</div>
+
 </section>
 ))
 )}
