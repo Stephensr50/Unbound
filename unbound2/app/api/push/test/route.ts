@@ -106,8 +106,7 @@ message: err?.message,
 );
 
 return NextResponse.json({
-ok: false,
-message: "NEW CODE IS RUNNING",
+ok: true,
 sent: results.filter((r) => r.ok).length,
 failed: results.filter((r) => !r.ok).length,
 results,
