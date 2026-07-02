@@ -35,6 +35,8 @@ user_id: string;
 body: string;
 created_at: string;
 parent_comment_id: number | null;
+like_count?: number;
+liked_by_me?: boolean;
 };
 
 type ProfileRow = {
@@ -91,6 +93,7 @@ const [commentAuthors, setCommentAuthors] = useState<Record<string, ProfileRow>>
 );
 const [draft, setDraft] = useState("");
 const [busy, setBusy] = useState(false);
+const [busyCommentLikeId, setBusyCommentLikeId] = useState<number | null>(null);
 const [spark, setSpark] = useState(false);
 
 const [replyTo, setReplyTo] = useState<{
@@ -208,6 +211,33 @@ return;
 }
 
 const list = (cRows ?? []) as CommentRow[];
+const commentIds = list.map((c) => c.id);
+
+if (commentIds.length) {
+const { data: likeRows } = await supabase
+.from("comment_likes")
+.select("comment_id,user_id")
+.in("comment_id", commentIds);
+
+const counts: Record<number, number> = {};
+const likedByMe: Record<number, boolean> = {};
+
+for (const row of likeRows ?? []) {
+const commentId = (row as any).comment_id as number;
+const userId = (row as any).user_id as string;
+
+counts[commentId] = (counts[commentId] ?? 0) + 1;
+
+if (uid && userId === uid) {
+likedByMe[commentId] = true;
+}
+}
+
+for (const comment of list) {
+comment.like_count = counts[comment.id] ?? 0;
+comment.liked_by_me = !!likedByMe[comment.id];
+}
+}
 setComments(list);
 setCommentCount(list.length);
 await hydrateCommentAuthors(list);
@@ -430,6 +460,90 @@ setBusy(false);
 
 async function toggleSpank(_postId: number) {
 await setReaction(post?.id ?? 0, myReaction || "devil");
+}
+
+async function toggleCommentLike(comment: CommentRow) {
+const uid = myUserId ?? (await refreshAuth());
+if (!uid) return;
+
+if (busyCommentLikeId) return;
+
+setBusyCommentLikeId(comment.id);
+setBanner(null);
+
+const alreadyLiked = !!comment.liked_by_me;
+
+if (alreadyLiked) {
+const { error } = await supabase
+.from("comment_likes")
+.delete()
+.eq("comment_id", comment.id)
+.eq("user_id", uid);
+
+if (error) {
+setBanner(error.message);
+setBusyCommentLikeId(null);
+return;
+}
+
+setComments((arr) =>
+arr.map((c) =>
+c.id === comment.id
+? {
+...c,
+liked_by_me: false,
+like_count: Math.max(0, (c.like_count ?? 0) - 1),
+}
+: c
+)
+);
+
+setBusyCommentLikeId(null);
+return;
+}
+
+const { error } = await supabase.from("comment_likes").insert({
+comment_id: comment.id,
+user_id: uid,
+});
+
+if (error) {
+const isConflict =
+(error as any)?.status === 409 ||
+(error as any)?.code === "23505" ||
+String((error as any)?.message || "").toLowerCase().includes("duplicate") ||
+String((error as any)?.message || "").toLowerCase().includes("unique");
+
+if (!isConflict) {
+setBanner(error.message);
+setBusyCommentLikeId(null);
+return;
+}
+}
+
+if (post && comment.user_id !== uid) {
+await supabase.from("notifications").insert({
+user_id: comment.user_id,
+actor_id: uid,
+type: "comment_like",
+entity_id: String(post.id),
+comment_id: String(comment.id),
+});
+}
+
+setComments((arr) =>
+arr.map((c) =>
+c.id === comment.id
+? {
+...c,
+liked_by_me: true,
+like_count: (c.like_count ?? 0) + 1,
+}
+: c
+)
+);
+
+setBusyCommentLikeId(null);
 }
 
 async function addComment() {
@@ -989,6 +1103,27 @@ Replying to {replyLabel}
 ) : null}
 
 <div style={{ whiteSpace: "pre-wrap" }}>{c.body}</div>
+
+<div style={{ display: "flex", gap: 10, alignItems: "center", marginTop: 8 }}>
+<button
+type="button"
+onClick={() => toggleCommentLike(c)}
+disabled={busyCommentLikeId === c.id}
+style={{
+border: "none",
+background: "transparent",
+color: c.liked_by_me ? "rgba(236,72,153,0.95)" : "rgba(255,255,255,0.65)",
+cursor: "pointer",
+fontWeight: 800,
+padding: 0,
+fontSize: 13,
+}}
+>
+{c.liked_by_me ? "♥ Liked" : "♡ Like"}
+{(c.like_count ?? 0) > 0 ? ` · ${c.like_count}` : ""}
+</button>
+</div>
+
 <ReportCommentButton
 commentId={c.id}
 commentBody={c.body}
