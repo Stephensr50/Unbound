@@ -200,7 +200,7 @@ return `/post/${postId}?flash=4000`;
 }
 }
 
-if (n.type === "spank" || n.type === "comment") {
+if (n.type === "spank" || n.type === "comment" || n.type === "comment_like") {
 const postId = Number(n.entity_id);
 if (Number.isFinite(postId) && postId > 0) {
 if (n.comment_id) {
@@ -405,6 +405,7 @@ n.actor?.display_name ||
 
 if (n.type === "spank") return `${actorName} spanked your post`;
 if (n.type === "comment") return `${actorName} commented on your post`;
+if (n.type === "comment_like") return `${actorName} liked your comment`;
 if (n.type === "friend_request") return `${actorName} sent you a friend request`;
 if (n.type === "message") return `${actorName} messaged you`;
 return n.title || n.message || n.body || "Notification";
@@ -414,7 +415,7 @@ function buildSub(n: NotifRow) {
     if (n.type === "moderation") return "Tap to read moderator message";
 if (n.type === "comment_reply") return "Tap to open reply";
 
-if (n.type === "spank" || n.type === "comment") {
+if (n.type === "spank" || n.type === "comment" || n.type === "comment_like") {
 return n.comment_id ? "Tap to open comment" : "Tap to open post";
 }
 
