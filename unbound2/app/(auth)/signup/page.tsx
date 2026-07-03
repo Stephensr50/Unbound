@@ -73,6 +73,9 @@ email,
 password,
 options: {
 emailRedirectTo,
+data: {
+gender,
+},
 },
 });
 
@@ -131,8 +134,8 @@ Select gender...
 </option>
 <option value="Male">Male</option>
 <option value="Female">Female</option>
-<option value="Nonbinary">Nonbinary</option>
-<option value="Other">Other</option>
+<option value="Transgender">Trans</option>
+<option value="Non-binary">Non-binary</option>
 </select>
 
 {error && (

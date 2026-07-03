@@ -17,6 +17,7 @@ const [uploading, setUploading] = useState(false);
 const [notificationsEnabled, setNotificationsEnabled] = useState(false);
 
 const [displayName, setDisplayName] = useState("");
+const [gender, setGender] = useState("");
 const [bio, setBio] = useState("");
 const [avatarUrl, setAvatarUrl] = useState<string>("");
 const [designation, setDesignation] = useState("");
@@ -111,12 +112,13 @@ setUserId(userId)
 
 const { data: profile } = await supabase
 .from("profiles")
-.select("display_name, designation,age, bio, avatar_url, city, state, country, relationship_status, orientation, pronouns, looking_for, ds_relationship")
+.select("display_name, gender, designation,age, bio, avatar_url, city, state, country, relationship_status, orientation, pronouns, looking_for, ds_relationship")
 .eq("id", userId)
 .single();
 
 if (profile) {
 setDisplayName(profile.display_name ?? "");
+setGender(profile.gender ?? "");
 setDesignation(profile.designation || "");
 setAge(profile.age ? String(profile.age) : "");
 setBio(profile.bio ?? "");
@@ -292,6 +294,7 @@ const { error } = await supabase
 .from("profiles")
 .update({
 display_name: displayName.trim(),
+gender: gender || null,
 age: age.trim() ? Number(age) : null,
 designation: designation.trim() || null,
 bio,
@@ -416,7 +419,31 @@ marginBottom: 12,
 }}
 />
 </label>
-
+<label>
+<div style={{ fontSize: 12, opacity: 0.8, marginBottom: 6 }}>
+Gender
+</div>
+<select
+value={gender}
+onChange={(e) => setGender(e.target.value)}
+disabled={loading}
+style={{
+width: "100%",
+padding: "10px 12px",
+borderRadius: 10,
+border: "1px solid rgba(255,255,255,0.15)",
+background: "rgba(0,0,0,0.35)",
+color: "white",
+marginBottom: 12,
+}}
+>
+<option value="">Select gender...</option>
+<option value="Male">Male</option>
+<option value="Female">Female</option>
+<option value="Transgender">Trans</option>
+<option value="Non-binary">Non-binary</option>
+</select>
+</label>
 <label>
 <div style={{ fontSize: 12, opacity: 0.8, marginBottom: 6 }}>
 Age
