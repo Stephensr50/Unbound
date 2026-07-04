@@ -18,6 +18,17 @@ return createClient(url, key);
 
 type ReactionKey = "devil" | "fire" | "eyes" | "purple_heart";
 
+type PostMediaRow = {
+id?: number;
+post_id: number;
+media_url: string | null;
+media_bucket: string | null;
+media_path: string | null;
+media_type: string | null;
+sort_order: number | null;
+signed_url?: string | null;
+};
+
 type PostRow = {
 id: number;
 user_id: string;
@@ -31,6 +42,7 @@ media_path: string | null;
 signed_url?: string | null;
 group_id?: number | null;
 is_locked: boolean | null;
+media_items?: PostMediaRow[];
 };
 
 type GroupRow = {
@@ -184,12 +196,14 @@ const [viewer, setViewer] = useState<{
 url: string;
 type: "image" | "video";
 } | null>(null);
+const [galleryIndex, setGalleryIndex] = useState<Record<number, number>>({});
 
 const [focusPostId, setFocusPostId] = useState<number | null>(null);
 const [flashPostId, setFlashPostId] = useState<number | null>(null);
 const flashTimerRef = useRef<number | null>(null);
 const didAutoScrollRef = useRef(false);
 const fileInputRef = useRef<HTMLInputElement>(null);
+const touchStartXRef = useRef<Record<number, number>>({});
 
 useEffect(() => {
 const raw =
@@ -592,6 +606,49 @@ return;
 }
 
 let rows = (data ?? []) as PostRow[];
+const postIds = rows.map((p) => p.id);
+
+if (postIds.length) {
+const { data: mediaRows, error: mediaRowsError } = await supabase
+.from("post_media")
+.select("id,post_id,media_url,media_bucket,media_path,media_type,sort_order")
+.in("post_id", postIds)
+.order("sort_order", { ascending: true });
+
+if (mediaRowsError) {
+setBanner(mediaRowsError.message);
+return;
+}
+
+const signedMediaRows = await Promise.all(
+((mediaRows ?? []) as PostMediaRow[]).map(async (m) => {
+if (m.media_bucket && m.media_path) {
+const { data: signedData } = await supabase.storage
+.from(m.media_bucket)
+.createSignedUrl(m.media_path, 60 * 60 * 24);
+
+return {
+...m,
+signed_url: signedData?.signedUrl ?? null,
+};
+}
+
+return m;
+})
+);
+
+const mediaByPostId: Record<number, PostMediaRow[]> = {};
+
+for (const m of signedMediaRows) {
+if (!mediaByPostId[m.post_id]) mediaByPostId[m.post_id] = [];
+mediaByPostId[m.post_id].push(m);
+}
+
+rows = rows.map((p) => ({
+...p,
+media_items: mediaByPostId[p.id] ?? [],
+}));
+}
 const rowsNeedingSignedUrls = rows.filter(
 (p) => p.media_bucket && p.media_path
 );
@@ -1696,105 +1753,32 @@ lockedIndex++;
 return result;
 }, [posts, unlockedPostIds]);
 const renderMedia = (p: PostRow) => {
-if (false) {
-return (
-<div
-onClick={() => unlockPost(p)}
-style={{
-width: "100%",
-minHeight: 420,
-cursor: "pointer",
-borderRadius: 18,
-border: "1px solid rgba(236,72,153,0.28)",
-background:
-"linear-gradient(180deg, rgba(255,255,255,0.08), rgba(0,0,0,0.82))",
-backdropFilter: "blur(18px)",
-WebkitBackdropFilter: "blur(18px)",
-display: "flex",
-alignItems: "center",
-justifyContent: "center",
-flexDirection: "column",
-gap: 12,
-marginBottom: 10,
-color: "#fff",
-textAlign: "center",
-padding: 24,
-boxShadow:
-"0 0 25px rgba(236,72,153,0.18), 0 0 60px rgba(168,85,247,0.12)",
-transition: "all 0.22s ease",
+const mediaItems =
+p.media_items && p.media_items.length > 0
+? p.media_items
+: p.media_url
+? [
+{
+post_id: p.id,
+media_url: p.media_url,
+media_bucket: p.media_bucket,
+media_path: p.media_path,
+media_type: p.media_type,
+sort_order: 0,
+signed_url: p.signed_url ?? null,
+},
+]
+: [];
 
-}}
-onMouseEnter={(e) => {
-const el = e.currentTarget;
-el.style.transform = "translateY(-4px) scale(1.01)";
-el.style.boxShadow =
-"0 0 35px rgba(236,72,153,0.32), 0 0 80px rgba(168,85,247,0.22)";
-}}
-onMouseLeave={(e) => {
-const el = e.currentTarget;
-el.style.transform = "translateY(0) scale(1)";
-el.style.boxShadow =
-"0 0 25px rgba(236,72,153,0.18), 0 0 60px rgba(168,85,247,0.12)";
-}}
->
-<div
-style={{
-width: 88,
-height: 88,
-borderRadius: "50%",
-display: "flex",
-alignItems: "center",
-justifyContent: "center",
-background: "rgba(255,255,255,0.08)",
-border: "1px solid rgba(255,255,255,0.12)",
-backdropFilter: "blur(18px)",
-WebkitBackdropFilter: "blur(18px)",
-boxShadow:
-"0 0 22px rgba(236,72,153,0.30), 0 0 45px rgba(168,85,247,0.22)",
-marginBottom: 12,
-}}
->
-<div style={{ fontSize: 42 }}>🔒</div>
-</div>
+if (!mediaItems.length) return null;
 
-<div style={{ fontSize: 24, fontWeight: 900 }}>Locked Content</div>
-
-<div style={{ opacity: 0.82, fontSize: 15 }}>
-Unlock this post for $1.49 
-</div>
-
-<button
-type="button"
-style={{
-marginTop: 8,
-padding: "12px 22px",
-borderRadius: 999,
-border: "1px solid rgba(236,72,153,0.45)",
-background:
-"linear-gradient(180deg, rgba(255,255,255,0.14), rgba(255,255,255,0.06))",
-color: "white",
-fontWeight: 800,
-cursor: "pointer",
-backdropFilter: "blur(14px)",
-WebkitBackdropFilter: "blur(14px)",
-boxShadow:
-"0 0 18px rgba(236,72,153,0.25), 0 0 40px rgba(168,85,247,0.18)",
-}}
->
-Unlock Now
-</button>
-</div>
-);
-}
-
-const mediaSrc = p.signed_url || p.media_url;
-
+if (mediaItems.length === 1) {
+const item = mediaItems[0];
+const mediaSrc = item.signed_url || item.media_url;
 if (!mediaSrc) return null;
 
 const isVideo =
-(p.media_type && p.media_type.startsWith("video/")) || p.kind === "video";
-const isImage =
-(p.media_type && p.media_type.startsWith("image/")) || p.kind === "image";
+(item.media_type && item.media_type.startsWith("video/")) || p.kind === "video";
 
 if (isVideo) {
 return (
@@ -1813,12 +1797,32 @@ background: "rgba(0,0,0,0.5)",
 );
 }
 
-if (isImage) {
 return (
 <div
-onClick={() => setViewer({ url: mediaSrc!, type: "image" })}
+onClick={() => setViewer({ url: activeSrc, type: "image" })}
 onContextMenu={(e) => e.preventDefault()}
 onDragStart={(e) => e.preventDefault()}
+onTouchStart={(e) => {
+touchStartXRef.current[p.id] = e.touches[0].clientX;
+}}
+onTouchEnd={(e) => {
+const startX = touchStartXRef.current[p.id];
+const endX = e.changedTouches[0].clientX;
+const diff = startX - endX;
+
+if (Math.abs(diff) > 45) {
+e.preventDefault();
+e.stopPropagation();
+
+if (diff > 0) {
+goTo(activeIndex + 1);
+} else {
+goTo(activeIndex - 1);
+}
+}
+
+delete touchStartXRef.current[p.id];
+}}
 style={{
 width: "100%",
 display: "flex",
@@ -1855,8 +1859,6 @@ WebkitTouchCallout: "none",
 
 <div
 aria-hidden="true"
-onContextMenu={(e) => e.preventDefault()}
-onDragStart={(e) => e.preventDefault()}
 style={{
 position: "absolute",
 inset: 0,
@@ -1868,7 +1870,150 @@ background: "transparent",
 );
 }
 
-return null;
+const activeIndex = galleryIndex[p.id] ?? 0;
+const activeItem = mediaItems[activeIndex] ?? mediaItems[0];
+const activeSrc = activeItem?.signed_url || activeItem?.media_url;
+
+if (!activeSrc) return null;
+
+const goTo = (nextIndex: number) => {
+const safeIndex =
+nextIndex < 0
+? mediaItems.length - 1
+: nextIndex >= mediaItems.length
+? 0
+: nextIndex;
+
+setGalleryIndex((m) => ({
+...m,
+[p.id]: safeIndex,
+}));
+};
+
+return (
+<div
+style={{
+position: "relative",
+marginBottom: 10,
+userSelect: "none",
+WebkitUserSelect: "none",
+WebkitTouchCallout: "none",
+}}
+>
+<div
+onClick={() => setViewer({ url: activeSrc, type: "image" })}
+onContextMenu={(e) => e.preventDefault()}
+onDragStart={(e) => e.preventDefault()}
+style={{
+position: "relative",
+cursor: "pointer",
+}}
+>
+<img
+src={activeSrc}
+alt=""
+draggable={false}
+onContextMenu={(e) => e.preventDefault()}
+onDragStart={(e) => e.preventDefault()}
+style={{
+display: "block",
+width: "100%",
+maxWidth: "100%",
+height: "auto",
+borderRadius: 14,
+border: "1px solid rgba(180,120,255,0.14)",
+objectFit: "contain",
+boxSizing: "border-box",
+pointerEvents: "none",
+userSelect: "none",
+WebkitUserSelect: "none",
+WebkitTouchCallout: "none",
+}}
+/>
+
+<button
+type="button"
+onClick={(e) => {
+e.stopPropagation();
+goTo(activeIndex - 1);
+}}
+style={{
+position: "absolute",
+left: 8,
+top: "50%",
+transform: "translateY(-50%)",
+width: 34,
+height: 34,
+borderRadius: 999,
+border: "1px solid rgba(236,72,153,0.35)",
+background: "rgba(0,0,0,0.45)",
+color: "white",
+fontSize: 22,
+cursor: "pointer",
+}}
+>
+‹
+</button>
+
+<button
+type="button"
+onClick={(e) => {
+e.stopPropagation();
+goTo(activeIndex + 1);
+}}
+style={{
+position: "absolute",
+right: 8,
+top: "50%",
+transform: "translateY(-50%)",
+width: 34,
+height: 34,
+borderRadius: 999,
+border: "1px solid rgba(34,211,238,0.35)",
+background: "rgba(0,0,0,0.45)",
+color: "white",
+fontSize: 22,
+cursor: "pointer",
+}}
+>
+›
+</button>
+</div>
+
+<div
+style={{
+display: "flex",
+justifyContent: "center",
+gap: 7,
+marginTop: 9,
+}}
+>
+{mediaItems.map((_, index) => (
+<button
+key={`dot-${p.id}-${index}`}
+type="button"
+onClick={() => goTo(index)}
+style={{
+
+width: 10,
+height: 10,
+borderRadius: "50%",
+border: "none",
+padding: 0,
+cursor: "pointer",
+background: index === activeIndex ? "#ec4899" : "#8b5cf6",
+boxShadow:
+index === activeIndex
+? "0 0 10px rgba(236,72,153,0.95)"
+: "0 0 8px rgba(139,92,246,0.65)",
+transition: "all 0.18s ease",
+
+}}
+/>
+))}
+</div>
+</div>
+);
 };
 
 function renderClickableBody(body: string) {
@@ -2050,16 +2195,34 @@ userSelect: "none",
 }}
 >
 <input
-ref={fileInputRef}
 type="file"
 accept="image/*,video/*"
 multiple
 style={{ display: "none" }}
 onChange={(e) => {
 const selected = Array.from(e.target.files ?? []).slice(0, 10);
+
+const videos = selected.filter((f) => f.type.startsWith("video/"));
+const images = selected.filter((f) => f.type.startsWith("image/"));
+
+if (videos.length > 1) {
+alert("You can only upload one video at a time.");
+e.target.value = "";
+setFiles([]);
+return;
+}
+
+if (videos.length === 1 && selected.length > 1) {
+alert("You can upload multiple photos, or one video — not both together.");
+e.target.value = "";
+setFiles([]);
+return;
+}
+
 setFiles(selected);
 }}
 />
+
 {files.length ? "Change media" : "Add photo/video"}
 </label>
 {files.length === 1 && files[0]?.type?.startsWith("video/") && (
