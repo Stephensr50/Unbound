@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@supabase/supabase-js";
 import Link from "next/link";
@@ -32,6 +32,18 @@ looking_for?: string | null;
 ds_relationship?: string | null;
 };
 
+type PostMediaRow = {
+id?: number;
+post_id: number;
+media_url: string | null;
+media_bucket: string | null;
+media_path: string | null;
+media_type: string | null;
+sort_order: number | null;
+signed_url?: string | null;
+
+};
+
 type PostRow = {
 id: number;
 user_id: string;
@@ -43,6 +55,10 @@ image_url?: string | null;
 file_url?: string | null;
 media_type?: string | null;
 group_id?: number | null;
+media_bucket?: string | null;
+media_path?: string | null;
+signed_url?: string | null;
+media_items?: PostMediaRow[];
 };
 
 type GroupRow = {
@@ -159,6 +175,8 @@ const [gallery, setGallery] = useState<{
 items: GalleryItem[];
 index: number;
 } | null>(null);
+const [galleryIndex, setGalleryIndex] = useState<Record<number, number>>({});
+const touchStartXRef = useRef<Record<number, number>>({});
 
 async function refreshAuth() {
 const { data } = await supabase.auth.getSession();
@@ -414,7 +432,7 @@ setBanner(null);
 
 const { data, error } = await supabase
 .from("posts")
-.select("id,user_id,body,kind,created_at,media_url,media_type,group_id")
+.select("id,user_id,body,kind,created_at,media_url,media_type,media_bucket,media_path,group_id")
 .eq("user_id", uid)
 .order("created_at", { ascending: false })
 .limit(100);
@@ -425,7 +443,52 @@ setPosts([]);
 return;
 }
 
-const rows = (data ?? []) as PostRow[];
+let rows = (data ?? []) as PostRow[];
+
+const postIds = rows.map((p) => p.id);
+
+if (postIds.length) {
+const { data: mediaRows, error: mediaRowsError } = await supabase
+.from("post_media")
+.select("id,post_id,media_url,media_bucket,media_path,media_type,sort_order")
+.in("post_id", postIds)
+.order("sort_order", { ascending: true });
+
+if (mediaRowsError) {
+setBanner(mediaRowsError.message);
+return;
+}
+
+const signedMediaRows = await Promise.all(
+((mediaRows ?? []) as PostMediaRow[]).map(async (m) => {
+if (m.media_bucket && m.media_path) {
+const { data: signedData } = await supabase.storage
+.from(m.media_bucket)
+.createSignedUrl(m.media_path, 60 * 60 * 24);
+
+return {
+...m,
+signed_url: signedData?.signedUrl ?? null,
+};
+}
+
+return m;
+})
+);
+
+const mediaByPostId: Record<number, PostMediaRow[]> = {};
+
+for (const m of signedMediaRows) {
+if (!mediaByPostId[m.post_id]) mediaByPostId[m.post_id] = [];
+mediaByPostId[m.post_id].push(m);
+}
+
+rows = rows.map((p) => ({
+...p,
+media_items: mediaByPostId[p.id] ?? [],
+}));
+}
+
 setPosts(rows);
 
 const groupIds = Array.from(
@@ -1156,7 +1219,16 @@ Videos {videoPosts.length ? `· ${videoPosts.length}` : ""}
 {activeTab === "posts" ? (
 <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
 {posts.map((p) => {
-const media = getPostMedia(p);
+
+const mediaItems = p.media_items && p.media_items.length > 0 ? p.media_items : [];
+const activeIndex = galleryIndex[p.id] ?? 0;
+const activeItem = mediaItems[activeIndex] ?? mediaItems[0];
+
+const media =
+activeItem?.signed_url ||
+activeItem?.media_url ||
+p.signed_url ||
+getPostMedia(p);
 
 const isVideo = isVideoPost(p);
 const isPhoto = isPhotoPost(p);
@@ -1271,7 +1343,91 @@ style={mediaStyle}
 onClick={() => openGalleryForPost(p.id, "videos")}
 />
 ) : (
-// eslint-disable-next-line @next/next/no-img-element
+<div
+style={{
+position: "relative",
+width: "100%",
+marginTop: 12,
+}}
+>
+{mediaItems.length > 1 && (
+<>
+<button
+type="button"
+onClick={(e) => {
+e.stopPropagation();
+setGalleryIndex((prev) => ({
+...prev,
+[p.id]:
+(activeIndex - 1 + mediaItems.length) %
+mediaItems.length,
+}));
+}}
+style={{
+position: "absolute",
+left: 10, // right: 10 on the second button
+top: "50%",
+transform: "translateY(-50%)",
+
+display: "flex",
+alignItems: "center",
+justifyContent: "center",
+paddingBottom: 5,
+
+zIndex: 5,
+width: 42,
+height: 42,
+borderRadius: "50%",
+border: "1px solid rgba(236,72,153,0.55)",
+background: "rgba(20,0,28,0.75)",
+color: "#ec4899",
+fontSize: 26,
+fontWeight: 900,
+cursor: "pointer",
+boxShadow: "0 0 12px rgba(236,72,153,0.35)",
+}}
+>
+‹
+</button>
+
+<button
+type="button"
+onClick={(e) => {
+e.stopPropagation();
+setGalleryIndex((prev) => ({
+...prev,
+[p.id]:
+(activeIndex + 1) % mediaItems.length,
+}));
+}}
+style={{
+position: "absolute",
+right: 10, // right: 10 on the second button
+top: "50%",
+transform: "translateY(-50%)",
+
+display: "flex",
+alignItems: "center",
+justifyContent: "center",
+paddingBottom: 5,
+zIndex: 5,
+width: 42,
+height: 42,
+borderRadius: "50%",
+border: "1px solid rgba(236,72,153,0.55)",
+background: "rgba(20,0,28,0.75)",
+color: "#ec4899",
+fontSize: 26,
+fontWeight: 900,
+cursor: "pointer",
+boxShadow: "0 0 12px rgba(236,72,153,0.35)",
+}}
+>
+›
+</button>
+</>
+)}
+
 <div
 onClick={() => openGalleryForPost(p.id, "photos")}
 onContextMenu={(e) => e.preventDefault()}
@@ -1279,15 +1435,12 @@ onDragStart={(e) => e.preventDefault()}
 style={{
 position: "relative",
 width: "100%",
-marginTop: 12,
 userSelect: "none",
 WebkitUserSelect: "none",
 WebkitTouchCallout: "none",
 cursor: "pointer",
 }}
 >
-
-{/* eslint-disable-next-line @next/next/no-img-element */}
 <img
 src={media}
 alt=""
@@ -1303,15 +1456,7 @@ WebkitUserSelect: "none",
 WebkitTouchCallout: "none",
 }}
 />
-<div
-aria-hidden="true"
-style={{
-position: "absolute",
-inset: 0,
-borderRadius: 14,
-background: "transparent",
-}}
-/>
+</div>
 </div>
 )
 ) : null}
