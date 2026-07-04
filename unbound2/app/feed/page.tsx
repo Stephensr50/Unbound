@@ -1904,9 +1904,32 @@ WebkitTouchCallout: "none",
 onClick={() => setViewer({ url: activeSrc, type: "image" })}
 onContextMenu={(e) => e.preventDefault()}
 onDragStart={(e) => e.preventDefault()}
+onPointerDown={(e) => {
+touchStartXRef.current[p.id] = e.clientX;
+}}
+onPointerUp={(e) => {
+const startX = touchStartXRef.current[p.id];
+if (typeof startX !== "number") return;
+
+const diff = startX - e.clientX;
+
+if (Math.abs(diff) > 45) {
+e.preventDefault();
+e.stopPropagation();
+
+if (diff > 0) {
+goTo(activeIndex + 1);
+} else {
+goTo(activeIndex - 1);
+}
+}
+
+delete touchStartXRef.current[p.id];
+}}
 style={{
 position: "relative",
 cursor: "pointer",
+touchAction: "pan-y",
 }}
 >
 <img
