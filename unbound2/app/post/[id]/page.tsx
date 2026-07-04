@@ -806,17 +806,26 @@ goTo(activeIndex - 1);
 }}
 style={{
 position: "absolute",
-left: 8,
+left: 10, // right: 10 on the second button
 top: "50%",
 transform: "translateY(-50%)",
-width: 34,
-height: 34,
-borderRadius: 999,
-border: "1px solid rgba(236,72,153,0.35)",
-background: "rgba(0,0,0,0.45)",
-color: "white",
-fontSize: 22,
+
+display: "flex",
+alignItems: "center",
+justifyContent: "center",
+paddingBottom: 5,
+
+zIndex: 5,
+width: 42,
+height: 42,
+borderRadius: "50%",
+border: "1px solid rgba(236,72,153,0.55)",
+background: "rgba(20,0,28,0.75)",
+color: "#ec4899",
+fontSize: 26,
+fontWeight: 900,
 cursor: "pointer",
+boxShadow: "0 0 12px rgba(236,72,153,0.35)",
 }}
 >
 ‹
@@ -830,17 +839,25 @@ goTo(activeIndex + 1);
 }}
 style={{
 position: "absolute",
-right: 8,
+right: 10, // right: 10 on the second button
 top: "50%",
 transform: "translateY(-50%)",
-width: 34,
-height: 34,
-borderRadius: 999,
-border: "1px solid rgba(236,72,153,0.35)",
-background: "rgba(0,0,0,0.45)",
-color: "white",
-fontSize: 22,
+
+display: "flex",
+alignItems: "center",
+justifyContent: "center",
+paddingBottom: 5,
+zIndex: 5,
+width: 42,
+height: 42,
+borderRadius: "50%",
+border: "1px solid rgba(236,72,153,0.55)",
+background: "rgba(20,0,28,0.75)",
+color: "#ec4899",
+fontSize: 26,
+fontWeight: 900,
 cursor: "pointer",
+boxShadow: "0 0 12px rgba(236,72,153,0.35)",
 }}
 >
 ›
