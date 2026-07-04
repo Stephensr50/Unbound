@@ -10,6 +10,17 @@ const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
 return createClient(url, key);
 }
 
+type PostMediaRow = {
+id?: number;
+post_id: number;
+media_url: string | null;
+media_bucket: string | null;
+media_path: string | null;
+media_type: string | null;
+sort_order: number | null;
+signed_url?: string | null;
+};
+
 type ExplorePostRow = {
 id: number;
 user_id: string;
@@ -20,6 +31,8 @@ media_url: string | null;
 media_bucket: string | null;
 media_path: string | null;
 media_type: string | null;
+signed_url?: string | null;
+media_items?: PostMediaRow[];
 };
 
 type ProfileRow = {
@@ -91,10 +104,49 @@ const { data, error } = await supabase
 if (error) throw error;
 if (!alive) return;
 
-const rawRows = ((data ?? []) as ExplorePostRow[]).filter(
-(p) => !!p.media_url
+let rawRows = ((data ?? []) as ExplorePostRow[]).filter(
+(p) => !!p.media_url || !!p.media_path
+);
+const postIds = rawRows.map((p) => p.id);
+
+if (postIds.length) {
+const { data: mediaRows, error: mediaRowsError } = await supabase
+.from("post_media")
+.select("id,post_id,media_url,media_bucket,media_path,media_type,sort_order")
+.in("post_id", postIds)
+.order("sort_order", { ascending: true });
+
+if (mediaRowsError) throw mediaRowsError;
+
+const signedMediaRows = await Promise.all(
+((mediaRows ?? []) as PostMediaRow[]).map(async (m) => {
+if (m.media_bucket && m.media_path) {
+const { data: signedData } = await supabase.storage
+.from(m.media_bucket)
+.createSignedUrl(m.media_path, 60 * 60 * 24);
+
+return {
+...m,
+signed_url: signedData?.signedUrl ?? null,
+};
+}
+
+return m;
+})
 );
 
+const mediaByPostId: Record<number, PostMediaRow[]> = {};
+
+for (const m of signedMediaRows) {
+if (!mediaByPostId[m.post_id]) mediaByPostId[m.post_id] = [];
+mediaByPostId[m.post_id].push(m);
+}
+
+rawRows = rawRows.map((p) => ({
+...p,
+media_items: mediaByPostId[p.id] ?? [],
+}));
+}
 const seen = new Set<string>();
 const rows: ExplorePostRow[] = [];
 
@@ -373,6 +425,17 @@ gap: 4,
 const profile = profilesById[post.user_id];
 const label = profile?.display_name || profile?.username || "Unknown";
 const isVideo = isVideoPost(post);
+const mediaItems =
+post.media_items && post.media_items.length > 0
+? post.media_items
+: [];
+
+const firstMedia = mediaItems[0];
+const mediaSrc =
+firstMedia?.signed_url ||
+firstMedia?.media_url ||
+post.signed_url ||
+post.media_url;
 
 return (
 <div
@@ -398,10 +461,10 @@ borderRadius: 0,
 background: "black",
 }}
 >
-{post.media_url ? (
+{mediaSrc ? (
 isVideo ? (
 <video
-src={post.media_url}
+src={mediaSrc}
 muted
 playsInline
 preload="auto"
@@ -456,6 +519,36 @@ background: "transparent",
 />
 </div>
 )
+) : null}
+{mediaItems.length > 1 ? (
+<div
+style={{
+position: "absolute",
+left: 0,
+right: 0,
+bottom: 8,
+display: "flex",
+justifyContent: "center",
+gap: 5,
+pointerEvents: "none",
+}}
+>
+{mediaItems.slice(0, 5).map((_, index) => (
+<span
+key={`explore-dot-${post.id}-${index}`}
+style={{
+width: 6,
+height: 6,
+borderRadius: "50%",
+background: index === 0 ? "#ec4899" : "#8b5cf6",
+boxShadow:
+index === 0
+? "0 0 8px rgba(236,72,153,0.9)"
+: "0 0 6px rgba(139,92,246,0.55)",
+}}
+/>
+))}
+</div>
 ) : null}
 </div>
 </div>

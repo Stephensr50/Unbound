@@ -18,6 +18,17 @@ type ReactionKey = "devil" | "fire" | "eyes" | "purple_heart";
 
 type ReactionCountsMap = Partial<Record<ReactionKey, number>>;
 
+type PostMediaRow = {
+id?: number;
+post_id: number;
+media_url: string | null;
+media_bucket: string | null;
+media_path: string | null;
+media_type: string | null;
+sort_order: number | null;
+signed_url?: string | null;
+};
+
 type PostRow = {
 id: number;
 user_id: string;
@@ -26,6 +37,10 @@ kind: string;
 created_at: string;
 media_url: string | null;
 media_type: string | null;
+media_bucket: string | null;
+media_path: string | null;
+signed_url?: string | null;
+media_items?: PostMediaRow[];
 };
 
 type CommentRow = {
@@ -95,6 +110,7 @@ const [draft, setDraft] = useState("");
 const [busy, setBusy] = useState(false);
 const [busyCommentLikeId, setBusyCommentLikeId] = useState<number | null>(null);
 const [spark, setSpark] = useState(false);
+const [galleryIndex, setGalleryIndex] = useState<Record<number, number>>({});
 
 const [replyTo, setReplyTo] = useState<{
 id: number;
@@ -107,6 +123,7 @@ const flashTimerRef = useRef<number | null>(null);
 const commentRefs = useRef<Record<number, HTMLDivElement | null>>({});
 const [flashCommentId, setFlashCommentId] = useState<number | null>(null);
 const commentFlashTimerRef = useRef<number | null>(null);
+const touchStartXRef = useRef<Record<number, number>>({});
 
 async function refreshAuth() {
 const { data } = await supabase.auth.getSession();
@@ -143,7 +160,7 @@ const uid = await refreshAuth();
 
 const { data: p, error: pErr } = await supabase
 .from("posts")
-.select("id,user_id,body,kind,created_at,media_url,media_type")
+.select("id,user_id,body,kind,created_at,media_url,media_type,media_bucket,media_path")
 .eq("id", pid)
 .maybeSingle();
 
@@ -156,8 +173,42 @@ setBanner("Post not found.");
 return;
 }
 
-const postRow = p as PostRow;
-setPost(postRow);
+let postRow = p as PostRow;
+
+const { data: mediaRows, error: mediaErr } = await supabase
+.from("post_media")
+.select("id,post_id,media_url,media_bucket,media_path,media_type,sort_order")
+.eq("post_id", pid)
+.order("sort_order", { ascending: true });
+
+if (mediaErr) {
+setBanner(mediaErr.message);
+return;
+}
+
+const signedMediaRows = await Promise.all(
+((mediaRows ?? []) as PostMediaRow[]).map(async (m) => {
+if (m.media_bucket && m.media_path) {
+const { data: signedData } = await supabase.storage
+.from(m.media_bucket)
+.createSignedUrl(m.media_path, 60 * 60 * 24);
+
+return {
+...m,
+signed_url: signedData?.signedUrl ?? null,
+};
+}
+
+return m;
+})
+);
+
+postRow = {
+...postRow,
+media_items: signedMediaRows,
+};
+
+setPost(postRow); 
 
 if (postRow.user_id) {
 const { data: prof } = await supabase
@@ -632,17 +683,50 @@ outline: "none",
 };
 
 const renderMedia = (p: PostRow) => {
-if (!p.media_url) return null;
+const mediaItems =
+p.media_items && p.media_items.length > 0
+? p.media_items
+: p.media_url
+? [
+{
+post_id: p.id,
+media_url: p.media_url,
+media_bucket: p.media_bucket,
+media_path: p.media_path,
+media_type: p.media_type,
+sort_order: 0,
+signed_url: p.signed_url ?? null,
+},
+]
+: [];
+
+if (!mediaItems.length) return null;
+
+const activeIndex = galleryIndex[p.id] ?? 0;
+const activeItem = mediaItems[activeIndex] ?? mediaItems[0];
+const activeSrc = activeItem?.signed_url || activeItem?.media_url;
+
+if (!activeSrc) return null;
 
 const isVideo =
-(p.media_type && p.media_type.startsWith("video/")) || p.kind === "video";
-const isImage =
-(p.media_type && p.media_type.startsWith("image/")) || p.kind === "image";
+(activeItem.media_type && activeItem.media_type.startsWith("video/")) ||
+p.kind === "video";
+
+const goTo = (nextIndex: number) => {
+const safeIndex =
+nextIndex < 0
+? mediaItems.length - 1
+: nextIndex >= mediaItems.length
+? 0
+: nextIndex;
+
+setGalleryIndex((m) => ({ ...m, [p.id]: safeIndex }));
+};
 
 if (isVideo) {
 return (
 <video
-src={p.media_url}
+src={activeSrc}
 controls
 style={{
 width: "100%",
@@ -656,23 +740,44 @@ background: "rgba(0,0,0,0.5)",
 );
 }
 
-if (isImage) {
 return (
+<div style={{ marginBottom: 10 }}>
 <div
 onContextMenu={(e) => e.preventDefault()}
 onDragStart={(e) => e.preventDefault()}
+onPointerDown={(e) => {
+touchStartXRef.current[p.id] = e.clientX;
+}}
+onPointerUp={(e) => {
+const startX = touchStartXRef.current[p.id];
+if (typeof startX !== "number") return;
+
+const diff = startX - e.clientX;
+
+if (Math.abs(diff) > 45) {
+e.preventDefault();
+e.stopPropagation();
+
+if (diff > 0) {
+goTo(activeIndex + 1);
+} else {
+goTo(activeIndex - 1);
+}
+}
+
+delete touchStartXRef.current[p.id];
+}}
 style={{
 position: "relative",
 width: "100%",
-marginBottom: 10,
 userSelect: "none",
 WebkitUserSelect: "none",
 WebkitTouchCallout: "none",
+touchAction: "pan-y",
 }}
 >
-{/* eslint-disable-next-line @next/next/no-img-element */}
 <img
-src={p.media_url}
+src={activeSrc}
 alt=""
 draggable={false}
 onContextMenu={(e) => e.preventDefault()}
@@ -691,20 +796,93 @@ WebkitTouchCallout: "none",
 }}
 />
 
-<div
-aria-hidden="true"
+{mediaItems.length > 1 ? (
+<>
+<button
+type="button"
+onClick={(e) => {
+e.stopPropagation();
+goTo(activeIndex - 1);
+}}
 style={{
 position: "absolute",
-inset: 0,
-borderRadius: 14,
-background: "transparent",
+left: 8,
+top: "50%",
+transform: "translateY(-50%)",
+width: 34,
+height: 34,
+borderRadius: 999,
+border: "1px solid rgba(236,72,153,0.35)",
+background: "rgba(0,0,0,0.45)",
+color: "white",
+fontSize: 22,
+cursor: "pointer",
+}}
+>
+‹
+</button>
+
+<button
+type="button"
+onClick={(e) => {
+e.stopPropagation();
+goTo(activeIndex + 1);
+}}
+style={{
+position: "absolute",
+right: 8,
+top: "50%",
+transform: "translateY(-50%)",
+width: 34,
+height: 34,
+borderRadius: 999,
+border: "1px solid rgba(236,72,153,0.35)",
+background: "rgba(0,0,0,0.45)",
+color: "white",
+fontSize: 22,
+cursor: "pointer",
+}}
+>
+›
+</button>
+</>
+) : null}
+</div>
+
+{mediaItems.length > 1 ? (
+<div
+style={{
+display: "flex",
+justifyContent: "center",
+gap: 7,
+marginTop: 9,
+}}
+>
+{mediaItems.map((_, index) => (
+<button
+key={`post-dot-${p.id}-${index}`}
+type="button"
+onClick={() => goTo(index)}
+style={{
+width: 10,
+height: 10,
+borderRadius: "50%",
+border: "none",
+padding: 0,
+cursor: "pointer",
+background: index === activeIndex ? "#ec4899" : "#8b5cf6",
+boxShadow:
+index === activeIndex
+? "0 0 10px rgba(236,72,153,0.95)"
+: "0 0 8px rgba(139,92,246,0.65)",
+transition: "all 0.18s ease",
 }}
 />
+))}
+</div>
+) : null}
 </div>
 );
-}
-
-return null;
 };
 
 const authorName =
