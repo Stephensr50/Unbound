@@ -395,8 +395,8 @@ key={i}
 style={{
 aspectRatio: "4 / 5",
 borderRadius: 20,
-border: "3px solid rgba(236, 72, 154, 0.62)",
-background: "rgba(0,0,0,0.42)",
+border: "1px solid rgba(236, 72, 153, 0.18)",
+background: "rgba(0,0,0,0.18)",
 }}
 />
 ))}
