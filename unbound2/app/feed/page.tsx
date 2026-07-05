@@ -2122,6 +2122,64 @@ alignItems: "start",
 35% { box-shadow: 0 0 34px rgba(192,38,211,0.45); }
 100% { box-shadow: 0 0 0 rgba(192,38,211,0.0); }
 }
+
+@keyframes unboundPop {
+0% { transform: scale(1); }
+45% { transform: scale(1.22); }
+100% { transform: scale(1); }
+}
+
+@keyframes deleteBounce {
+0% { transform: scale(0.86); opacity: 0; }
+70% { transform: scale(1.04); opacity: 1; }
+100% { transform: scale(1); opacity: 1; }
+}
+
+@keyframes borderLaser {
+0% { background-position: 0% 50%; }
+100% { background-position: 300% 50%; }
+}
+
+.laser-card {
+position: relative;
+overflow: hidden;
+border: 2px solid rgba(236,72,153,0.45) !important;
+}
+
+.laser-card::before {
+content: "";
+position: absolute;
+inset: -2px;
+border-radius: inherit;
+padding: 3px;
+background: linear-gradient(
+90deg,
+rgba(236,72,153,0.15),
+rgba(236,72,153,1),
+rgba(255,255,255,0.95),
+rgba(168,85,247,1),
+rgba(236,72,153,0.15)
+);
+background-size: 300% 300%;
+animation: borderLaser 4s linear infinite;
+pointer-events: none;
+z-index: 2;
+
+-webkit-mask:
+linear-gradient(#000 0 0) content-box,
+linear-gradient(#000 0 0);
+-webkit-mask-composite: xor;
+mask:
+linear-gradient(#000 0 0) content-box,
+linear-gradient(#000 0 0);
+mask-composite: exclude;
+}
+
+.laser-card > * {
+position: relative;
+z-index: 3;
+}
+
 `}</style>
 
 <StoriesBar />
@@ -2566,6 +2624,7 @@ return (
 <div
 key={p.id}
 id={`post-${p.id}`}
+className="laser-card"
 style={{
 ...cardStyle,
 border: isFocused ? "1px solid rgba(192,38,211,0.65)" : cardStyle.border,
