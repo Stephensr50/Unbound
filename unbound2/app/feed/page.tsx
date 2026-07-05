@@ -2161,7 +2161,7 @@ rgba(168,85,247,1),
 rgba(236,72,153,0.15)
 );
 background-size: 300% 300%;
-animation: borderLaser 4s linear infinite;
+animation: borderLaser 4.5s linear infinite;
 pointer-events: none;
 z-index: 2;
 
