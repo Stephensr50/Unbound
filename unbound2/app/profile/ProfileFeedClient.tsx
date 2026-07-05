@@ -802,19 +802,35 @@ setBusyPostId(null);
 }
 
 function makeGalleryItems(items: PostRow[], mode: "photos" | "videos"): GalleryItem[] {
-return items
-.map((p) => {
-const media = getPostMedia(p);
-if (!media) return null;
-return {
+return items.flatMap((p) => {
+const mediaItems = p.media_items && p.media_items.length > 0 ? p.media_items : [];
+
+if (mode === "photos" && mediaItems.length > 0) {
+return mediaItems
+.filter((m) => (m.media_type ?? "").startsWith("image/") || m.signed_url || m.media_url)
+.map((m) => ({
+postId: p.id,
+url: m.signed_url || m.media_url || "",
+type: "image" as const,
+caption: p.body,
+createdAt: p.created_at,
+}))
+.filter((item) => !!item.url);
+}
+
+const media = p.signed_url || getPostMedia(p);
+if (!media) return [];
+
+return [
+{
 postId: p.id,
 url: media,
 type: mode === "photos" ? "image" : "video",
 caption: p.body,
 createdAt: p.created_at,
-} as GalleryItem;
-})
-.filter(Boolean) as GalleryItem[];
+} as GalleryItem,
+];
+});
 }
 
 function openGalleryForPost(postId: number, mode: "photos" | "videos") {
@@ -872,6 +888,36 @@ background: "rgba(0,0,0,0.35)",
 color: "white",
 cursor: "pointer",
 fontWeight: 700,
+};
+
+const galleryArrow: React.CSSProperties = {
+position: "absolute",
+top: "50%",
+transform: "translateY(-50%)",
+width: 46,
+height: 46,
+borderRadius: "50%",
+border: "1px solid rgba(180,120,255,0.45)",
+background: "rgba(40,0,60,0.85)",
+color: "#d946ef",
+fontSize: 26,
+fontWeight: 700,
+cursor: "pointer",
+display: "flex",
+alignItems: "center",
+justifyContent: "center",
+zIndex: 20,
+boxShadow: "0 0 18px rgba(217,70,239,0.35)",
+};
+
+const galleryArrowLeft: React.CSSProperties = {
+...galleryArrow,
+left: 16,
+};
+
+const galleryArrowRight: React.CSSProperties = {
+...galleryArrow,
+right: 16,
 };
 
 const tabBtn = (active: boolean): React.CSSProperties => ({
@@ -987,7 +1033,16 @@ return (
 return (
 <div style={mediaGrid}>
 {items.map((p) => {
-const media = getPostMedia(p);
+const mediaItems =
+p.media_items && p.media_items.length > 0 ? p.media_items : [];
+console.log("PHOTO GRID POST", p.id, "media_items:", mediaItems.length, mediaItems);
+
+const media =
+mediaItems[0]?.signed_url ||
+mediaItems[0]?.media_url ||
+p.signed_url ||
+getPostMedia(p);
+
 if (!media) return null;
 
 const groupInfo =
@@ -997,12 +1052,34 @@ return (
 <div
 key={p.id}
 style={mediaTile}
-onClick={() => openGalleryForPost(p.id, mode)}
+onClick={() => {
+const mediaItems =
+p.media_items && p.media_items.length > 0 ? p.media_items : [];
+
+if (mode === "photos" && mediaItems.length > 1) {
+setGallery({
+items: mediaItems
+.map((m) => ({
+postId: p.id,
+url: m.signed_url || m.media_url || "",
+type: "image" as const,
+caption: p.body,
+createdAt: p.created_at,
+}))
+.filter((item) => !!item.url),
+index: 0,
+});
+return;
+}
+
+openGalleryForPost(p.id, mode);
+}}
 title={p.body || (mode === "photos" ? "Open photo" : "Open video")}
 >
 {mode === "photos" ? (
 // eslint-disable-next-line @next/next/no-img-element
 // eslint-disable-next-line @next/next/no-img-element
+<>
 <img
 src={media}
 alt=""
@@ -1020,6 +1097,35 @@ WebkitUserSelect: "none",
 WebkitTouchCallout: "none",
 }}
 />
+
+{mediaItems.length > 1 ? (
+<div
+style={{
+position: "absolute",
+bottom: 10,
+left: 0,
+right: 0,
+display: "flex",
+justifyContent: "center",
+gap: 7,
+zIndex: 5,
+}}
+>
+{mediaItems.map((_, index) => (
+<div
+key={`photo-grid-dot-${p.id}-${index}`}
+style={{
+width: 9,
+height: 9,
+borderRadius: "50%",
+background: index === 0 ? "#ec4899" : "#8b5cf6",
+boxShadow: "0 0 8px rgba(236,72,153,0.75)",
+}}
+/>
+))}
+</div>
+) : null}
+</>
 ) : (
 <video
 src={media}
@@ -1751,34 +1857,13 @@ marginBottom: 10,
 {gallery.index + 1} of {gallery.items.length}
 </div>
 
-<div style={{ display: "flex", gap: 8 }}>
-<button
-onClick={galleryPrev}
-disabled={gallery.items.length <= 1}
-style={{
-...pillBtn,
-opacity: gallery.items.length <= 1 ? 0.5 : 1,
-}}
->
-← Prev
-</button>
 
-<button
-onClick={galleryNext}
-disabled={gallery.items.length <= 1}
-style={{
-...pillBtn,
-opacity: gallery.items.length <= 1 ? 0.5 : 1,
-}}
->
-Next →
-</button>
 
 <button onClick={() => setGallery(null)} style={pillBtn}>
 Close
 </button>
 </div>
-</div>
+
 {currentGalleryItem.type === "image" ? (
 <div
 onContextMenu={(e) => e.preventDefault()}
@@ -1813,6 +1898,63 @@ WebkitTouchCallout: "none",
 }}
 />
 
+<button
+type="button"
+onClick={galleryPrev}
+disabled={gallery.items.length <= 1}
+style={{
+...galleryArrowLeft,
+left: 12,
+opacity: gallery.items.length <= 1 ? 0.5 : 1,
+}}
+>
+‹
+</button>
+
+<button
+type="button"
+onClick={galleryNext}
+disabled={gallery.items.length <= 1}
+style={{
+...galleryArrowRight,
+right: 12,
+opacity: gallery.items.length <= 1 ? 0.5 : 1,
+}}
+>
+›
+</button>
+{gallery.items.length > 1 && (
+<div
+style={{
+position: "absolute",
+bottom: 12,
+left: "50%",
+transform: "translateX(-50%)",
+display: "flex",
+gap: 8,
+zIndex: 30,
+}}
+>
+{gallery.items.map((_, index) => (
+<div
+key={index}
+style={{
+width: 10,
+height: 10,
+borderRadius: "50%",
+background:
+index === gallery.index
+? "#ec4899"
+: "rgba(255,255,255,0.35)",
+boxShadow:
+index === gallery.index
+? "0 0 10px rgba(236,72,153,0.8)"
+: "none",
+}}
+/>
+))}
+</div>
+)}
 <div
 aria-hidden="true"
 style={{
@@ -1840,6 +1982,7 @@ margin: "0 auto",
 )}
 
 <div style={{ marginTop: 10 }}>
+
 <div style={{ fontSize: 13, opacity: 0.72 }}>
 {timeAgo(currentGalleryItem.createdAt)}
 </div>
