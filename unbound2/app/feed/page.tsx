@@ -2952,13 +2952,13 @@ Delete
 {p.title ? (
 <div
 style={{
-fontSize: 34,
+fontSize: isMobile ? 30 : 34,
 fontWeight: 900,
 marginBottom: 14,
-color: "#ff78d4",
-textShadow: "0 0 4px rgba(236,72,153,.22)",
-fontFamily: "Gloock, serif",
-lineHeight: 1.1,
+color: "#f472b6",
+textShadow: "0 0 3px rgba(236,72,153,.28)",
+fontFamily: "Georgia, serif",
+lineHeight: 1.08,
 }}
 >
 {p.title}
