@@ -2952,10 +2952,12 @@ Delete
 {p.title ? (
 <div
 style={{
-fontSize: isMobile ? 30 : 34,
+fontSize: isMobile ? 26 : 34,
 fontWeight: 900,
 marginBottom: 14,
-color: "#f472b6",
+color: isMobile ? "#e879c4" : "#f472b6",
+WebkitFontSmoothing: "antialiased",
+MozOsxFontSmoothing: "grayscale",
 textShadow: "none",
 fontFamily: "Georgia, serif",
 lineHeight: 1.08,
