@@ -2956,7 +2956,7 @@ fontSize: isMobile ? 30 : 34,
 fontWeight: 900,
 marginBottom: 14,
 color: "#f472b6",
-textShadow: "0 0 3px rgba(236,72,153,.28)",
+textShadow: "none",
 fontFamily: "Georgia, serif",
 lineHeight: 1.08,
 }}
