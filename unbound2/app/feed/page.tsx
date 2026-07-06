@@ -2955,11 +2955,8 @@ style={{
 fontSize: 34,
 fontWeight: 900,
 marginBottom: 14,
-color: "#ec4899",
-textShadow: `
-0 0 3px rgba(236,72,153,.55),
-0 0 8px rgba(168,85,247,.30)
-`,
+color: "#ff78d4",
+textShadow: "0 0 4px rgba(236,72,153,.22)",
 fontFamily: "Gloock, serif",
 lineHeight: 1.1,
 }}
