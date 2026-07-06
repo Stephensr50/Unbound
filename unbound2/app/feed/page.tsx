@@ -2994,7 +2994,7 @@ fontWeight: 800,
 fontSize: 17,
 cursor: "pointer",
 textShadow:
-"0 0 10px rgba(236,72,153,.7), 0 0 20px rgba(168,85,247,.45)",
+"0 0 5px rgba(236,72,153,.7), 0 0 20px rgba(168,85,247,.45)",
 }}
 >
 Continue reading →
