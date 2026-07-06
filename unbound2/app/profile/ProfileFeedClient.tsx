@@ -1988,6 +1988,7 @@ overflowY: "auto",
 <div
 onClick={(e) => e.stopPropagation()}
 style={{
+position: "relative",
 width: "min(1040px, 96vw)",
 background: "rgba(0,0,0,0.90)",
 border: "1px solid rgba(180,120,255,0.22)",
@@ -2052,8 +2053,27 @@ style={pillBtn}
 Unsave
 </button>
 
-<button onClick={() => setGallery(null)} style={pillBtn}>
-Close
+<button
+type="button"
+onClick={() => setGallery(null)}
+aria-label="Close"
+style={{
+position: "absolute",
+top: 10,
+right: 10,
+width: 42,
+height: 42,
+borderRadius: "50%",
+border: "1px solid rgba(180,120,255,0.35)",
+background: "rgba(0,0,0,0.65)",
+color: "white",
+fontSize: 24,
+fontWeight: 900,
+cursor: "pointer",
+zIndex: 50,
+}}
+>
+×
 </button>
 </div>
 </div>
