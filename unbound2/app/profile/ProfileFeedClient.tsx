@@ -2000,8 +2000,8 @@ marginBottom: 40,
 <div
 style={{
 display: "flex",
-alignItems: "center",
-justifyContent: "space-between",
+flexDirection: "column",
+alignItems: "flex-start",
 gap: 10,
 marginBottom: 10,
 }}
@@ -2038,7 +2038,7 @@ style={{
 display: "flex",
 gap: 8,
 flexWrap: "wrap",
-marginLeft: -80,
+
 }}
 >
 {currentGalleryAuthor ? (
@@ -2056,7 +2056,7 @@ type="button"
 onClick={() => unsavePost(currentGalleryItem.postId)}
 style={pillBtn}
 >
-Unsave
+Unsave 
 </button>
 
 <button
