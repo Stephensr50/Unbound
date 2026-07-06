@@ -2958,7 +2958,10 @@ marginBottom: 14,
 color: isMobile ? "#e879c4" : "#f472b6",
 WebkitFontSmoothing: "antialiased",
 MozOsxFontSmoothing: "grayscale",
-textShadow: "none",
+textShadow: `
+0 0 2px rgba(236,72,153,0.20),
+0 0 6px rgba(168,85,247,0.12)
+`,
 fontFamily: "Georgia, serif",
 lineHeight: 1.08,
 }}
