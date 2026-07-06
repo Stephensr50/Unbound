@@ -2956,8 +2956,27 @@ color: savedPosts.has(currentGalleryItem.postId) ? "#ec4899" : "white",
 >
 {savedPosts.has(currentGalleryItem.postId) ? "Saved" : "Save"}
 </button>
-<button onClick={() => setGallery(null)} style={pillBtn}>
-Close
+<button
+type="button"
+onClick={() => setGallery(null)}
+aria-label="Close"
+style={{
+position: "absolute",
+top: 10,
+right: 10,
+width: 42,
+height: 42,
+borderRadius: "50%",
+border: "1px solid rgba(180,120,255,0.35)",
+background: "rgba(0,0,0,0.65)",
+color: "white",
+fontSize: 24,
+fontWeight: 900,
+cursor: "pointer",
+zIndex: 50,
+}}
+>
+×
 </button>
 </div>
 </div>
