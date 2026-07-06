@@ -138,6 +138,7 @@ const [myUserId, setMyUserId] = useState<string | null>(null);
 const [reportBusyPostId, setReportBusyPostId] = useState<number | null>(null);
 const [allowedAuthorIds, setAllowedAuthorIds] = useState<string[]>([]);
 const [posts, setPosts] = useState<PostRow[]>([]);
+const [savedPosts, setSavedPosts] = useState<Set<number>>(new Set());
 const [text, setText] = useState("");
 
 const [files, setFiles] = useState<File[]>([]);
@@ -227,7 +228,19 @@ fileInputRef.current?.click();
 async function refreshAuth() {
 const { data } = await supabase.auth.getSession();
 const uid = data.session?.user?.id ?? null;
+
 setMyUserId(uid);
+
+if (uid) {
+const { data: savedRows } = await supabase
+.from("saved_posts")
+.select("post_id")
+.eq("user_id", uid);
+
+setSavedPosts(new Set((savedRows ?? []).map((row) => row.post_id)));
+} else {
+setSavedPosts(new Set());
+}
 return uid;
 }
 
@@ -1060,6 +1073,48 @@ setBusyPostId(null);
 async function toggleSpank(postId: number) {
 const existing = myReactionByPost[postId];
 await setReaction(postId, existing || "devil");
+}
+async function toggleSavePost(postId: number) {
+const uid = myUserId ?? (await refreshAuth());
+if (!uid) return;
+
+const alreadySaved = savedPosts.has(postId);
+
+setSavedPosts((prev) => {
+const next = new Set(prev);
+if (alreadySaved) next.delete(postId);
+else next.add(postId);
+return next;
+});
+
+if (alreadySaved) {
+const { error } = await supabase
+.from("saved_posts")
+.delete()
+.eq("user_id", uid)
+.eq("post_id", postId);
+
+if (error) {
+setBanner(error.message);
+setSavedPosts((prev) => new Set(prev).add(postId));
+}
+
+return;
+}
+
+const { error } = await supabase.from("saved_posts").insert({
+user_id: uid,
+post_id: postId,
+});
+
+if (error) {
+setBanner(error.message);
+setSavedPosts((prev) => {
+const next = new Set(prev);
+next.delete(postId);
+return next;
+});
+}
 }
 
 async function openCommentsFor(postId: number) {
@@ -2149,7 +2204,7 @@ border: 2px solid rgba(236,72,153,0.45) !important;
 .laser-card::before {
 content: "";
 position: absolute;
-inset: -2px;
+inset: 0px;
 border-radius: inherit;
 padding: 3px;
 background: linear-gradient(
@@ -2888,6 +2943,8 @@ onToggleSpank={toggleSpank}
 onTogglePicker={toggleReactionPicker}
 onSetReaction={setReaction}
 onOpenComments={openCommentsFor}
+isSaved={savedPosts.has(p.id)}
+onToggleSave={toggleSavePost}
 />
 
 {isOpen ? (

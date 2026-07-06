@@ -28,6 +28,8 @@ onToggleSpank,
 onTogglePicker,
 onSetReaction,
 onOpenComments,
+isSaved,
+onToggleSave,
 }: {
 postId: number;
 spanks: number;
@@ -43,6 +45,8 @@ onToggleSpank: (postId: number) => void;
 onTogglePicker: (postId: number) => void;
 onSetReaction: (postId: number, reaction: ReactionKey) => void;
 onOpenComments: (postId: number) => void;
+isSaved?: boolean;
+onToggleSave?: (postId: number) => void;
 }) {
 const orderedReactions = (Object.keys(REACTIONS) as ReactionKey[]).filter(
 (key) => (reactionCounts?.[key] ?? 0) > 0
@@ -194,6 +198,39 @@ onOpenComments(postId);
 style={pillBtn}
 >
 Comments {comments ? `· ${comments}` : ""}
+</button>
+<button
+type="button"
+onClick={(e) => {
+e.stopPropagation();
+onToggleSave?.(postId);
+}}
+style={{
+...pillBtn,
+padding: 0,
+width: 46,
+height: 46,
+color: isSaved ? "#e879f9" : "white",
+display: "flex",
+alignItems: "center",
+justifyContent: "center",
+}}
+title={isSaved ? "Saved" : "Save"}
+>
+
+<svg
+width="20"
+height="20"
+viewBox="0 0 24 24"
+fill={isSaved ? "currentColor" : "none"}
+stroke="currentColor"
+strokeWidth="2.4"
+strokeLinecap="round"
+strokeLinejoin="round"
+aria-hidden="true"
+>
+<path d="M6 3h12a1 1 0 0 1 1 1v17l-7-5-7 5V4a1 1 0 0 1 1-1z" />
+</svg>
 </button>
 
 {orderedReactions.length > 0 ? (

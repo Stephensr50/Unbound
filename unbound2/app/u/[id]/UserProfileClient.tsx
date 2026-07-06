@@ -173,6 +173,7 @@ const searchParams = useSearchParams();
 
 const [myUserId, setMyUserId] = useState<string | null>(null);
 const [posts, setPosts] = useState<PostRow[]>([]);
+const [savedPosts, setSavedPosts] = useState<Set<number>>(new Set());
 const [banner, setBanner] = useState<string | null>(null);
 const [openPostMenu, setOpenPostMenu] = useState<Record<number, boolean>>({});
 const [profileUnavailable, setProfileUnavailable] = useState(false);
@@ -231,6 +232,26 @@ const [profileKinks, setProfileKinks] = useState<UserKinkRow[]>([]);
 const [kinksModalOpen, setKinksModalOpen] = useState(false);
 const [aboutModalOpen, setAboutModalOpen] = useState(false);
 async function refreshAuth() {
+
+    async function refreshAuth() {
+const { data } = await supabase.auth.getSession();
+const uid = data.session?.user?.id ?? null;
+
+setMyUserId(uid);
+
+if (uid) {
+const { data: savedRows } = await supabase
+.from("saved_posts")
+.select("post_id")
+.eq("user_id", uid);
+
+setSavedPosts(new Set((savedRows ?? []).map((row) => row.post_id)));
+} else {
+setSavedPosts(new Set());
+}
+
+return uid;
+}
 const { data } = await supabase.auth.getSession();
 const uid = data.session?.user?.id ?? null;
 setMyUserId(uid);
@@ -1034,7 +1055,49 @@ async function toggleSpank(postId: number) {
 const existing = myReactionByPost[postId];
 await setReaction(postId, existing || "devil");
 }
+async function toggleSavePost(postId: number) {
+const uid = myUserId ?? (await refreshAuth());
+if (!uid) return;
 
+const alreadySaved = savedPosts.has(postId);
+
+if (alreadySaved) {
+const { error } = await supabase
+.from("saved_posts")
+.delete()
+.eq("user_id", uid)
+.eq("post_id", postId);
+
+if (error) {
+setBanner(error.message);
+return;
+}
+
+setSavedPosts((prev) => {
+const next = new Set(prev);
+next.delete(postId);
+return next;
+});
+
+return;
+}
+
+const { error } = await supabase.from("saved_posts").insert({
+user_id: uid,
+post_id: postId,
+});
+
+if (error) {
+setBanner(error.message);
+return;
+}
+
+setSavedPosts((prev) => {
+const next = new Set(prev);
+next.add(postId);
+return next;
+});
+}
 async function openCommentsFor(postId: number) {
 setOpenComments((m) => ({ ...m, [postId]: !m[postId] }));
 
@@ -2883,7 +2946,16 @@ opacity: gallery.items.length <= 1 ? 0.5 : 1,
 >
 Next →
 </button>
-
+<button
+type="button"
+onClick={() => toggleSavePost(currentGalleryItem.postId)}
+style={{
+...pillBtn,
+color: savedPosts.has(currentGalleryItem.postId) ? "#ec4899" : "white",
+}}
+>
+{savedPosts.has(currentGalleryItem.postId) ? "Saved" : "Save"}
+</button>
 <button onClick={() => setGallery(null)} style={pillBtn}>
 Close
 </button>

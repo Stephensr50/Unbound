@@ -15,7 +15,7 @@ return createClient(url, key);
 
 type ReactionKey = "devil" | "fire" | "eyes" | "purple_heart";
 type ReactionCountsMap = Partial<Record<ReactionKey, number>>;
-type ProfileTab = "posts" | "photos" | "videos";
+type ProfileTab = "posts" | "photos" | "videos" | "saved";
 type RelationshipTab = "followers" | "following" | "friends";
 
 type ProfileRow = {
@@ -131,8 +131,11 @@ const router = useRouter();
 
 const [myUserId, setMyUserId] = useState<string | null>(null);
 const [myProfile, setMyProfile] = useState<ProfileRow | null>(null);
+const [profilesById, setProfilesById] = useState<Record<string, ProfileRow>>({});
 
 const [posts, setPosts] = useState<PostRow[]>([]);
+const [savedPosts, setSavedPosts] = useState<Set<number>>(new Set());
+const [savedPostRows, setSavedPostRows] = useState<PostRow[]>([]);
 const [banner, setBanner] = useState<string | null>(null);
 const [groupsById, setGroupsById] = useState<Record<number, GroupRow>>({});
 const [activeTab, setActiveTab] = useState<ProfileTab>("posts");
@@ -183,6 +186,59 @@ const { data } = await supabase.auth.getSession();
 const uid = data.session?.user?.id ?? null;
 setMyUserId(uid);
 return uid;
+}
+
+async function loadSavedPosts(uid: string) {
+const { data: savedRows, error: savedErr } = await supabase
+.from("saved_posts")
+.select("post_id")
+.eq("user_id", uid)
+.order("created_at", { ascending: false });
+
+if (savedErr) {
+setBanner(savedErr.message);
+return;
+}
+
+const ids = (savedRows ?? []).map((row) => row.post_id);
+
+setSavedPosts(new Set(ids));
+
+if (!ids.length) {
+setSavedPostRows([]);
+return;
+}
+
+const { data, error } = await supabase
+.from("posts")
+.select("id,user_id,body,kind,created_at,media_url,media_type,media_bucket,media_path,group_id")
+.in("id", ids);
+
+if (error) {
+setBanner(error.message);
+return;
+}
+
+
+const authorIds = Array.from(
+new Set(((data ?? []) as PostRow[]).map((p) => p.user_id).filter(Boolean))
+);
+
+if (authorIds.length) {
+const { data: profiles } = await supabase
+.from("profiles")
+.select("id,username,display_name,avatar_url")
+.in("id", authorIds);
+
+const map: Record<string, ProfileRow> = {};
+for (const profile of (profiles ?? []) as ProfileRow[]) {
+map[profile.id] = profile;
+}
+
+setProfilesById(map);
+}
+
+setSavedPostRows((data ?? []) as PostRow[]);
 }
 
 async function loadMyProfile(uid: string) {
@@ -518,6 +574,7 @@ return;
 await Promise.all([
 loadMyProfile(uid),
 loadMyPosts(uid),
+loadSavedPosts(uid),
 loadRelationshipCounts(uid),
 ]);
 })();
@@ -695,6 +752,34 @@ const existing = myReactionByPost[postId];
 await setReaction(postId, existing || "devil");
 }
 
+async function unsavePost(postId: number) {
+const uid = myUserId ?? (await refreshAuth());
+if (!uid) return;
+
+const { error } = await supabase
+.from("saved_posts")
+.delete()
+.eq("user_id", uid)
+.eq("post_id", postId);
+
+if (error) {
+setBanner(error.message);
+return;
+}
+
+setSavedPosts((prev) => {
+const next = new Set(prev);
+next.delete(postId);
+return next;
+});
+
+setSavedPostRows((rows) => rows.filter((p) => p.id !== postId));
+
+if (gallery?.items[gallery.index]?.postId === postId) {
+setGallery(null);
+}
+}
+
 async function openCommentsFor(postId: number) {
 const nextOpen = !openComments[postId];
 setOpenComments((m) => ({ ...m, [postId]: nextOpen }));
@@ -834,7 +919,12 @@ createdAt: p.created_at,
 }
 
 function openGalleryForPost(postId: number, mode: "photos" | "videos") {
-const source = mode === "photos" ? photoPosts : videoPosts;
+const source =
+activeTab === "saved"
+? savedPostRows
+: mode === "photos"
+? photoPosts
+: videoPosts;
 const items = makeGalleryItems(source, mode);
 const index = Math.max(
 0,
@@ -1020,6 +1110,14 @@ relationshipTab === "followers"
 
 const currentGalleryItem =
 gallery && gallery.items.length > 0 ? gallery.items[gallery.index] : null;
+
+const currentGalleryPost = currentGalleryItem
+? savedPostRows.find((p) => p.id === currentGalleryItem.postId)
+: null;
+
+const currentGalleryAuthor = currentGalleryPost
+? profilesById[currentGalleryPost.user_id]
+: null;
 
 const renderMediaGrid = (items: PostRow[], mode: "photos" | "videos") => {
 if (items.length === 0) {
@@ -1366,6 +1464,12 @@ style={tabBtn(activeTab === "videos")}
 >
 Videos {videoPosts.length ? `· ${videoPosts.length}` : ""}
 </button>
+<button
+onClick={() => setActiveTab("saved")}
+style={tabBtn(activeTab === "saved")}
+>
+Saved {savedPosts.size ? `· ${savedPosts.size}` : ""}
+</button>
 </div>
 
 {activeTab === "posts" ? (
@@ -1703,8 +1807,10 @@ No posts yet.
 </div>
 ) : activeTab === "photos" ? (
 renderMediaGrid(photoPosts, "photos")
-) : (
+) : activeTab === "videos" ? (
 renderMediaGrid(videoPosts, "videos")
+) : (
+renderMediaGrid(savedPostRows, "photos")
 )}
 
 {relationshipModalOpen ? (
@@ -1899,15 +2005,57 @@ gap: 10,
 marginBottom: 10,
 }}
 >
-<div style={{ fontSize: 13, opacity: 0.8 }}>
+<div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
+{currentGalleryAuthor?.avatar_url ? (
+<img
+src={currentGalleryAuthor.avatar_url}
+alt=""
+style={{
+width: 38,
+height: 38,
+borderRadius: 999,
+objectFit: "cover",
+border: "1px solid rgba(255,255,255,0.16)",
+}}
+/>
+) : null}
+
+<div style={{ minWidth: 0 }}>
+<div style={{ fontWeight: 900 }}>
+{currentGalleryAuthor?.display_name ||
+currentGalleryAuthor?.username ||
+"Saved post"}
+</div>
+<div style={{ fontSize: 12, opacity: 0.7 }}>
+{currentGalleryAuthor?.username ? `@${currentGalleryAuthor.username} · ` : ""}
 {gallery.index + 1} of {gallery.items.length}
 </div>
+</div>
+</div>
 
+<div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+{currentGalleryAuthor ? (
+<button
+type="button"
+onClick={() => router.push(`/u/${currentGalleryAuthor.username || currentGalleryAuthor.id}`)}
+style={pillBtn}
+>
+View Profile
+</button>
+) : null}
 
+<button
+type="button"
+onClick={() => unsavePost(currentGalleryItem.postId)}
+style={pillBtn}
+>
+Unsave
+</button>
 
 <button onClick={() => setGallery(null)} style={pillBtn}>
 Close
 </button>
+</div>
 </div>
 
 {currentGalleryItem.type === "image" ? (
