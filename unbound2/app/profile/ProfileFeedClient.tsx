@@ -2033,8 +2033,14 @@ currentGalleryAuthor?.username ||
 </div>
 </div>
 </div>
-
-<div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+<div
+style={{
+display: "flex",
+gap: 8,
+flexWrap: "wrap",
+marginLeft: -80,
+}}
+>
 {currentGalleryAuthor ? (
 <button
 type="button"
