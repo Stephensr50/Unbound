@@ -33,6 +33,7 @@ type PostRow = {
 id: number;
 user_id: string;
 body: string | null;
+title: string | null;
 kind: string;
 created_at: string;
 media_url: string | null;
@@ -140,6 +141,7 @@ const [allowedAuthorIds, setAllowedAuthorIds] = useState<string[]>([]);
 const [posts, setPosts] = useState<PostRow[]>([]);
 const [savedPosts, setSavedPosts] = useState<Set<number>>(new Set());
 const [text, setText] = useState("");
+const [title, setTitle] = useState("");
 
 const [files, setFiles] = useState<File[]>([]);
 const [postAsReel, setPostAsReel] = useState(false);
@@ -197,6 +199,7 @@ const [viewer, setViewer] = useState<{
 url: string;
 type: "image" | "video";
 } | null>(null);
+const [readingPost, setReadingPost] = useState<PostRow | null>(null);
 const [galleryIndex, setGalleryIndex] = useState<Record<number, number>>({});
 
 const [focusPostId, setFocusPostId] = useState<number | null>(null);
@@ -510,7 +513,7 @@ allowedAuthorIds.length > 0 ? allowedAuthorIds : await getAllowedAuthorIds(uid);
 
 const { data, error } = await supabase
 .from("posts")
-.select("id,user_id,body,kind,created_at,media_url,media_type,media_bucket,media_path,group_id,is_locked")
+.select("id,user_id,title,body,kind,created_at,media_url,media_type,media_bucket,media_path,group_id,is_locked")
 .eq("id", focusId)
 .maybeSingle();
 
@@ -607,7 +610,7 @@ return;
 
 const { data, error } = await supabase
 .from("posts")
-.select("id,user_id,body,kind,created_at,media_url,media_type,media_bucket,media_path,group_id,is_locked")
+.select("id,user_id,title,body,kind,created_at,media_url,media_type,media_bucket,media_path,group_id,is_locked")
 .in("user_id", visibleAllowedIds)
 .eq("is_reel", false)
 .order("created_at", { ascending: false })
@@ -1564,7 +1567,9 @@ if (joinError) throw new Error(joinError.message);
 
 async function submitPost() {
 const trimmed = text.trim();
-if (!trimmed && files.length === 0) return;
+const trimmedTitle = title.trim();
+
+if (!trimmed && !trimmedTitle && files.length === 0) return;
 
 setPosting(true);
 setBanner(null);
@@ -1635,6 +1640,7 @@ const { data: insertedPost, error } = await supabase
 .from("posts")
 .insert({
 user_id: uid,
+title: trimmedTitle || null,
 body: trimmed || null,
 kind,
 media_url: firstUpload?.publicUrl ?? null,
@@ -1673,6 +1679,7 @@ await savePostHashtags(supabase, insertedPost.id, trimmed);
 }
 
 setText("");
+setTitle("");
 setFiles([]);
 setPostAsReel(false);
 setShowOnExplore(true);
@@ -2110,7 +2117,21 @@ transition: "all 0.18s ease",
 </div>
 );
 };
+function truncateBody(body: string) {
+const limit = 300;
 
+if (body.length <= limit) {
+return {
+text: body,
+truncated: false,
+};
+}
+
+return {
+text: body.slice(0, limit).trimEnd() + "...",
+truncated: true,
+};
+}
 function renderClickableBody(body: string) {
 const parts = body.split(/(#[a-zA-Z0-9_]+)/g);
 
@@ -2317,6 +2338,18 @@ padding: 14,
 marginBottom: 18,
 }}
 >
+    <input
+placeholder="Add a headline…"
+value={title}
+onChange={(e) => setTitle(e.target.value)}
+maxLength={80}
+style={{
+...inputStyle,
+width: "100%",
+marginBottom: 10,
+fontWeight: 900,
+}}
+/>
 <textarea
 placeholder="Share a status update…"
 value={text}
@@ -2916,17 +2949,60 @@ Delete
 {renderMedia(p)}
 </div>
 
-{p.body ? (
+{p.title ? (
+<div
+style={{
+fontSize: 34,
+fontWeight: 900,
+marginBottom: 14,
+color: "#ec4899",
+textShadow: `
+0 0 8px rgba(236,72,153,.9),
+0 0 18px rgba(168,85,247,.85),
+0 0 32px rgba(168,85,247,.45)
+`,
+fontFamily: "Gloock, serif",
+lineHeight: 1.1,
+}}
+>
+{p.title}
+</div>
+) : null}
+
+{p.body ? (() => {
+const preview = truncateBody(p.body);
+
+return (
+<>
 <div
 style={{
 fontSize: 16,
-lineHeight: 1.4,
+lineHeight: 1.6,
 whiteSpace: "pre-wrap",
 }}
 >
-{renderClickableBody(p.body)}
+{renderClickableBody(preview.text)}
 </div>
-) : null}
+
+{preview.truncated && (
+<div
+onClick={() => setReadingPost(p)}
+style={{
+marginTop: 12,
+color: "#ec4899",
+fontWeight: 800,
+fontSize: 17,
+cursor: "pointer",
+textShadow:
+"0 0 10px rgba(236,72,153,.7), 0 0 20px rgba(168,85,247,.45)",
+}}
+>
+Continue reading →
+</div>
+)}
+</>
+);
+})() : null}
 
 <ReactionBar
 postId={p.id}
@@ -3117,7 +3193,97 @@ gap: 14,
 <FeaturedProfileCard />
 </aside>
 ) : null}
+{readingPost ? (
+<div
+onClick={() => setReadingPost(null)}
+style={{
+position: "fixed",
+inset: 0,
+background: "rgba(0,0,0,0.78)",
+display: "flex",
+alignItems: "center",
+justifyContent: "center",
+zIndex: 9998,
+padding: 16,
+}}
+>
+<div
+onClick={(e) => e.stopPropagation()}
+style={{
+width: "min(760px, 96vw)",
+maxHeight: "86vh",
+overflowY: "auto",
+background: "rgba(5,5,10,0.96)",
+border: "1px solid rgba(236,72,153,0.45)",
+borderRadius: 22,
+padding: isMobile ? 18 : 24,
+boxShadow:
+"0 0 30px rgba(236,72,153,0.35), 0 0 70px rgba(168,85,247,0.22)",
+}}
+>
+<div
+style={{
+display: "flex",
+justifyContent: "space-between",
+gap: 12,
+alignItems: "flex-start",
+marginBottom: 18,
+}}
+>
+<div style={{ minWidth: 0 }}>
+<div
+style={{
+fontSize: 13,
+opacity: 0.65,
+marginBottom: 8,
+}}
+>
+{authorName(readingPost.user_id)} · {timeAgo(readingPost.created_at)}
+</div>
 
+{readingPost.title ? (
+<div
+style={{
+fontSize: isMobile ? 32 : 42,
+fontWeight: 900,
+color: "#ec4899",
+textShadow:
+"0 0 8px rgba(236,72,153,.9), 0 0 22px rgba(168,85,247,.7)",
+fontFamily: "Gloock, serif",
+lineHeight: 1.05,
+}}
+>
+{readingPost.title}
+</div>
+) : null}
+</div>
+
+<button
+onClick={() => setReadingPost(null)}
+style={{
+...pillBtn,
+flex: "0 0 auto",
+}}
+>
+Close
+</button>
+</div>
+
+{readingPost.body ? (
+<div
+style={{
+fontSize: 17,
+lineHeight: 1.7,
+whiteSpace: "pre-wrap",
+color: "rgba(255,255,255,0.9)",
+}}
+>
+{renderClickableBody(readingPost.body)}
+</div>
+) : null}
+</div>
+</div>
+) : null}
 {viewer ? (
 <div
 onClick={() => setViewer(null)}
