@@ -204,6 +204,10 @@ const [commentsByPost, setCommentsByPost] = useState<Record<number, CommentRow[]
 
 const [commentProfilesById, setCommentProfilesById] = useState<Record<string, ProfileRow>>({});
 const [commentDraft, setCommentDraft] = useState<Record<number, string>>({});
+const [commentLikeCounts, setCommentLikeCounts] = useState<Record<number, number>>({});
+const [commentLikedByMe, setCommentLikedByMe] = useState<Record<number, boolean>>({});
+const [editingCommentId, setEditingCommentId] = useState<number | null>(null);
+const [editingCommentBody, setEditingCommentBody] = useState("");
 
 const [relationshipCounts, setRelationshipCounts] = useState({
 followers: 0,
@@ -232,8 +236,6 @@ const [profileKinks, setProfileKinks] = useState<UserKinkRow[]>([]);
 const [kinksModalOpen, setKinksModalOpen] = useState(false);
 const [aboutModalOpen, setAboutModalOpen] = useState(false);
 async function refreshAuth() {
-
-    async function refreshAuth() {
 const { data } = await supabase.auth.getSession();
 const uid = data.session?.user?.id ?? null;
 
@@ -250,11 +252,6 @@ setSavedPosts(new Set((savedRows ?? []).map((row) => row.post_id)));
 setSavedPosts(new Set());
 }
 
-return uid;
-}
-const { data } = await supabase.auth.getSession();
-const uid = data.session?.user?.id ?? null;
-setMyUserId(uid);
 return uid;
 }
 
@@ -1122,6 +1119,11 @@ setCommentsByPost((m) => ({
 [postId]: rows,
 }));
 
+await loadCommentLikes(
+rows.map((c) => c.id),
+myUserId ?? null
+);
+
 const commenterIds = Array.from(
 new Set(rows.map((c) => c.user_id).filter(Boolean))
 ).filter((id) => !commentProfilesById[id]);
@@ -1142,6 +1144,37 @@ return next;
 });
 }
 }
+}
+
+async function loadCommentLikes(commentIds: number[], uid: string | null) {
+if (!commentIds.length) return;
+
+const { data, error } = await supabase
+.from("comment_likes")
+.select("comment_id,user_id")
+.in("comment_id", commentIds);
+
+if (error) {
+console.error("loadCommentLikes error:", error.message);
+return;
+}
+
+const counts: Record<number, number> = {};
+const mine: Record<number, boolean> = {};
+
+for (const row of data ?? []) {
+const commentId = (row as any).comment_id as number;
+const userId = (row as any).user_id as string;
+
+counts[commentId] = (counts[commentId] ?? 0) + 1;
+
+if (uid && userId === uid) {
+mine[commentId] = true;
+}
+}
+
+setCommentLikeCounts((m) => ({ ...m, ...counts }));
+setCommentLikedByMe((m) => ({ ...m, ...mine }));
 }
 
 async function unlockPost(post: PostRow) {
@@ -1177,6 +1210,105 @@ return;
 }
 
 window.location.href = data.url;
+}
+
+async function deleteComment(postId: number, commentId: number) {
+const uid = myUserId ?? (await refreshAuth());
+if (!uid) return;
+
+const { error } = await supabase
+.from("post_comments")
+.delete()
+.eq("id", commentId)
+.eq("user_id", uid);
+
+if (error) {
+setBanner(error.message);
+return;
+}
+
+setCommentsByPost((m) => ({
+...m,
+[postId]: (m[postId] ?? []).filter((c) => c.id !== commentId),
+}));
+
+setCommentCounts((m) => ({
+...m,
+[postId]: Math.max(0, (m[postId] ?? 0) - 1),
+}));
+}
+async function saveEditedComment(commentId: number) {
+const uid = myUserId ?? (await refreshAuth());
+if (!uid) return;
+
+const body = editingCommentBody.trim();
+if (!body) return;
+
+const { data, error } = await supabase
+.from("post_comments")
+.update({ body })
+.eq("id", commentId)
+.eq("user_id", uid)
+.select("id,post_id,user_id,body,created_at")
+.single();
+
+if (error) {
+setBanner(error.message);
+return;
+}
+
+setCommentsByPost((m) => ({
+...m,
+[(data as CommentRow).post_id]: (m[(data as CommentRow).post_id] ?? []).map((c) =>
+c.id === commentId ? (data as CommentRow) : c
+),
+}));
+
+setEditingCommentId(null);
+setEditingCommentBody("");
+}
+async function toggleCommentLike(commentId: number) {
+const uid = myUserId ?? (await refreshAuth());
+if (!uid) return;
+
+const alreadyLiked = !!commentLikedByMe[commentId];
+
+if (alreadyLiked) {
+const { error } = await supabase
+.from("comment_likes")
+.delete()
+.eq("comment_id", commentId)
+.eq("user_id", uid);
+
+if (error) {
+setBanner(error.message);
+return;
+}
+
+setCommentLikedByMe((m) => ({ ...m, [commentId]: false }));
+setCommentLikeCounts((m) => ({
+...m,
+[commentId]: Math.max(0, (m[commentId] ?? 0) - 1),
+}));
+
+return;
+}
+
+const { error } = await supabase.from("comment_likes").insert({
+comment_id: commentId,
+user_id: uid,
+});
+
+if (error) {
+setBanner(error.message);
+return;
+}
+
+setCommentLikedByMe((m) => ({ ...m, [commentId]: true }));
+setCommentLikeCounts((m) => ({
+...m,
+[commentId]: (m[commentId] ?? 0) + 1,
+}));
 }
 async function addComment(postId: number) {
 const uid = myUserId ?? (await refreshAuth());
@@ -2589,8 +2721,86 @@ flex: "0 0 auto",
 <span style={{ opacity: 0.6, fontSize: 12 }}>{timeAgo(c.created_at)}</span>
 </div>
 
-<div style={{ whiteSpace: "pre-wrap", lineHeight: 1.35 }}>{c.body}</div>
+{editingCommentId === c.id ? (
+<div style={{ display: "flex", gap: 8, marginTop: 6 }}>
+<input
+value={editingCommentBody}
+onChange={(e) => setEditingCommentBody(e.target.value)}
+style={{ ...inputStyle, flex: 1 }}
+autoFocus
+/>
 
+<button onClick={() => saveEditedComment(c.id)} style={postBtn}>
+Save
+</button>
+
+<button
+onClick={() => {
+setEditingCommentId(null);
+setEditingCommentBody("");
+}}
+style={pillBtn}
+>
+Cancel
+</button>
+</div>
+) : (
+<div style={{ whiteSpace: "pre-wrap", lineHeight: 1.35 }}>{c.body}</div>
+)}
+<button
+type="button"
+onClick={() => toggleCommentLike(c.id)}
+style={{
+marginTop: 8,
+border: "none",
+background: "transparent",
+color: commentLikedByMe[c.id] ? "#ec4899" : "rgba(255,255,255,0.68)",
+cursor: "pointer",
+fontWeight: 800,
+padding: 0,
+}}
+>
+{commentLikedByMe[c.id] ? "💜 Liked" : "♡ Like"}
+{commentLikeCounts[c.id] ? ` · ${commentLikeCounts[c.id]}` : ""}
+</button>
+{c.user_id === myUserId ? (
+<div style={{ display: "flex", gap: 12, marginTop: 8 }}>
+
+<button
+type="button"
+onClick={() => {
+setEditingCommentId(c.id);
+setEditingCommentBody(c.body);
+}}
+style={{
+border: "none",
+background: "transparent",
+color: "rgba(255,255,255,0.68)",
+cursor: "pointer",
+fontWeight: 800,
+padding: 0,
+}}
+>
+Edit
+</button>
+
+<button
+type="button"
+onClick={() => deleteComment(p.id, c.id)}
+style={{
+border: "none",
+background: "transparent",
+color: "rgba(255,120,120,0.9)",
+cursor: "pointer",
+fontWeight: 800,
+padding: 0,
+}}
+>
+Delete
+</button>
+
+</div>
+) : null}
 <ReportCommentButton
 commentId={c.id}
 commentBody={c.body}
