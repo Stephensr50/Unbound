@@ -2,25 +2,45 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useState, type CSSProperties } from "react";
 
 export default function BottomNav() {
 const pathname = usePathname();
 const [isMobile, setIsMobile] = useState(false);
+const [mounted, setMounted] = useState(false);
 
 useEffect(() => {
-const check = () => setIsMobile(window.innerWidth <= 900);
-check();
-window.addEventListener("resize", check);
-return () => window.removeEventListener("resize", check);
+const checkMobile = () => {
+setIsMobile(window.innerWidth <= 900);
+};
+
+setMounted(true);
+checkMobile();
+
+window.addEventListener("resize", checkMobile);
+
+return () => {
+window.removeEventListener("resize", checkMobile);
+};
 }, []);
 
-if (!isMobile) return null;
+if (!mounted || !isMobile) return null;
+
+const hideOn = new Set([
+"/",
+"/login",
+"/signup",
+"/camera",
+"/forgot-password",
+"/reset-password",
+]);
+
+if (pathname && hideOn.has(pathname)) return null;
 
 const active = "#ff4fd8";
 const inactive = "rgba(255,255,255,0.72)";
 
-const itemStyle = (isActive: boolean): React.CSSProperties => ({
+const itemStyle = (isActive: boolean): CSSProperties => ({
 color: isActive ? active : inactive,
 textDecoration: "none",
 display: "grid",
@@ -30,7 +50,7 @@ fontSize: 11,
 fontFamily: "Arial, sans-serif",
 });
 
-const iconStyle: React.CSSProperties = {
+const iconStyle: CSSProperties = {
 width: 24,
 height: 24,
 };
@@ -42,15 +62,19 @@ position: "fixed",
 left: 0,
 right: 0,
 bottom: 0,
-height: 72,
-zIndex: 9999,
+height: "calc(72px + env(safe-area-inset-bottom))",
+zIndex: 1000000,
 display: "grid",
 gridTemplateColumns: "repeat(5, 1fr)",
 alignItems: "center",
-background: "rgba(5,0,10,0.94)",
+boxSizing: "border-box",
+background: "rgba(5,0,10,0.96)",
 backdropFilter: "blur(16px)",
+WebkitBackdropFilter: "blur(16px)",
 borderTop: "1px solid rgba(255,255,255,0.12)",
 paddingBottom: "env(safe-area-inset-bottom)",
+boxShadow:
+"0 -8px 28px rgba(0,0,0,0.65), 0 0 22px rgba(168,85,247,0.16)",
 }}
 >
 <Link href="/feed" style={itemStyle(pathname === "/feed")}>
@@ -67,7 +91,7 @@ Feed
 Explore
 </Link>
 
-<Link href="/camera" style={itemStyle(false)}>
+<Link href="/camera" style={itemStyle(false)} aria-label="Create post">
 <span
 style={{
 width: 52,
