@@ -18,6 +18,8 @@ const [mounted, setMounted] = useState(false);
 const [restrictedNav, setRestrictedNav] = useState(false);
 const [menuOpen, setMenuOpen] = useState(false);
 const [isMobile, setIsMobile] = useState(false);
+const [authChecked, setAuthChecked] = useState(false);
+const [isLoggedIn, setIsLoggedIn] = useState(false);
 
 useEffect(() => {
 function checkMobile() {
@@ -40,8 +42,15 @@ const { signalUnread, refreshSignals } = useUnreadSignals();
 useEffect(() => {
 async function checkModerationStatus() {
 const { data: authData } = await supabase.auth.getUser();
-const user = authData?.user;
-if (!user) return;
+const user = authData?.user ?? null;
+
+setIsLoggedIn(!!user);
+setAuthChecked(true);
+
+if (!user) {
+setRestrictedNav(false);
+return;
+}
 
 const { data: profile } = await supabase
 .from("profiles")
@@ -127,7 +136,110 @@ const hideOn = new Set([
 ]);
 
 const shouldHide = !!pathname && hideOn.has(pathname);
+
 if (shouldHide || restrictedNav) return null;
+
+if (pathname === "/" && !authChecked) {
+return null;
+}
+
+if (pathname === "/" && !isLoggedIn) {
+return (
+<header
+style={{
+position: "fixed",
+top: 14,
+left: "50%",
+transform: "translateX(-50%)",
+zIndex: 999999,
+width: "calc(100vw - 28px)",
+maxWidth: 1080,
+boxSizing: "border-box",
+}}
+>
+<div
+style={{
+display: "flex",
+alignItems: "center",
+justifyContent: "space-between",
+gap: 14,
+padding: isMobile ? "8px 10px" : "10px 18px",
+borderRadius: 999,
+border: "1px solid rgba(168,85,247,0.18)",
+background: "rgba(8,5,12,0.68)",
+backdropFilter: "blur(12px)",
+WebkitBackdropFilter: "blur(12px)",
+boxShadow:
+"0 18px 55px rgba(0,0,0,0.48), 0 0 26px rgba(168,85,247,0.18)",
+}}
+>
+<Link
+href="/"
+aria-label="Unbound homepage"
+style={{
+display: "inline-flex",
+alignItems: "center",
+textDecoration: "none",
+}}
+>
+<img
+src="/unbound-logo1.png"
+alt="Unbound"
+style={{
+width: isMobile ? 62 : 76,
+height: isMobile ? 62 : 76,
+objectFit: "contain",
+filter:
+"drop-shadow(0 0 5px rgba(255,60,200,.8)) drop-shadow(0 0 16px rgba(140,80,255,.65))",
+}}
+/>
+</Link>
+
+<div
+style={{
+display: "flex",
+alignItems: "center",
+gap: isMobile ? 8 : 12,
+}}
+>
+<Link
+href="/login"
+style={{
+padding: isMobile ? "10px 14px" : "11px 20px",
+borderRadius: 999,
+border: "1px solid rgba(239,100,255,0.62)",
+color: "#ffffff",
+textDecoration: "none",
+fontSize: isMobile ? 14 : 16,
+fontWeight: 800,
+background: "rgba(255,255,255,0.035)",
+}}
+>
+Log In
+</Link>
+
+<Link
+href="/signup"
+style={{
+padding: isMobile ? "10px 14px" : "11px 20px",
+borderRadius: 999,
+color: "#ffffff",
+textDecoration: "none",
+fontSize: isMobile ? 14 : 16,
+fontWeight: 800,
+background:
+"linear-gradient(135deg, #d528ff 0%, #8f2cff 55%, #fc3d9f 100%)",
+boxShadow: "0 0 18px rgba(210,40,255,0.32)",
+whiteSpace: "nowrap",
+}}
+>
+Join Unbound
+</Link>
+</div>
+</div>
+</header>
+);
+}
 
 const isActive = (href: string) => {
 if (!pathname) return false;
