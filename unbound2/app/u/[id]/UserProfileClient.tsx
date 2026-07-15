@@ -371,7 +371,9 @@ setSignalLoading(true);
 setSignalBanner(null);
 setBanner(null);
 
-const { error: upsertError } = await supabase.from("user_signals").upsert(
+const { data: signalRow, error: upsertError } = await supabase
+.from("user_signals")
+.upsert(
 {
 sender_id: uid,
 receiver_id: profile.id,
@@ -380,7 +382,9 @@ signal_type: type,
 {
 onConflict: "sender_id,receiver_id",
 }
-);
+)
+.select("id")
+.single();
 
 if (upsertError) {
 setBanner(upsertError.message);
@@ -389,6 +393,63 @@ return;
 }
 
 setMySignalToProfile(type);
+
+const { data: senderProfile } = await supabase
+.from("profiles")
+.select("username, display_name, avatar_url")
+.eq("id", uid)
+.maybeSingle();
+
+const senderName =
+senderProfile?.display_name ||
+senderProfile?.username ||
+"Someone";
+
+const signalLabels: Record<SignalType, string> = {
+interested: "Interested",
+curious: "Curious",
+would: "Would",
+crush: "Crush",
+};
+
+const signalLabel = signalLabels[type];
+
+const { error: notificationError } = await supabase
+.from("notifications")
+.insert({
+user_id: profile.id,
+actor_id: uid,
+type: "signal",
+entity_table: "user_signals",
+entity_id: signalRow?.id ? String(signalRow.id) : null,
+title: "New signal",
+body: `${senderName} sent you a ${signalLabel} signal.`,
+href: "/signals",
+actor_display_name: senderName,
+actor_avatar_url: senderProfile?.avatar_url ?? null,
+is_read: false,
+});
+
+if (notificationError) {
+console.error("Signal notification error:", notificationError);
+}
+
+try {
+await fetch("/api/push/send", {
+method: "POST",
+headers: {
+"Content-Type": "application/json",
+},
+body: JSON.stringify({
+recipientId: profile.id,
+title: "New signal",
+body: `${senderName} sent you a ${signalLabel} signal.`,
+url: "/signals",
+}),
+});
+} catch (pushError) {
+console.error("Signal push error:", pushError);
+}
 
 const { data: reverse, error: reverseError } = await supabase
 .from("user_signals")
