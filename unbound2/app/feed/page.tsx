@@ -1052,6 +1052,7 @@ setReactionCountsByPost((m) => ({
 triggerSpark(postId);
 closeReactionPicker(postId);
 setBusyPostId(null);
+return;
 }
 setBanner(error.message);
 setBusyPostId(null);
