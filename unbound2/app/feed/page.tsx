@@ -1057,7 +1057,51 @@ setBanner(error.message);
 setBusyPostId(null);
 return;
 }
+if (postOwnerId !== uid) {
+const { data: actorProfile } = await supabase
+.from("profiles")
+.select("display_name, username")
+.eq("id", uid)
+.maybeSingle();
 
+const actorName =
+actorProfile?.display_name ||
+actorProfile?.username ||
+"Someone";
+
+const reactionLabels: Record<ReactionKey, string> = {
+devil: "spanked",
+fire: "reacted 🔥 to",
+eyes: "reacted 👀 to",
+purple_heart: "reacted 💜 to",
+};
+
+const reactionText = reactionLabels[reaction] ?? "reacted to";
+
+try {
+const pushResponse = await fetch("/api/push/send", {
+method: "POST",
+headers: {
+"Content-Type": "application/json",
+},
+body: JSON.stringify({
+recipientId: postOwnerId,
+title: "New post reaction",
+body: `${actorName} ${reactionText} your post.`,
+url: `/post/${postId}`,
+}),
+});
+
+if (!pushResponse.ok) {
+console.error(
+"post reaction push failed",
+await pushResponse.text()
+);
+}
+} catch (pushError) {
+console.error("post reaction push error", pushError);
+}
+}
 setLikedByMe((m) => ({ ...m, [postId]: true }));
 setMyReactionByPost((m) => ({ ...m, [postId]: reaction }));
 setLikeCounts((m) => ({ ...m, [postId]: (m[postId] ?? 0) + 1 }));

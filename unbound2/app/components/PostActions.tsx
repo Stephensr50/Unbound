@@ -70,6 +70,59 @@ const { error: insErr } = await supabase
 
 if (!insErr) {
 setLiked(true);
+
+// Find the owner of the post
+const { data: postRow, error: postError } = await supabase
+.from("posts")
+.select("user_id")
+.eq("id", postId)
+.maybeSingle();
+
+if (postError) {
+console.error("post owner lookup failed", postError);
+return;
+}
+
+const postOwnerId = postRow?.user_id;
+
+// Do not notify someone for spanking their own post
+if (postOwnerId && postOwnerId !== me) {
+const { data: senderProfile } = await supabase
+.from("profiles")
+.select("username, display_name")
+.eq("id", me)
+.maybeSingle();
+
+const senderName =
+senderProfile?.display_name ||
+senderProfile?.username ||
+"Someone";
+
+try {
+const pushResponse = await fetch("/api/push/send", {
+method: "POST",
+headers: {
+"Content-Type": "application/json",
+},
+body: JSON.stringify({
+recipientId: postOwnerId,
+title: "New spank",
+body: `${senderName} spanked your post.`,
+url: `/post/${postId}`,
+}),
+});
+
+if (!pushResponse.ok) {
+console.error(
+"spank push failed",
+await pushResponse.text()
+);
+}
+} catch (pushError) {
+console.error("spank push error", pushError);
+}
+}
+
 return;
 }
 
