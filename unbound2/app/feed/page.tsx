@@ -1338,9 +1338,21 @@ const uid = await ensureCanInteract();
 const body = (commentDraft[postId] ?? "").trim();
 if (!body) return;
 
+const postOwnerId =
+posts.find((post) => post.id === postId)?.user_id ?? null;
+
+if (!postOwnerId) {
+setBanner("Post unavailable.");
+return;
+}
+
 const { data, error } = await supabase
 .from("post_comments")
-.insert({ post_id: postId, user_id: uid, body })
+.insert({
+post_id: postId,
+user_id: uid,
+body,
+})
 .select("id,post_id,user_id,body,created_at")
 .single();
 
@@ -1354,8 +1366,60 @@ setCommentsByPost((m) => ({
 [postId]: [...(m[postId] ?? []), data as CommentRow],
 }));
 
-setCommentDraft((m) => ({ ...m, [postId]: "" }));
-setCommentCounts((m) => ({ ...m, [postId]: (m[postId] ?? 0) + 1 }));
+setCommentDraft((m) => ({
+...m,
+[postId]: "",
+}));
+
+setCommentCounts((m) => ({
+...m,
+[postId]: (m[postId] ?? 0) + 1,
+}));
+
+if (postOwnerId !== uid) {
+await supabase.from("notifications").insert({
+user_id: postOwnerId,
+actor_id: uid,
+type: "post_comment",
+entity_id: String(postId),
+comment_id: String(data.id),
+});
+
+const { data: actorProfile } = await supabase
+.from("profiles")
+.select("display_name,username")
+.eq("id", uid)
+.maybeSingle();
+
+const actorName =
+actorProfile?.display_name ||
+actorProfile?.username ||
+"Someone";
+
+try {
+const pushResponse = await fetch("/api/push/send", {
+method: "POST",
+headers: {
+"Content-Type": "application/json",
+},
+body: JSON.stringify({
+recipientId: postOwnerId,
+title: "New comment",
+body: `${actorName} commented on your post.`,
+url: `/post/${postId}`,
+}),
+});
+
+if (!pushResponse.ok) {
+console.error(
+"post comment push failed",
+await pushResponse.text()
+);
+}
+} catch (pushError) {
+console.error("post comment push error", pushError);
+}
+}
 } catch (e: any) {
 setBanner(String(e?.message || e));
 }
