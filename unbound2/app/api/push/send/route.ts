@@ -7,6 +7,12 @@ export const runtime = "nodejs";
 export async function POST(req: Request) {
 try {
 const { recipientId, title, body, url } = await req.json();
+console.log("Push request:", {
+recipientId,
+title,
+body,
+url,
+});
 
 if (!recipientId) {
 return NextResponse.json({ error: "Missing recipientId" }, { status: 400 });

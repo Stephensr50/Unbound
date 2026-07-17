@@ -1377,13 +1377,7 @@ setCommentCounts((m) => ({
 }));
 
 if (postOwnerId !== uid) {
-await supabase.from("notifications").insert({
-user_id: postOwnerId,
-actor_id: uid,
-type: "post_comment",
-entity_id: String(postId),
-comment_id: String(data.id),
-});
+
 
 const { data: actorProfile } = await supabase
 .from("profiles")
