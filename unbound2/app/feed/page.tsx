@@ -181,6 +181,10 @@ const [busyPostId, setBusyPostId] = useState<number | null>(null);
 const [busyCommentLikeId, setBusyCommentLikeId] = useState<number | null>(null);
 const [editingCommentId, setEditingCommentId] = useState<number | null>(null);
 const [editingCommentText, setEditingCommentText] = useState("");
+const [commentPendingDelete, setCommentPendingDelete] = useState<{
+postId: number;
+commentId: number;
+} | null>(null);
 const [banner, setBanner] = useState<string | null>(null);
 
 const [spark, setSpark] = useState<Record<number, boolean>>({});
@@ -1370,12 +1374,20 @@ setEditingCommentId(null);
 setEditingCommentText("");
 }
 
-async function deleteComment(postId: number, commentId: number) {
+function deleteComment(postId: number, commentId: number) {
+setCommentPendingDelete({
+postId,
+commentId,
+});
+}
+
+async function confirmDeleteComment() {
+if (!commentPendingDelete) return;
+
+const { postId, commentId } = commentPendingDelete;
+
 const uid = myUserId ?? (await refreshAuth());
 if (!uid) return;
-
-const confirmed = window.confirm("Delete this comment?");
-if (!confirmed) return;
 
 const { error } = await supabase
 .from("post_comments")
@@ -1404,6 +1416,8 @@ if (editingCommentId === commentId) {
 setEditingCommentId(null);
 setEditingCommentText("");
 }
+
+setCommentPendingDelete(null);
 }
 
 async function addComment(postId: number) {
@@ -3445,6 +3459,85 @@ gap: 14,
 >
 <FeaturedProfileCard />
 </aside>
+) : null}
+{commentPendingDelete ? (
+<div
+onClick={() => setCommentPendingDelete(null)}
+style={{
+position: "fixed",
+inset: 0,
+zIndex: 10000,
+display: "flex",
+alignItems: "center",
+justifyContent: "center",
+padding: 18,
+background: "rgba(0,0,0,0.78)",
+backdropFilter: "blur(8px)",
+}}
+>
+<div
+onClick={(e) => e.stopPropagation()}
+style={{
+width: "min(420px, 94vw)",
+padding: 22,
+borderRadius: 22,
+background: "rgba(8,8,14,0.98)",
+border: "1px solid rgba(236,72,153,0.5)",
+boxShadow:
+"0 0 28px rgba(236,72,153,0.35), 0 0 60px rgba(168,85,247,0.22)",
+}}
+>
+<div
+style={{
+fontSize: 26,
+fontWeight: 900,
+marginBottom: 10,
+color: "#f472b6",
+}}
+>
+Delete comment?
+</div>
+
+<div
+style={{
+fontSize: 14,
+lineHeight: 1.5,
+opacity: 0.75,
+marginBottom: 20,
+}}
+>
+This can’t be undone.
+</div>
+
+<div
+style={{
+display: "flex",
+justifyContent: "flex-end",
+gap: 10,
+}}
+>
+<button
+type="button"
+onClick={() => setCommentPendingDelete(null)}
+style={pillBtn}
+>
+Cancel
+</button>
+
+<button
+type="button"
+onClick={confirmDeleteComment}
+style={{
+...postBtn,
+background: "linear-gradient(90deg,#dc2626,#ec4899)",
+boxShadow: "0 0 16px rgba(239,68,68,0.45)",
+}}
+>
+Delete
+</button>
+</div>
+</div>
+</div>
 ) : null}
 {readingPost ? (
 <div
