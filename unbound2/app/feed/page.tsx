@@ -2053,30 +2053,9 @@ background: "rgba(0,0,0,0.5)",
 
 return (
 <div
-onClick={() => setViewer({ url: activeSrc, type: "image" })}
+onClick={() => setViewer({ url: mediaSrc, type: "image" })}
 onContextMenu={(e) => e.preventDefault()}
 onDragStart={(e) => e.preventDefault()}
-onTouchStart={(e) => {
-touchStartXRef.current[p.id] = e.touches[0].clientX;
-}}
-onTouchEnd={(e) => {
-const startX = touchStartXRef.current[p.id];
-const endX = e.changedTouches[0].clientX;
-const diff = startX - endX;
-
-if (Math.abs(diff) > 45) {
-e.preventDefault();
-e.stopPropagation();
-
-if (diff > 0) {
-goTo(activeIndex + 1);
-} else {
-goTo(activeIndex - 1);
-}
-}
-
-delete touchStartXRef.current[p.id];
-}}
 style={{
 width: "100%",
 display: "flex",
