@@ -179,6 +179,8 @@ Record<number, CommentRow[]>
 const [commentDraft, setCommentDraft] = useState<Record<number, string>>({});
 const [busyPostId, setBusyPostId] = useState<number | null>(null);
 const [busyCommentLikeId, setBusyCommentLikeId] = useState<number | null>(null);
+const [editingCommentId, setEditingCommentId] = useState<number | null>(null);
+const [editingCommentText, setEditingCommentText] = useState("");
 const [banner, setBanner] = useState<string | null>(null);
 
 const [spark, setSpark] = useState<Record<number, boolean>>({});
@@ -1330,6 +1332,79 @@ like_count: (c.like_count ?? 0) + 1,
 setBusyCommentLikeId(null);
 }
 
+async function saveEditedComment(postId: number, commentId: number) {
+const uid = myUserId ?? (await refreshAuth());
+if (!uid) return;
+
+const trimmed = editingCommentText.trim();
+
+if (!trimmed) {
+setBanner("Comment cannot be empty.");
+return;
+}
+
+const { error } = await supabase
+.from("post_comments")
+.update({ body: trimmed })
+.eq("id", commentId)
+.eq("user_id", uid);
+
+if (error) {
+setBanner(error.message);
+return;
+}
+
+setCommentsByPost((m) => ({
+...m,
+[postId]: (m[postId] ?? []).map((comment) =>
+comment.id === commentId
+? {
+...comment,
+body: trimmed,
+}
+: comment
+),
+}));
+
+setEditingCommentId(null);
+setEditingCommentText("");
+}
+
+async function deleteComment(postId: number, commentId: number) {
+const uid = myUserId ?? (await refreshAuth());
+if (!uid) return;
+
+const confirmed = window.confirm("Delete this comment?");
+if (!confirmed) return;
+
+const { error } = await supabase
+.from("post_comments")
+.delete()
+.eq("id", commentId)
+.eq("user_id", uid);
+
+if (error) {
+setBanner(error.message);
+return;
+}
+
+setCommentsByPost((m) => ({
+...m,
+[postId]: (m[postId] ?? []).filter(
+(comment) => comment.id !== commentId
+),
+}));
+
+setCommentCounts((m) => ({
+...m,
+[postId]: Math.max(0, (m[postId] ?? 0) - 1),
+}));
+
+if (editingCommentId === commentId) {
+setEditingCommentId(null);
+setEditingCommentText("");
+}
+}
 
 async function addComment(postId: number) {
 try {
@@ -3235,9 +3310,45 @@ cursor: "pointer",
 </span>
 </div>
 
+{editingCommentId === c.id ? (
+<div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+<textarea
+value={editingCommentText}
+onChange={(e) => setEditingCommentText(e.target.value)}
+rows={3}
+style={{
+...inputStyle,
+width: "100%",
+resize: "vertical",
+}}
+/>
+
+<div style={{ display: "flex", gap: 8 }}>
+<button
+type="button"
+onClick={() => saveEditedComment(p.id, c.id)}
+style={postBtn}
+>
+Save
+</button>
+
+<button
+type="button"
+onClick={() => {
+setEditingCommentId(null);
+setEditingCommentText("");
+}}
+style={pillBtn}
+>
+Cancel
+</button>
+</div>
+</div>
+) : (
 <div style={{ whiteSpace: "pre-wrap", lineHeight: 1.35 }}>
 {c.body}
 </div>
+)}
 
 <div style={{ display: "flex", gap: 10, alignItems: "center", marginTop: 8 }}>
 <button
@@ -3257,6 +3368,44 @@ fontSize: 13,
 {c.liked_by_me ? "♥ Liked" : "♡ Like"}
 {(c.like_count ?? 0) > 0 ? ` · ${c.like_count}` : ""}
 </button>
+{c.user_id === myUserId && editingCommentId !== c.id ? (
+<>
+<button
+type="button"
+onClick={() => {
+setEditingCommentId(c.id);
+setEditingCommentText(c.body);
+}}
+style={{
+border: "none",
+background: "transparent",
+color: "rgba(255,255,255,0.65)",
+cursor: "pointer",
+fontWeight: 800,
+padding: 0,
+fontSize: 13,
+}}
+>
+Edit
+</button>
+
+<button
+type="button"
+onClick={() => deleteComment(p.id, c.id)}
+style={{
+border: "none",
+background: "transparent",
+color: "rgba(255,120,120,0.9)",
+cursor: "pointer",
+fontWeight: 800,
+padding: 0,
+fontSize: 13,
+}}
+>
+Delete
+</button>
+</>
+) : null}
 </div>
 
 <ReportCommentButton
