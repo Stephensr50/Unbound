@@ -99,7 +99,7 @@ const { data, error } = await supabase
 .eq("show_on_explore", true)
 .or("is_locked.eq.false,is_locked.is.null")
 .order("created_at", { ascending: false })
-.limit(200);
+.limit(30);
 
 if (error) throw error;
 if (!alive) return;
