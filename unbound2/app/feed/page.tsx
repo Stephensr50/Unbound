@@ -139,6 +139,10 @@ const [myUserId, setMyUserId] = useState<string | null>(null);
 const [reportBusyPostId, setReportBusyPostId] = useState<number | null>(null);
 const [allowedAuthorIds, setAllowedAuthorIds] = useState<string[]>([]);
 const [posts, setPosts] = useState<PostRow[]>([]);
+const [feedPage, setFeedPage] = useState(0);
+const [hasMorePosts, setHasMorePosts] = useState(true);
+const [loadingMorePosts, setLoadingMorePosts] = useState(false);
+const feedLoadLockRef = useRef(false);
 const [savedPosts, setSavedPosts] = useState<Set<number>>(new Set());
 const [text, setText] = useState("");
 const [title, setTitle] = useState("");
@@ -412,9 +416,11 @@ await loadSuggestedUsers(uid);
 setFollowBusyId(null);
 }
 
-async function loadGroups(groupIds: number[]) {
+async function loadGroups(groupIds: number[], append = false) {
 if (!groupIds.length) {
+if (!append) {
 setGroupsById({});
+}
 return;
 }
 
@@ -429,23 +435,36 @@ return;
 }
 
 const map: Record<number, GroupRow> = {};
-for (const g of (data ?? []) as GroupRow[]) {
-map[g.id] = g;
-}
-setGroupsById(map);
+
+for (const group of (data ?? []) as GroupRow[]) {
+map[group.id] = group;
 }
 
-async function loadCounts(postIds: number[]) {
+setGroupsById((current) =>
+append
+? {
+...current,
+...map,
+}
+: map
+);
+}
+
+async function loadCounts(postIds: number[], append = false) {
 if (!postIds.length) {
+if (!append) {
 setLikeCounts({});
 setLikedByMe({});
 setMyReactionByPost({});
 setReactionCountsByPost({});
 setCommentCounts({});
+}
+
 return;
 }
 
 setBanner(null);
+
 const { data: likeRows, error: likeErr } = await supabase
 .from("post_likes")
 .select("post_id,user_id,reaction")
@@ -461,76 +480,88 @@ const lbm: Record<number, boolean> = {};
 const reactionsByMe: Record<number, ReactionKey | undefined> = {};
 const reactionTotals: Record<number, ReactionCountsMap> = {};
 
-for (const r of likeRows ?? []) {
-const pid = (r as any).post_id as number;
-const uid = (r as any).user_id as string;
-const reaction = ((r as any).reaction || "devil") as ReactionKey;
+for (const row of likeRows ?? []) {
+const postId = (row as any).post_id as number;
+const userId = (row as any).user_id as string;
+const reaction = ((row as any).reaction || "devil") as ReactionKey;
 
-lc[pid] = (lc[pid] ?? 0) + 1;
+lc[postId] = (lc[postId] ?? 0) + 1;
 
-if (!reactionTotals[pid]) {
-reactionTotals[pid] = {};
+if (!reactionTotals[postId]) {
+reactionTotals[postId] = {};
 }
 
-reactionTotals[pid][reaction] =
-(reactionTotals[pid][reaction] ?? 0) + 1;
+reactionTotals[postId][reaction] =
+(reactionTotals[postId][reaction] ?? 0) + 1;
 
-if (myUserId && uid === myUserId) {
-lbm[pid] = true;
-reactionsByMe[pid] = reaction;
+if (myUserId && userId === myUserId) {
+lbm[postId] = true;
+reactionsByMe[postId] = reaction;
 }
 }
 
-const { data: commentRows, error: cErr } = await supabase
+const { data: commentRows, error: commentError } = await supabase
 .from("post_comments")
 .select("post_id")
 .in("post_id", postIds);
 
-if (cErr) {
-setLikeCounts(lc);
-setLikedByMe(lbm);
-setMyReactionByPost(reactionsByMe);
-setReactionCountsByPost(reactionTotals);
-setCommentCounts({});
-return;
+const commentTotals: Record<number, number> = {};
+
+if (!commentError) {
+for (const row of commentRows ?? []) {
+const postId = (row as any).post_id as number;
+commentTotals[postId] = (commentTotals[postId] ?? 0) + 1;
+}
 }
 
-const cc: Record<number, number> = {};
-for (const r of commentRows ?? []) {
-const pid = (r as any).post_id as number;
-cc[pid] = (cc[pid] ?? 0) + 1;
-}
+setLikeCounts((current) =>
+append ? { ...current, ...lc } : lc
+);
 
-setLikeCounts(lc);
-setLikedByMe(lbm);
-setMyReactionByPost(reactionsByMe);
-setReactionCountsByPost(reactionTotals);
-setCommentCounts(cc);
+setLikedByMe((current) =>
+append ? { ...current, ...lbm } : lbm
+);
+
+setMyReactionByPost((current) =>
+append ? { ...current, ...reactionsByMe } : reactionsByMe
+);
+
+setReactionCountsByPost((current) =>
+append ? { ...current, ...reactionTotals } : reactionTotals
+);
+
+setCommentCounts((current) =>
+append ? { ...current, ...commentTotals } : commentTotals
+);
 }
 
 async function ensureFocusPostLoaded(focusId: number) {
-if (posts.some((p) => p.id === focusId)) return;
+if (posts.some((post) => post.id === focusId)) return;
 
 const uid = myUserId ?? (await refreshAuth());
 if (!uid) return;
 
 const allowedIds =
-allowedAuthorIds.length > 0 ? allowedAuthorIds : await getAllowedAuthorIds(uid);
+allowedAuthorIds.length > 0
+? allowedAuthorIds
+: await getAllowedAuthorIds(uid);
 
 const { data, error } = await supabase
 .from("posts")
-.select("id,user_id,title,body,kind,created_at,media_url,media_type,media_bucket,media_path,group_id,is_locked")
+.select(
+"id,user_id,title,body,kind,created_at,media_url,media_type,media_bucket,media_path,group_id,is_locked"
+)
 .eq("id", focusId)
 .maybeSingle();
 
 if (error || !data) return;
 
-const p = data as PostRow;
+const post = data as PostRow;
 
 const { data: authorProfile } = await supabase
 .from("profiles")
 .select("moderation_status")
-.eq("id", p.user_id)
+.eq("id", post.user_id)
 .maybeSingle();
 
 if ((authorProfile?.moderation_status ?? "active") !== "active") {
@@ -538,59 +569,85 @@ setBanner("That post is not available.");
 return;
 }
 
-if (!allowedIds.includes(p.user_id)) {
+if (!allowedIds.includes(post.user_id)) {
 setBanner("That post is not available in your feed.");
 return;
 }
 
-setPosts((prev) => {
-if (prev.some((x) => x.id === p.id)) return prev;
-return [p, ...prev];
+setPosts((current) => {
+if (current.some((existing) => existing.id === post.id)) {
+return current;
+}
+
+return [post, ...current];
 });
 
-if (p.user_id && !profilesById[p.user_id]) {
-const { data: prof } = await supabase
+if (post.user_id && !profilesById[post.user_id]) {
+const { data: profile } = await supabase
 .from("profiles")
 .select("id,username,display_name,avatar_url")
-.eq("id", p.user_id)
+.eq("id", post.user_id)
 .maybeSingle();
 
-if (prof) {
-setProfilesById((m) => ({ ...m, [prof.id]: prof as ProfileRow }));
+if (profile) {
+setProfilesById((current) => ({
+...current,
+[profile.id]: profile as ProfileRow,
+}));
 }
 }
 
-if (typeof p.group_id === "number" && !groupsById[p.group_id]) {
-await loadGroups([p.group_id]);
+if (
+typeof post.group_id === "number" &&
+!groupsById[post.group_id]
+) {
+await loadGroups([post.group_id], true);
 }
 
-await loadCounts([focusId]);
+await loadCounts([focusId], true);
 }
 
-async function loadPosts() {
+async function loadPosts(targetPage = 0, append = false) {
+if (append) {
+setLoadingMorePosts(true);
+} else {
+setFeedPage(0);
+setHasMorePosts(true);
+feedLoadLockRef.current = false;
+}
+
+try {
 const uid = myUserId ?? (await refreshAuth());
+
 if (!uid) {
+if (!append) {
 setPosts([]);
+}
+setHasMorePosts(false);
 return;
 }
 
 const allowedIds = await getAllowedAuthorIds(uid);
 
 if (!allowedIds.length) {
+if (!append) {
 setPosts([]);
 setProfilesById({});
 setGroupsById({});
 await loadCounts([]);
+}
+
+setHasMorePosts(false);
 return;
 }
 
-const { data: blockRows, error: blockErr } = await supabase
+const { data: blockRows, error: blockError } = await supabase
 .from("blocked_users")
 .select("blocker_id,blocked_id")
 .or(`blocker_id.eq.${uid},blocked_id.eq.${uid}`);
 
-if (blockErr) {
-setBanner(blockErr.message);
+if (blockError) {
+setBanner(blockError.message);
 return;
 }
 
@@ -600,90 +657,118 @@ for (const row of blockRows ?? []) {
 const blockerId = (row as any).blocker_id as string | null;
 const blockedId = (row as any).blocked_id as string | null;
 
-if (blockerId === uid && blockedId) blockedUserIds.add(blockedId);
-if (blockedId === uid && blockerId) blockedUserIds.add(blockerId);
+if (blockerId === uid && blockedId) {
+blockedUserIds.add(blockedId);
 }
 
-const visibleAllowedIds = allowedIds.filter((id) => !blockedUserIds.has(id));
+if (blockedId === uid && blockerId) {
+blockedUserIds.add(blockerId);
+}
+}
+
+const visibleAllowedIds = allowedIds.filter(
+(id) => !blockedUserIds.has(id)
+);
 
 if (!visibleAllowedIds.length) {
+if (!append) {
 setPosts([]);
 setProfilesById({});
 setGroupsById({});
 await loadCounts([]);
+}
+
+setHasMorePosts(false);
 return;
 }
 
+const start = targetPage * 25;
+const end = start + 24;
+
 const { data, error } = await supabase
 .from("posts")
-.select("id,user_id,title,body,kind,created_at,media_url,media_type,media_bucket,media_path,group_id,is_locked")
+.select(
+"id,user_id,title,body,kind,created_at,media_url,media_type,media_bucket,media_path,group_id,is_locked"
+)
 .in("user_id", visibleAllowedIds)
 .eq("is_reel", false)
 .order("created_at", { ascending: false })
-.limit(25);
+.range(start, end);
 
 if (error) {
 setBanner(error.message);
 return;
 }
 
-let rows = (data ?? []) as PostRow[];
-const postIds = rows.map((p) => p.id);
+const batch = (data ?? []) as PostRow[];
 
-if (postIds.length) {
-const { data: mediaRows, error: mediaRowsError } = await supabase
+setHasMorePosts(batch.length === 25);
+
+if (!batch.length) {
+return;
+}
+
+let rows = batch;
+const postIds = rows.map((post) => post.id);
+
+const { data: mediaRows, error: mediaError } = await supabase
 .from("post_media")
-.select("id,post_id,media_url,media_bucket,media_path,media_type,sort_order")
+.select(
+"id,post_id,media_url,media_bucket,media_path,media_type,sort_order"
+)
 .in("post_id", postIds)
 .order("sort_order", { ascending: true });
 
-if (mediaRowsError) {
-setBanner(mediaRowsError.message);
+if (mediaError) {
+setBanner(mediaError.message);
 return;
 }
 
 const signedMediaRows = await Promise.all(
-((mediaRows ?? []) as PostMediaRow[]).map(async (m) => {
-if (m.media_bucket && m.media_path) {
-const { data: signedData } = await supabase.storage
-.from(m.media_bucket)
-.createSignedUrl(m.media_path, 60 * 60 * 24);
-
-return {
-...m,
-signed_url: signedData?.signedUrl ?? null,
-};
+((mediaRows ?? []) as PostMediaRow[]).map(async (media) => {
+if (!media.media_bucket || !media.media_path) {
+return media;
 }
 
-return m;
+const { data: signedData } = await supabase.storage
+.from(media.media_bucket)
+.createSignedUrl(media.media_path, 60 * 60 * 24);
+
+return {
+...media,
+signed_url: signedData?.signedUrl ?? null,
+};
 })
 );
 
 const mediaByPostId: Record<number, PostMediaRow[]> = {};
 
-for (const m of signedMediaRows) {
-if (!mediaByPostId[m.post_id]) mediaByPostId[m.post_id] = [];
-mediaByPostId[m.post_id].push(m);
+for (const media of signedMediaRows) {
+if (!mediaByPostId[media.post_id]) {
+mediaByPostId[media.post_id] = [];
 }
 
-rows = rows.map((p) => ({
-...p,
-media_items: mediaByPostId[p.id] ?? [],
-}));
+mediaByPostId[media.post_id].push(media);
 }
+
+rows = rows.map((post) => ({
+...post,
+media_items: mediaByPostId[post.id] ?? [],
+}));
+
 const rowsNeedingSignedUrls = rows.filter(
-(p) => p.media_bucket && p.media_path
+(post) => post.media_bucket && post.media_path
 );
 
 if (rowsNeedingSignedUrls.length) {
 const signedRows = await Promise.all(
-rowsNeedingSignedUrls.map(async (p) => {
+rowsNeedingSignedUrls.map(async (post) => {
 const { data: signedData } = await supabase.storage
-.from(p.media_bucket!)
-.createSignedUrl(p.media_path!, 60 * 60 * 24);
+.from(post.media_bucket!)
+.createSignedUrl(post.media_path!, 60 * 60 * 24);
 
 return {
-id: p.id,
+id: post.id,
 signed_url: signedData?.signedUrl ?? null,
 };
 })
@@ -693,28 +778,29 @@ const signedMap = new Map(
 signedRows.map((row) => [row.id, row.signed_url])
 );
 
-rows = rows.map((p) => ({
-...p,
-signed_url: signedMap.get(p.id) ?? null,
+rows = rows.map((post) => ({
+...post,
+signed_url: signedMap.get(post.id) ?? null,
 }));
 }
-let unlockedMap: Record<number, boolean> = {};
+
+const unlockedMap: Record<number, boolean> = {};
 
 const lockedPostIds = rows
-.filter((p) => p.is_locked)
-.map((p) => p.id);
+.filter((post) => post.is_locked)
+.map((post) => post.id);
 
 if (lockedPostIds.length) {
-const { data: unlockRows, error: unlockErr } = await supabase
+const { data: unlockRows, error: unlockError } = await supabase
 .from("post_unlocks")
 .select("post_id")
 .eq("buyer_id", uid)
 .in("post_id", lockedPostIds);
 
-if (!unlockErr) {
-unlockedMap = Object.fromEntries(
-(unlockRows ?? []).map((r: any) => [Number(r.post_id), true])
-);
+if (!unlockError) {
+for (const row of unlockRows ?? []) {
+unlockedMap[Number((row as any).post_id)] = true;
+}
 }
 
 for (const post of rows) {
@@ -723,81 +809,168 @@ unlockedMap[post.id] = true;
 }
 }
 }
-function spreadLockedFeedPosts(list: PostRow[]) {
-const unlocked = list.filter((p) => !p.is_locked);
-const locked = list.filter((p) => p.is_locked);
 
-const result: PostRow[] = [];
-let lockedIndex = 0;
-
-for (let i = 0; i < unlocked.length; i++) {
-result.push(unlocked[i]);
-
-if ((i + 1) % 5 === 0 && lockedIndex < locked.length) {
-result.push(locked[lockedIndex]);
-lockedIndex++;
+setUnlockedPostIds((current) =>
+append
+? {
+...current,
+...unlockedMap,
 }
-}
-
-return result;
-}
-setUnlockedPostIds(unlockedMap);
-
-
-
-const uids = Array.from(new Set(rows.map((r) => r.user_id).filter(Boolean)));
-if (uids.length) {
-const { data: profs } = await supabase
-.from("profiles")
-.select("id,username,display_name,avatar_url,moderation_status")
-.in("id", uids);
-
-const activeProfiles = ((profs ?? []) as ProfileRow[]).filter(
-(p) => (p.moderation_status ?? "active") === "active"
+: unlockedMap
 );
 
-const activeUserIds = new Set(activeProfiles.map((p) => p.id));
+const userIds = Array.from(
+new Set(rows.map((post) => post.user_id).filter(Boolean))
+);
 
-const map: Record<string, ProfileRow> = {};
-for (const p of activeProfiles) map[p.id] = p;
+let activeRows = rows;
 
-setProfilesById(map);
-const activeRows = rows.filter((post) => activeUserIds.has(post.user_id));
-setPosts(spreadLockedFeedPosts(activeRows));
-} else {
-setProfilesById({});
+if (userIds.length) {
+const { data: profiles, error: profileError } = await supabase
+.from("profiles")
+.select(
+"id,username,display_name,avatar_url,moderation_status"
+)
+.in("id", userIds);
+
+if (profileError) {
+setBanner(profileError.message);
+return;
 }
+
+const activeProfiles = ((profiles ?? []) as ProfileRow[]).filter(
+(profile) =>
+(profile.moderation_status ?? "active") === "active"
+);
+
+const activeUserIds = new Set(
+activeProfiles.map((profile) => profile.id)
+);
+
+const profileMap: Record<string, ProfileRow> = {};
+
+for (const profile of activeProfiles) {
+profileMap[profile.id] = profile;
+}
+
+setProfilesById((current) =>
+append
+? {
+...current,
+...profileMap,
+}
+: profileMap
+);
+
+activeRows = rows.filter((post) =>
+activeUserIds.has(post.user_id)
+);
+}
+
+setPosts((current) => {
+if (!append) {
+return activeRows;
+}
+
+const combined = [...current, ...activeRows];
+const uniquePosts = new Map<number, PostRow>();
+
+for (const post of combined) {
+uniquePosts.set(post.id, post);
+}
+
+return Array.from(uniquePosts.values()).sort(
+(a, b) =>
+new Date(b.created_at).getTime() -
+new Date(a.created_at).getTime()
+);
+});
 
 const groupIds = Array.from(
 new Set(
-rows
-.map((r) => r.group_id)
-.filter((id): id is number => typeof id === "number")
+activeRows
+.map((post) => post.group_id)
+.filter(
+(groupId): groupId is number =>
+typeof groupId === "number"
+)
 )
 );
-await loadGroups(groupIds);
 
-if (rows.length) {
-await loadCounts(rows.map((r) => r.id));
-} else {
-await loadCounts([]);
+await Promise.all([
+loadGroups(groupIds, append),
+loadCounts(
+activeRows.map((post) => post.id),
+append
+),
+]);
+} catch (error: any) {
+setBanner(error?.message || "Failed to load feed.");
+} finally {
+if (append) {
+setLoadingMorePosts(false);
+}
+
+feedLoadLockRef.current = false;
 }
 }
 
 useEffect(() => {
 void (async () => {
 const uid = await refreshAuth();
+
 if (!uid) {
 setPosts([]);
 setSuggestedUsers([]);
 return;
 }
 
-await loadPosts();
-await loadSuggestedUsers(uid);
+await Promise.all([
+loadPosts(),
+loadSuggestedUsers(uid),
+]);
 })();
+
 // eslint-disable-next-line react-hooks/exhaustive-deps
 }, []);
+
+useEffect(() => {
+function handleFeedScroll() {
+if (
+!hasMorePosts ||
+loadingMorePosts ||
+feedLoadLockRef.current
+) {
+return;
+}
+
+const pageHeight = document.documentElement.scrollHeight;
+const currentBottom = window.scrollY + window.innerHeight;
+const distanceFromBottom = pageHeight - currentBottom;
+
+if (distanceFromBottom > 900) {
+return;
+}
+
+const nextPage = feedPage + 1;
+
+feedLoadLockRef.current = true;
+setFeedPage(nextPage);
+void loadPosts(nextPage, true);
+}
+
+window.addEventListener("scroll", handleFeedScroll, {
+passive: true,
+});
+
+handleFeedScroll();
+
+return () => {
+window.removeEventListener("scroll", handleFeedScroll);
+};
+
+// eslint-disable-next-line react-hooks/exhaustive-deps
+}, [feedPage, hasMorePosts, loadingMorePosts]);
 useEffect(() => {
 void (async () => {
 const sessionId = searchParams?.get("checkout_session_id");

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@supabase/supabase-js";
 
@@ -76,6 +76,10 @@ const [profilesById, setProfilesById] = useState<Record<string, ProfileRow>>(
 {}
 );
 const [loading, setLoading] = useState(true);
+const [page, setPage] = useState(0);
+const [hasMore, setHasMore] = useState(true);
+const [loadingMore, setLoadingMore] = useState(false);
+const loadMoreLockRef = useRef(false);
 const [banner, setBanner] = useState<string | null>(null);
 const [search, setSearch] = useState(tagFromUrl);
 const [mode, setMode] = useState<ExploreMode>("photos");
@@ -87,32 +91,48 @@ setSearch(tagFromUrl);
 useEffect(() => {
 let alive = true;
 
-async function loadExplore() {
+async function loadExplorePage() {
 try {
+if (page === 0) {
 setLoading(true);
 setBanner(null);
+} else {
+setLoadingMore(true);
+}
+
+const start = page * 30;
+const end = start + 29;
 
 const { data, error } = await supabase
 .from("posts")
-.select("id,user_id,body,kind,created_at,media_url,media_path,media_type,media_bucket,is_locked")
+.select(
+"id,user_id,body,kind,created_at,media_url,media_path,media_type,media_bucket,is_locked"
+)
 .not("media_url", "is", null)
 .eq("show_on_explore", true)
 .or("is_locked.eq.false,is_locked.is.null")
 .order("created_at", { ascending: false })
-.limit(30);
+.range(start, end);
 
 if (error) throw error;
 if (!alive) return;
 
-let rawRows = ((data ?? []) as ExplorePostRow[]).filter(
+const batch = (data ?? []) as ExplorePostRow[];
+
+setHasMore(batch.length === 30);
+
+let rawRows = batch.filter(
 (p) => !!p.media_url || !!p.media_path
 );
+
 const postIds = rawRows.map((p) => p.id);
 
 if (postIds.length) {
 const { data: mediaRows, error: mediaRowsError } = await supabase
 .from("post_media")
-.select("id,post_id,media_url,media_bucket,media_path,media_type,sort_order")
+.select(
+"id,post_id,media_url,media_bucket,media_path,media_type,sort_order"
+)
 .in("post_id", postIds)
 .order("sort_order", { ascending: true });
 
@@ -137,38 +157,45 @@ return m;
 
 const mediaByPostId: Record<number, PostMediaRow[]> = {};
 
-for (const m of signedMediaRows) {
-if (!mediaByPostId[m.post_id]) mediaByPostId[m.post_id] = [];
-mediaByPostId[m.post_id].push(m);
+for (const media of signedMediaRows) {
+if (!mediaByPostId[media.post_id]) {
+mediaByPostId[media.post_id] = [];
 }
 
-rawRows = rawRows.map((p) => ({
-...p,
-media_items: mediaByPostId[p.id] ?? [],
+mediaByPostId[media.post_id].push(media);
+}
+
+rawRows = rawRows.map((post) => ({
+...post,
+media_items: mediaByPostId[post.id] ?? [],
 }));
 }
+
 const seen = new Set<string>();
 const rows: ExplorePostRow[] = [];
 
 for (const post of rawRows) {
 const key = `${post.user_id}::${post.media_url}`;
+
 if (seen.has(key)) continue;
+
 seen.add(key);
 rows.push(post);
 }
+
 const rowsNeedingSignedUrls = rows.filter(
-(p) => p.media_bucket && p.media_path
+(post) => post.media_bucket && post.media_path
 );
 
 if (rowsNeedingSignedUrls.length) {
 const signedRows = await Promise.all(
-rowsNeedingSignedUrls.map(async (p) => {
+rowsNeedingSignedUrls.map(async (post) => {
 const { data: signedData } = await supabase.storage
-.from(p.media_bucket!)
-.createSignedUrl(p.media_path!, 60 * 60);
+.from(post.media_bucket!)
+.createSignedUrl(post.media_path!, 60 * 60);
 
 return {
-id: p.id,
+id: post.id,
 signed_url: signedData?.signedUrl ?? null,
 };
 })
@@ -189,14 +216,19 @@ media_url: signedUrl,
 }
 }
 }
+
 const userIds = Array.from(
-new Set(rows.map((p) => p.user_id).filter(Boolean))
+new Set(rows.map((post) => post.user_id).filter(Boolean))
 );
 
 if (!userIds.length) {
+if (page === 0) {
 setProfilesById({});
 setAllPosts([]);
 setPosts([]);
+}
+
+setHasMore(false);
 return;
 }
 
@@ -209,36 +241,99 @@ if (profErr) throw profErr;
 if (!alive) return;
 
 const activeProfiles = ((profs ?? []) as ProfileRow[]).filter(
-(p) => (p.moderation_status ?? "active") === "active"
+(profile) =>
+(profile.moderation_status ?? "active") === "active"
 );
 
-const activeUserIds = new Set(activeProfiles.map((p) => p.id));
+const activeUserIds = new Set(
+activeProfiles.map((profile) => profile.id)
+);
 
-const map: Record<string, ProfileRow> = {};
-for (const p of activeProfiles) {
-map[p.id] = p;
+const profileMap: Record<string, ProfileRow> = {};
+
+for (const profile of activeProfiles) {
+profileMap[profile.id] = profile;
 }
 
-const cleanRows = rows.filter((post) => activeUserIds.has(post.user_id));
+const cleanRows = rows.filter((post) =>
+activeUserIds.has(post.user_id)
+);
 
-setProfilesById(map);
-setAllPosts(cleanRows);
-setPosts(cleanRows);
+setProfilesById((current) =>
+page === 0
+? profileMap
+: {
+...current,
+...profileMap,
+}
+);
+
+setAllPosts((current) => {
+if (page === 0) return cleanRows;
+
+const merged = [...current, ...cleanRows];
+const uniquePosts = new Map<number, ExplorePostRow>();
+
+for (const post of merged) {
+uniquePosts.set(post.id, post);
+}
+
+return Array.from(uniquePosts.values());
+});
 } catch (e: any) {
 if (!alive) return;
+
 setBanner(e?.message || "Failed to load explore.");
 } finally {
-if (alive) setLoading(false);
+if (alive) {
+if (page === 0) {
+setLoading(false);
+} else {
+setLoadingMore(false);
+}
+
+loadMoreLockRef.current = false;
+}
 }
 }
 
-void loadExplore();
+void loadExplorePage();
 
 return () => {
 alive = false;
 };
-}, [supabase]);
+}, [supabase, page]);
+useEffect(() => {
+function handleScroll() {
+if (
+loading ||
+loadingMore ||
+!hasMore ||
+loadMoreLockRef.current
+) {
+return;
+}
 
+const pageHeight = document.documentElement.scrollHeight;
+const currentBottom = window.scrollY + window.innerHeight;
+const distanceFromBottom = pageHeight - currentBottom;
+
+if (distanceFromBottom > 800) return;
+
+loadMoreLockRef.current = true;
+setPage((current) => current + 1);
+}
+
+window.addEventListener("scroll", handleScroll, {
+passive: true,
+});
+
+handleScroll();
+
+return () => {
+window.removeEventListener("scroll", handleScroll);
+};
+}, [loading, loadingMore, hasMore]);
 useEffect(() => {
 const q = normalizeSearch(search);
 
@@ -467,7 +562,7 @@ isVideo ? (
 src={mediaSrc}
 muted
 playsInline
-preload="auto"
+preload="metadata"
 className="exploreMedia"
 style={{
 width: "100%",
@@ -491,7 +586,7 @@ WebkitTouchCallout: "none",
 >
 {/* eslint-disable-next-line @next/next/no-img-element */}
 <img
-src={post.media_url}
+src={mediaSrc}
 alt={post.body || label}
 draggable={false}
 className="exploreMedia"
@@ -556,6 +651,31 @@ index === 0
 })}
 </div>
 )}
+
+{loadingMore ? (
+<div
+style={{
+padding: "22px 0 90px",
+textAlign: "center",
+fontWeight: 800,
+opacity: 0.75,
+}}
+>
+Loading more posts…
+</div>
+) : null}
+
+{!loading && !loadingMore && !hasMore && allPosts.length > 0 ? (
+<div
+style={{
+padding: "22px 0 90px",
+textAlign: "center",
+opacity: 0.55,
+}}
+>
+You’ve reached the end.
+</div>
+) : null}
 </div>
 );
 }
