@@ -620,7 +620,7 @@ const { data, error } = await supabase
 .in("user_id", visibleAllowedIds)
 .eq("is_reel", false)
 .order("created_at", { ascending: false })
-.limit(200);
+.limit(25);
 
 if (error) {
 setBanner(error.message);
