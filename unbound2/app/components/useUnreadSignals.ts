@@ -82,7 +82,7 @@ supabase.removeChannel(ch);
 useEffect(() => {
 const id = window.setInterval(() => {
 refreshSignals();
-}, 4000);
+}, 60000);
 
 return () => {
 window.clearInterval(id);

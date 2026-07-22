@@ -88,7 +88,7 @@ await calcUnread(uid);
 const interval = window.setInterval(() => {
 if (!myUserId) return;
 calcUnread(myUserId);
-}, 8000);
+}, 60000);
 
 // refresh when tab becomes visible again
 const onVis = () => {
