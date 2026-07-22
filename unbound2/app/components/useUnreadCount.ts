@@ -116,10 +116,10 @@ refresh();
 // initial
 refresh();
 
-// poll every 5 seconds
+// poll every 60 seconds
 const t = window.setInterval(() => {
 if (document.visibilityState === "visible") refresh();
-}, 5000);
+}, 60000);
 
 const onFocus = () => refresh();
 const onVis = () => {
