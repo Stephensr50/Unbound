@@ -149,37 +149,44 @@ useEffect(() => {
 if (!myUserId) return;
 
 (async () => {
-const { data: p, error: pErr } = await supabase
+const [
+profileResult,
+followersResult,
+friendsResult,
+followingResult,
+] = await Promise.all([
+supabase
 .from("profiles")
 .select(
-"id, username, display_name, designation,age, bio, avatar_url, city, state, country, is_admin"
+"id, username, display_name, designation, age, bio, avatar_url, city, state, country, is_admin"
 )
 .eq("id", myUserId)
-.maybeSingle();
+.maybeSingle(),
 
-if (pErr) console.error(pErr);
-setMyProfile((p as ProfileRow) ?? null);
-
-const { count: followers } = await supabase
+supabase
 .from("follows")
 .select("*", { count: "exact", head: true })
-.eq("following_id", myUserId);
+.eq("following_id", myUserId),
 
-setFollowersCount(followers ?? 0);
-
-const { count: friends } = await supabase
+supabase
 .from("friends")
 .select("*", { count: "exact", head: true })
-.eq("user_id", myUserId);
+.eq("user_id", myUserId),
 
-setFriendsCount(friends ?? 0);
-
-const { count: following } = await supabase
+supabase
 .from("follows")
 .select("*", { count: "exact", head: true })
-.eq("follower_id", myUserId);
+.eq("follower_id", myUserId),
+]);
 
-setFollowingCount(following ?? 0);
+if (profileResult.error) {
+console.error(profileResult.error);
+}
+
+setMyProfile((profileResult.data as ProfileRow) ?? null);
+setFollowersCount(followersResult.count ?? 0);
+setFriendsCount(friendsResult.count ?? 0);
+setFollowingCount(followingResult.count ?? 0);
 })();
 }, [supabase, myUserId]);
 
@@ -483,7 +490,7 @@ return (
 {myProfile?.avatar_url ? (
 // eslint-disable-next-line @next/next/no-img-element
 <img
-src={`${myProfile.avatar_url}?t=${Date.now()}`}
+src={myProfile.avatar_url}
 alt=""
 style={{ height: "100%", width: "100%", objectFit: "cover" }}
 />
