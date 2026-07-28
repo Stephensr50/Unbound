@@ -82,6 +82,8 @@ let query = supabase
 .from("profiles")
 .select("id, username, display_name, avatar_url, gender")
 .neq("id", me)
+.not("avatar_url", "is", null)
+.neq("avatar_url", "")
 .limit(50);
 if (genderFilter !== "all") {
 query = query.eq("gender", genderFilter);
