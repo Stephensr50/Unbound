@@ -108,7 +108,7 @@ apple: "/apple-touch-icon2.png",
 },
 
 verification: {
-google: "XngmY73g4KwXjhuX0mcQYjjuc_2b3HU4DXsxrHd1XnA",
+google: "XngmY73g4KWXjhuX0mcQYjjuc_2b3HU4DXsxrHd1XnA",
 },
 };
 
