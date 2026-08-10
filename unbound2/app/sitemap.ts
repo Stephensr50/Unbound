@@ -23,6 +23,12 @@ changeFrequency: "daily",
 priority: 0.9,
 },
 {
+url: `${baseUrl}/fetlife-alternative`,
+lastModified: new Date(),
+changeFrequency: "weekly",
+priority: 0.9,
+},
+{
 url: `${baseUrl}/messages`,
 lastModified: new Date(),
 changeFrequency: "daily",
