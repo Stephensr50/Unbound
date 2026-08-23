@@ -47,7 +47,7 @@ changeFrequency: "monthly",
 priority: 0.5,
 },
 {
-url: `${baseUrl}/community-guidelines`,
+url: `${baseUrl}/guidelines`,
 lastModified: new Date(),
 changeFrequency: "monthly",
 priority: 0.5,
