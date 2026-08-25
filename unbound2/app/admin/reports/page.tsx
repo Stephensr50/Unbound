@@ -119,6 +119,52 @@ reviewed_at: new Date().toISOString(),
 loadReports();
 }
 
+async function warnUser(reportId: number) {
+const confirmed = confirm(
+"Send an official warning to this user? Their account will remain active and this report will be recorded as warned."
+);
+
+if (!confirmed) return;
+
+const {
+data: { session },
+} = await supabase.auth.getSession();
+
+if (!session) {
+alert("Your admin session has expired. Please log in again.");
+return;
+}
+
+const response = await fetch("/api/moderation/warn", {
+method: "POST",
+headers: {
+"Content-Type": "application/json",
+Authorization: `Bearer ${session.access_token}`,
+},
+body: JSON.stringify({
+reportId,
+}),
+});
+
+const result = await response.json();
+
+if (!response.ok) {
+console.error("Warning failed:", result);
+
+alert(
+`The warning could not be sent: ${
+result.error || "Unknown error"
+}`
+);
+
+return;
+}
+
+alert("Official warning sent.");
+
+await loadReports();
+}
+
 async function banUser(userId: string) {
 if (!confirm("Ban this user?")) return;
 
@@ -134,6 +180,8 @@ loadReports();
 }
 
 async function activateUser(userId: string) {
+if (!confirm("Reactivate this user?")) return;
+
 await supabase
 .from("profiles")
 .update({
@@ -194,7 +242,8 @@ gap: 16,
 key={report.id}
 style={{
 background: "rgba(255,255,255,0.05)",
-border: "1px solid rgba(255,255,255,0.12)",
+border:
+"1px solid rgba(255,255,255,0.12)",
 borderRadius: 18,
 padding: 18,
 backdropFilter: "blur(12px)",
@@ -275,7 +324,10 @@ minWidth: 180,
 >
 <button
 onClick={() =>
-updateStatus(report.id, "reviewed")
+updateStatus(
+report.id,
+"reviewed"
+)
 }
 style={buttonStyle}
 >
@@ -284,7 +336,10 @@ Mark Reviewed
 
 <button
 onClick={() =>
-updateStatus(report.id, "dismissed")
+updateStatus(
+report.id,
+"dismissed"
+)
 }
 style={buttonStyle}
 >
@@ -293,9 +348,40 @@ Dismiss
 
 {report.reported_user_id && (
 <>
+{report.status === "warned" ? (
+<div
+style={{
+...buttonStyle,
+background: "rgba(245,158,11,0.18)",
+border: "1px solid rgba(245,158,11,0.55)",
+textAlign: "center",
+cursor: "default",
+color: "#fbbf24",
+}}
+>
+✓ User Warned
+</div>
+) : (
+<button
+onClick={() => warnUser(report.id)}
+style={{
+...buttonStyle,
+background:
+"linear-gradient(135deg,#f59e0b,#f97316)",
+}}
+>
+Warn User
+</button>
+)}
+
+{report.reported
+?.moderation_status !==
+"banned" && (
 <button
 onClick={() =>
-banUser(report.reported_user_id!)
+banUser(
+report.reported_user_id!
+)
 }
 style={{
 ...buttonStyle,
@@ -305,7 +391,11 @@ background:
 >
 Ban User
 </button>
+)}
 
+{report.reported
+?.moderation_status ===
+"banned" && (
 <button
 onClick={() =>
 activateUser(
@@ -320,6 +410,7 @@ background:
 >
 Reactivate
 </button>
+)}
 
 <Link
 href={`/u/${report.reported_user_id}`}
