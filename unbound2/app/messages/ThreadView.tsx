@@ -62,6 +62,9 @@ const [me, setMe] = useState<string | null>(null);
 
 const [conversationId, setConversationId] = useState<number | null>(null);
 const [conversationTitle, setConversationTitle] = useState("Conversation");
+const [otherUserId, setOtherUserId] = useState<string | null>(null);
+const [otherUsername, setOtherUsername] = useState<string | null>(null);
+const [otherAvatarUrl, setOtherAvatarUrl] = useState<string | null>(null);
 const [loading, setLoading] = useState(true);
 
 const [msgs, setMsgs] = useState<MsgRow[]>([]);
@@ -224,30 +227,41 @@ const { data: members, error: memErr } = await supabase
 
 if (memErr || !members) {
 setConversationTitle("Conversation");
+setOtherUserId(null);
+setOtherUsername(null);
+setOtherAvatarUrl(null);
 return;
 }
 
 const otherId =
-members.map((m: any) => m.user_id as string).find((id) => id && id !== me) ??
-null;
+members
+.map((m: any) => m.user_id as string)
+.find((id) => id && id !== me) ?? null;
 
 if (!otherId) {
 setConversationTitle("Conversation");
+setOtherUserId(null);
+setOtherUsername(null);
+setOtherAvatarUrl(null);
 return;
 }
 
+setOtherUserId(otherId);
+
 const { data: profile } = await supabase
 .from("profiles")
-.select("display_name, username")
+.select("display_name, username, avatar_url")
 .eq("id", otherId)
 .maybeSingle();
 
 const title =
 profile?.display_name?.trim() ||
 profile?.username?.trim() ||
-"Conversation";
+"Unknown User";
 
 setConversationTitle(title);
+setOtherUsername(profile?.username?.trim() || null);
+setOtherAvatarUrl(profile?.avatar_url ?? null);
 }
 
 async function loadOtherReadPointer(convId: number) {
@@ -885,8 +899,77 @@ marginBottom: 14,
 ← Back
 </button>
 
-<div style={{ fontFamily: '"Gloock", serif', fontSize: 22, marginBottom: 8 }}>
+<div
+style={{
+display: "flex",
+alignItems: "center",
+gap: 12,
+marginBottom: 8,
+}}
+>
+<button
+type="button"
+onClick={() => {
+if (otherUserId) {
+router.push(`/profile/${otherUserId}`);
+}
+}}
+disabled={!otherUserId}
+style={{
+display: "flex",
+alignItems: "center",
+gap: 12,
+padding: 0,
+border: "none",
+background: "transparent",
+color: "white",
+cursor: otherUserId ? "pointer" : "default",
+textAlign: "left",
+}}
+title={otherUserId ? "View profile" : undefined}
+>
+{otherAvatarUrl ? (
+<img
+src={otherAvatarUrl}
+alt={conversationTitle}
+draggable={false}
+style={{
+width: 48,
+height: 48,
+borderRadius: "50%",
+objectFit: "cover",
+border: "2px solid rgba(168,85,247,0.55)",
+boxShadow: "0 0 12px rgba(168,85,247,0.35)",
+}}
+/>
+) : (
+<div
+style={{
+width: 48,
+height: 48,
+borderRadius: "50%",
+display: "flex",
+alignItems: "center",
+justifyContent: "center",
+background: "rgba(168,85,247,0.20)",
+border: "2px solid rgba(168,85,247,0.35)",
+fontSize: 20,
+fontWeight: 800,
+}}
+>
+{conversationTitle?.charAt(0)?.toUpperCase() || "?"}
+</div>
+)}
+
+<div
+style={{
+fontFamily: '"Gloock", serif',
+fontSize: 22,
+}}
+>
 {loading ? "Conversation…" : conversationTitle}
+</div>
+</button>
 </div>
 
 {err ? (

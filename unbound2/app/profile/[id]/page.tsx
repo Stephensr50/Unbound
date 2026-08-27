@@ -1,9 +1,11 @@
 import { redirect } from "next/navigation";
 
-export default function ProfileRedirect({
+export default async function ProfileRedirect({
 params,
 }: {
-params: { id: string };
+params: Promise<{ id: string }>;
 }) {
-redirect(`/u/${params.id}`);
+const { id } = await params;
+
+redirect(`/u/${id}`);
 }
