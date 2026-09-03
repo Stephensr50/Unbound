@@ -10,6 +10,8 @@ const router = useRouter();
 
 const [email, setEmail] = useState("");
 const [password, setPassword] = useState("");
+const [username, setUsername] = useState("");
+const [displayName, setDisplayName] = useState("");
 const [gender, setGender] = useState("");
 const [loading, setLoading] = useState(false);
 const [error, setError] = useState<string | null>(null);
@@ -55,7 +57,41 @@ async function handleSignup(e: FormEvent) {
 e.preventDefault();
 setError(null);
 
-// Keep the UI requirement, but we won't write it to DB here.
+const cleanUsername = username.trim().toLowerCase();
+const cleanDisplayName = displayName.trim();
+
+if (!cleanUsername) {
+setError("Please choose a username.");
+return;
+}
+
+if (cleanUsername.length < 3) {
+setError("Username must be at least 3 characters.");
+return;
+}
+
+if (cleanUsername.length > 30) {
+setError("Username must be 30 characters or less.");
+return;
+}
+
+if (!/^[a-z0-9_]+$/.test(cleanUsername)) {
+setError(
+"Username can only contain letters, numbers, and underscores."
+);
+return;
+}
+
+if (!cleanDisplayName) {
+setError("Please enter a screen name.");
+return;
+}
+
+if (cleanDisplayName.length > 50) {
+setError("Screen name must be 50 characters or less.");
+return;
+}
+
 if (!gender) {
 setError("Please select a gender.");
 return;
@@ -63,33 +99,61 @@ return;
 
 setLoading(true);
 
+// Check whether this username is already taken
+const { data: existingUsername, error: usernameCheckError } = await supabase
+.from("profiles")
+.select("id")
+.ilike("username", cleanUsername)
+.limit(1);
+
+if (usernameCheckError) {
+setLoading(false);
+setError("Unable to check username. Please try again.");
+return;
+}
+
+if (existingUsername && existingUsername.length > 0) {
+setLoading(false);
+setError("That username is already taken. Please choose another.");
+return;
+}
+
 const emailRedirectTo =
 typeof window !== "undefined"
 ? `${window.location.origin}/login?verified=1`
 : undefined;
 
-const { data, error: signUpError } = await supabase.auth.signUp({
+const { error: signUpError } = await supabase.auth.signUp({
 email,
 password,
 options: {
 emailRedirectTo,
 data: {
+username: cleanUsername,
+display_name: cleanDisplayName,
 gender,
 },
 },
 });
 
 setLoading(false);
-
 if (signUpError) {
+const message = signUpError.message.toLowerCase();
+
+if (
+message.includes("duplicate") ||
+message.includes("unique") ||
+message.includes("username")
+) {
+setError("That username is already taken. Please choose another.");
+return;
+}
+
 setError(signUpError.message);
 return;
 }
 
-// If email confirmations are ON, Supabase may not create a session yet.
-// So we handle both cases cleanly.
 router.push("/login?check_email=1&setup=1");
-return;
 }
 
 return (
@@ -103,7 +167,41 @@ padding: 24,
 }}
 >
 <form onSubmit={handleSignup} style={cardStyle}>
-<h1 style={{ margin: 0, fontSize: 44, color: "white" }}>Join Unbound</h1>
+<h1 style={{ margin: 0, fontSize: 44, color: "white" }}>
+Join Unbound
+</h1>
+
+<input
+style={inputStyle}
+type="text"
+placeholder="Username"
+value={username}
+onChange={(e) => setUsername(e.target.value)}
+autoCapitalize="none"
+autoCorrect="off"
+maxLength={30}
+required
+/>
+
+<div
+style={{
+marginTop: 5,
+fontSize: 12,
+opacity: 0.65,
+}}
+>
+Letters, numbers, and underscores only
+</div>
+
+<input
+style={inputStyle}
+type="text"
+placeholder="Screen name"
+value={displayName}
+onChange={(e) => setDisplayName(e.target.value)}
+maxLength={50}
+required
+/>
 
 <input
 style={inputStyle}
@@ -139,7 +237,13 @@ Select gender...
 </select>
 
 {error && (
-<div style={{ marginTop: 10, color: "#ff6b6b", fontWeight: 600 }}>
+<div
+style={{
+marginTop: 10,
+color: "#ff6b6b",
+fontWeight: 600,
+}}
+>
 {error}
 </div>
 )}
@@ -155,6 +259,7 @@ Already have an account? <a href="/login">Log in</a>
 </div>
 );
 }
+
 export default function SignupPage() {
 return (
 <Suspense fallback={null}>
