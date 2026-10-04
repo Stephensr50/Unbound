@@ -260,28 +260,52 @@ return uid;
 async function getAllowedAuthorIds(uid: string) {
 const allowed = new Set<string>([uid]);
 
+// Load ALL followed users in batches so Supabase's
+// 1,000-row response limit cannot cut the list off.
+const FOLLOW_BATCH_SIZE = 1000;
+let followStart = 0;
+
+while (true) {
 const { data: followingRows, error: followsErr } = await supabase
 .from("follows")
 .select("following_id")
-.eq("follower_id", uid);
+.eq("follower_id", uid)
+.range(followStart, followStart + FOLLOW_BATCH_SIZE - 1);
 
 if (followsErr) {
 setBanner(followsErr.message);
-} else {
+break;
+}
+
 for (const row of followingRows ?? []) {
 const followingId = (row as any).following_id as string | null;
 if (followingId) allowed.add(followingId);
 }
+
+if (!followingRows || followingRows.length < FOLLOW_BATCH_SIZE) {
+break;
 }
 
+followStart += FOLLOW_BATCH_SIZE;
+}
+
+// Load ALL friendships in batches. A single Supabase query
+// is capped at 1,000 rows, which was cutting off some friends.
+const FRIEND_BATCH_SIZE = 1000;
+let friendStart = 0;
+
+while (true) {
 const { data: friendRows, error: friendsErr } = await supabase
 .from("friends")
 .select("user_id,friend_id")
-.or(`user_id.eq.${uid},friend_id.eq.${uid}`);
+.or(`user_id.eq.${uid},friend_id.eq.${uid}`)
+.range(friendStart, friendStart + FRIEND_BATCH_SIZE - 1);
 
 if (friendsErr) {
 setBanner(friendsErr.message);
-} else {
+break;
+}
+
 for (const row of friendRows ?? []) {
 const userId = (row as any).user_id as string | null;
 const friendId = (row as any).friend_id as string | null;
@@ -289,6 +313,12 @@ const friendId = (row as any).friend_id as string | null;
 if (userId && userId !== uid) allowed.add(userId);
 if (friendId && friendId !== uid) allowed.add(friendId);
 }
+
+if (!friendRows || friendRows.length < FRIEND_BATCH_SIZE) {
+break;
+}
+
+friendStart += FRIEND_BATCH_SIZE;
 }
 
 const ids = Array.from(allowed);
