@@ -637,67 +637,57 @@ await loadGroups([post.group_id], true);
 await loadCounts([focusId], true);
 }
 
+
 async function loadPosts(targetPage = 0, append = false) {
+// Prevent simultaneous feed requests.
+if (feedLoadLockRef.current && append) return;
+feedLoadLockRef.current = true;
+
 if (append) {
 setLoadingMorePosts(true);
 } else {
 setFeedPage(0);
 setHasMorePosts(true);
-feedLoadLockRef.current = false;
 }
 
 try {
 const uid = myUserId ?? (await refreshAuth());
 
 if (!uid) {
-if (!append) {
-setPosts([]);
-}
+if (!append) setPosts([]);
 setHasMorePosts(false);
 return;
 }
 
 const allowedIds = await getAllowedAuthorIds(uid);
 
-if (!allowedIds.length) {
-if (!append) {
-setPosts([]);
-setProfilesById({});
-setGroupsById({});
-await loadCounts([]);
-}
-
-setHasMorePosts(false);
-return;
-}
-
 const { data: blockRows, error: blockError } = await supabase
 .from("blocked_users")
 .select("blocker_id,blocked_id")
 .or(`blocker_id.eq.${uid},blocked_id.eq.${uid}`);
 
-if (blockError) {
-setBanner(blockError.message);
-return;
-}
+if (blockError) throw blockError;
 
 const blockedUserIds = new Set<string>();
 
 for (const row of blockRows ?? []) {
-const blockerId = (row as any).blocker_id as string | null;
-const blockedId = (row as any).blocked_id as string | null;
-
-if (blockerId === uid && blockedId) {
-blockedUserIds.add(blockedId);
+if (row.blocker_id === uid && row.blocked_id) {
+blockedUserIds.add(row.blocked_id);
 }
-
-if (blockedId === uid && blockerId) {
-blockedUserIds.add(blockerId);
+if (row.blocked_id === uid && row.blocker_id) {
+blockedUserIds.add(row.blocker_id);
 }
 }
 
-const visibleAllowedIds = allowedIds.filter(
-(id) => !blockedUserIds.has(id)
+const visibleAllowedIds = Array.from(
+new Set(
+allowedIds.filter(
+(id) =>
+typeof id === "string" &&
+/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id) &&
+!blockedUserIds.has(id)
+)
+)
 );
 
 if (!visibleAllowedIds.length) {
@@ -707,38 +697,93 @@ setProfilesById({});
 setGroupsById({});
 await loadCounts([]);
 }
-
 setHasMorePosts(false);
 return;
 }
 
-const start = targetPage * 25;
-const end = start + 24;
+const PAGE_SIZE = 25;
+const ID_BATCH_SIZE = 40;
+const start = targetPage * PAGE_SIZE;
+const requiredCount = start + PAGE_SIZE + 1;
 
+const idBatches: string[][] = [];
+
+for (let i = 0; i < visibleAllowedIds.length; i += ID_BATCH_SIZE) {
+idBatches.push(
+visibleAllowedIds.slice(i, i + ID_BATCH_SIZE)
+);
+}
+
+// Fetch enough newest posts from every author batch
+// to calculate the correct global page.
+const allRows: PostRow[] = [];
+
+// Limit concurrent requests to avoid overwhelming Supabase.
+const CONCURRENT_BATCHES = 4;
+
+for (let i = 0; i < idBatches.length; i += CONCURRENT_BATCHES) {
+const group = idBatches.slice(i, i + CONCURRENT_BATCHES);
+
+const results = await Promise.all(
+group.map(async (ids) => {
 const { data, error } = await supabase
 .from("posts")
 .select(
 "id,user_id,title,body,kind,created_at,media_url,media_type,media_bucket,media_path,group_id,is_locked"
 )
-.in("user_id", visibleAllowedIds)
+.in("user_id", ids)
 .eq("is_reel", false)
 .order("created_at", { ascending: false })
-.range(start, end);
+.order("id", { ascending: false })
+.limit(requiredCount);
 
-if (error) {
-setBanner(error.message);
+if (error) throw error;
+
+return (data ?? []) as PostRow[];
+})
+);
+
+for (const result of results) {
+allRows.push(...result);
+}
+}
+
+// Remove duplicates and sort globally, not batch by batch.
+const uniqueRows = new Map<number, PostRow>();
+
+for (const post of allRows) {
+uniqueRows.set(post.id, post);
+}
+
+const sortedRows = Array.from(uniqueRows.values()).sort(
+(a, b) => {
+const dateDiff =
+new Date(b.created_at).getTime() -
+new Date(a.created_at).getTime();
+
+return dateDiff || b.id - a.id;
+}
+);
+
+// Keep one extra row to determine whether another page exists.
+const pageRows = sortedRows.slice(
+start,
+start + PAGE_SIZE
+);
+
+setHasMorePosts(sortedRows.length > start + PAGE_SIZE);
+
+if (!pageRows.length) {
+if (!append) {
+setPosts([]);
+setProfilesById({});
+setGroupsById({});
+await loadCounts([]);
+}
 return;
 }
 
-const batch = (data ?? []) as PostRow[];
-
-setHasMorePosts(batch.length === 25);
-
-if (!batch.length) {
-return;
-}
-
-let rows = batch;
+let rows = pageRows;
 const postIds = rows.map((post) => post.id);
 
 const { data: mediaRows, error: mediaError } = await supabase
@@ -749,10 +794,7 @@ const { data: mediaRows, error: mediaError } = await supabase
 .in("post_id", postIds)
 .order("sort_order", { ascending: true });
 
-if (mediaError) {
-setBanner(mediaError.message);
-return;
-}
+if (mediaError) throw mediaError;
 
 const signedMediaRows = await Promise.all(
 ((mediaRows ?? []) as PostMediaRow[]).map(async (media) => {
@@ -777,7 +819,6 @@ for (const media of signedMediaRows) {
 if (!mediaByPostId[media.post_id]) {
 mediaByPostId[media.post_id] = [];
 }
-
 mediaByPostId[media.post_id].push(media);
 }
 
@@ -827,10 +868,10 @@ const { data: unlockRows, error: unlockError } = await supabase
 .eq("buyer_id", uid)
 .in("post_id", lockedPostIds);
 
-if (!unlockError) {
+if (unlockError) throw unlockError;
+
 for (const row of unlockRows ?? []) {
-unlockedMap[Number((row as any).post_id)] = true;
-}
+unlockedMap[Number(row.post_id)] = true;
 }
 
 for (const post of rows) {
@@ -841,12 +882,7 @@ unlockedMap[post.id] = true;
 }
 
 setUnlockedPostIds((current) =>
-append
-? {
-...current,
-...unlockedMap,
-}
-: unlockedMap
+append ? { ...current, ...unlockedMap } : unlockedMap
 );
 
 const userIds = Array.from(
@@ -863,10 +899,7 @@ const { data: profiles, error: profileError } = await supabase
 )
 .in("id", userIds);
 
-if (profileError) {
-setBanner(profileError.message);
-return;
-}
+if (profileError) throw profileError;
 
 const activeProfiles = ((profiles ?? []) as ProfileRow[]).filter(
 (profile) =>
@@ -884,12 +917,7 @@ profileMap[profile.id] = profile;
 }
 
 setProfilesById((current) =>
-append
-? {
-...current,
-...profileMap,
-}
-: profileMap
+append ? { ...current, ...profileMap } : profileMap
 );
 
 activeRows = rows.filter((post) =>
@@ -898,9 +926,7 @@ activeUserIds.has(post.user_id)
 }
 
 setPosts((current) => {
-if (!append) {
-return activeRows;
-}
+if (!append) return activeRows;
 
 const combined = [...current, ...activeRows];
 const uniquePosts = new Map<number, PostRow>();
@@ -912,7 +938,8 @@ uniquePosts.set(post.id, post);
 return Array.from(uniquePosts.values()).sort(
 (a, b) =>
 new Date(b.created_at).getTime() -
-new Date(a.created_at).getTime()
+new Date(a.created_at).getTime() ||
+b.id - a.id
 );
 });
 
@@ -935,15 +962,14 @@ append
 ),
 ]);
 } catch (error: any) {
+console.error("Feed loading failed:", error);
 setBanner(error?.message || "Failed to load feed.");
 } finally {
-if (append) {
-setLoadingMorePosts(false);
-}
-
+if (append) setLoadingMorePosts(false);
 feedLoadLockRef.current = false;
 }
 }
+
 
 useEffect(() => {
 void (async () => {
@@ -985,7 +1011,7 @@ return;
 const nextPage = feedPage + 1;
 
 feedLoadLockRef.current = true;
-setFeedPage(nextPage);
+
 void loadPosts(nextPage, true);
 }
 
