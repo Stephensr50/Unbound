@@ -183,10 +183,10 @@ textDecoration: "none",
 }}
 >
 <img
-src="/unbound-logo1.png"
+src={isMobile ? "/unbound-logo.png" : "/unbound-logo1.png"}
 alt="Unbound"
 style={{
-width: isMobile ? 62 : 76,
+width: isMobile ? 180 : 76,
 height: isMobile ? 62 : 76,
 objectFit: "contain",
 filter:
