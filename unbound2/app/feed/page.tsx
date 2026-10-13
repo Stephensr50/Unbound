@@ -2659,28 +2659,50 @@ z-index: 3;
 `}</style>
 
 <StoriesBar />
-{isMobile && (
+{isMobile ? (
 <div
 style={{
 display: "flex",
 justifyContent: "center",
-marginTop: -8,
-marginBottom: 12,
+alignItems: "center",
+width: "100%",
+marginTop: 10,
+marginBottom: 20,
 }}
 >
 <img
-src="/unbound-logo1.png"
-alt="Unbound"
+src="/unbound-logo.png"
+alt="UNBOUND"
 style={{
-width: 70,
-height: 70,
+width: "100%",
+maxWidth: 440,
+height: "auto",
 objectFit: "contain",
-border: "none",
 background: "transparent",
-filter:
-"drop-shadow(0 0 22px rgba(255,60,200,.95)) drop-shadow(0 0 42px rgba(140,80,255,.75))",
 }}
 />
+</div>
+) : (
+<div
+style={{
+fontWeight: 900,
+fontSize: "clamp(42px, 8vw, 96px)",
+width: "100%",
+lineHeight: 0.82,
+maxWidth: "100%",
+overflow: "visible",
+textAlign: "center",
+letterSpacing: 2,
+marginBottom: 20,
+color: "rgba(238, 8, 169, 0.72)",
+textShadow: `
+0 0 4px rgba(236,72,153,0.75),
+0 0 8px rgba(168,85,247,0.45)
+`,
+animation: "glowPulse 1.5s ease-in-out infinite alternate",
+}}
+>
+UNBOUND
 </div>
 )}
 <div
