@@ -203,14 +203,36 @@ const visibleAllowedUserIds = allowedUserIds.filter(
 (id) => !blockedUserIds.has(id)
 );
 
-const { data: mainData, error: mainError } = await supabase
+
+
+// Load stories in smaller batches to avoid oversized requests
+const allMainStories: StoryRow[] = [];
+const batchSize = 25;
+
+for (let i = 0; i < visibleAllowedUserIds.length; i += batchSize) {
+const batch = visibleAllowedUserIds.slice(i, i + batchSize);
+
+const { data, error } = await supabase
 .from("stories")
 .select("id,user_id,media_url,caption,created_at")
-.in("user_id", visibleAllowedUserIds)
+.in("user_id", batch)
 .order("created_at", { ascending: false })
 .limit(30);
 
-if (mainError) throw mainError;
+if (error) throw error;
+
+allMainStories.push(...((data ?? []) as StoryRow[]));
+}
+
+// Sort all results newest first and keep the latest 30
+allMainStories.sort(
+(a, b) =>
+new Date(b.created_at ?? 0).getTime() -
+new Date(a.created_at ?? 0).getTime()
+);
+
+const mainData = allMainStories.slice(0, 30);
+
 
 const { data: discoveryData, error: discoveryError } = await supabase
 .from("stories")
@@ -272,11 +294,13 @@ isDiscovery: true,
 );
 }
 
+
 setStories(merged);
 await loadProfilesForStories(merged);
 await loadViewedForStories(merged, me);
-} catch {
-// keep UI stable
+} catch (e: any) {
+console.error("STORIES REFRESH FAILED:", e);
+alert("STORIES ERROR: " + (e?.message || JSON.stringify(e)));
 }
 }
 
@@ -339,8 +363,9 @@ setOpenView(true);
 
 try {
 await markStoryViewed(story);
-} catch {
-// keep UI stable
+} catch (e: any) {
+console.error("STORIES REFRESH ERROR:", e);
+alert("Stories failed to load: " + (e?.message || "Unknown error"));
 }
 }
 
@@ -456,12 +481,15 @@ caption: caption.trim() || null,
 
 if (insErr) throw insErr;
 
+
+
 setMsg("Posted ✅");
 setPickedFile(null);
 setCaption("");
-setOpenCreate(false);
 
 await refreshStories();
+
+setOpenCreate(false);
 } catch (e: any) {
 setMsg(e?.message || "Failed to post story.");
 } finally {
@@ -555,7 +583,11 @@ ref={fileInputRef}
 type="file"
 accept="image/*,video/*"
 style={{ display: "none" }}
-onChange={(e) => setPickedFile(e.target.files?.[0] ?? null)}
+onChange={(e) => {
+const selected = e.target.files?.[0] ?? null;
+console.log("STORY FILE SELECTED:", selected);
+setPickedFile(selected);
+}}
 />
 
 {openCreate ? (
