@@ -2685,6 +2685,7 @@ background: "transparent",
 ) : (
 <div
 style={{
+display: isMobile ? "none" : "block",
 fontWeight: 900,
 fontSize: "clamp(42px, 8vw, 96px)",
 width: "100%",
